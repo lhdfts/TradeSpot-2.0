@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { cn } from '../lib/utils';
-import { Search } from 'lucide-react';
+
 
 interface FloatingInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label: string;

@@ -24,7 +24,7 @@ export const Pagination: React.FC<PaginationProps> = ({
             return pages.map(page => (
                 <Button
                     key={page}
-                    variant={currentPage === page ? 'primary' : 'ghost'}
+                    variant={currentPage === page ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => onPageChange(page)}
                     className={cn("w-8 h-8 p-0", currentPage === page && "pointer-events-none")}
@@ -65,7 +65,7 @@ export const Pagination: React.FC<PaginationProps> = ({
                 {visiblePages.map(page => (
                     <Button
                         key={page}
-                        variant={currentPage === page ? 'primary' : 'ghost'}
+                        variant={currentPage === page ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => onPageChange(page)}
                         className={cn("w-8 h-8 p-0", currentPage === page && "pointer-events-none")}

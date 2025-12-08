@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from './Button';
 import { ChevronDown, Check } from 'lucide-react';
@@ -32,7 +33,7 @@ interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>
   onChange?: (e: { target: { value: string; name?: string } }) => void;
 }
 
-export const Select: React.FC<SelectProps> = ({ label, options, className, value, onChange, disabled, name, ...props }) => {
+export const Select: React.FC<SelectProps> = ({ label, options, className, value, onChange, disabled, name }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 

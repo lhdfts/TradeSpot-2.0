@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface FloatingDateInputProps {
@@ -26,13 +26,13 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
     maxDate,
     error,
 }) => {
-    const [isFocused, setIsFocused] = useState(false);
+
     const [isOpen, setIsOpen] = useState(false);
     const [displayValue, setDisplayValue] = useState("");
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [coords, setCoords] = useState({ top: 0, left: 0 });
     const inputRef = useRef<HTMLInputElement>(null);
-    const dropdownRef = useRef<HTMLDivElement>(null);
+
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Formata a data para exibição (DD/MM/YYYY)
@@ -164,7 +164,6 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
     };
 
     const handleBlur = () => {
-        setIsFocused(false);
         // Se a data é incompleta ao sair do campo, limpa
         if (displayValue && displayValue.length < 10) {
             setDisplayValue("");
@@ -175,7 +174,6 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
     };
 
     const handleFocus = () => {
-        setIsFocused(true);
         inputRef.current?.select();
     };
 
@@ -259,7 +257,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
 
     const formattedMonthName = `${currentMonth.toLocaleDateString('pt-BR', { month: 'long' })} - ${currentMonth.getFullYear()}`
         .split(" ")
-        .map((word, index) => {
+        .map((word, _index) => {
             if (word === "-") return "-";
             return word.charAt(0).toUpperCase() + word.slice(1);
         })

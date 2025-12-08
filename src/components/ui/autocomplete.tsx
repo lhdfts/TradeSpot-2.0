@@ -4,7 +4,7 @@ import { Autocomplete as AutocompletePrimitive } from "@base-ui-components/react
 import { ChevronsUpDownIcon, XIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/Input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const Autocomplete = AutocompletePrimitive.Root;
