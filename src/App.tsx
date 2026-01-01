@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AppointmentProvider } from './context/AppointmentContext';
 import { Sidebar } from './components/Sidebar';
 import { MyAppointments } from './views/MyAppointments';
@@ -6,20 +7,69 @@ import { AllAppointments } from './views/AllAppointments';
 import { Metrics } from './views/Metrics';
 import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
+import { Login } from './views/Login';
 import { Modal } from './components/ui/Modal';
 import { AppointmentForm } from './components/AppointmentForm';
 import type { Appointment } from './types';
 import { RefreshCw } from 'lucide-react';
 import { useAppointments } from './context/AppointmentContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ThemeToggle } from './components/ThemeToggle';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { Button } from './components/ui/Button';
+import { ToastProvider } from './components/ui/toast';
+
+// Wrapper for Create Appointment to handle search params
+const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void; onCancel: () => void }> = ({ onSuccess, onCancel }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const prefillData = useMemo(() => {
+    const name = searchParams.get('name');
+    const email = searchParams.get('email');
+    const phone = searchParams.get('phone');
+    if (name || email || phone) {
+      return {
+        lead: name || undefined,
+        email: email || undefined,
+        phone: phone || undefined
+      };
+    }
+    return undefined;
+  }, [searchParams]);
+
+  // Clean URL if we have params to match original behavior
+  useEffect(() => {
+    if (prefillData) {
+      setSearchParams({}, { replace: true });
+    }
+  }, [prefillData, setSearchParams]);
+
+  return (
+    <div>
+      <AppointmentForm
+        prefillData={prefillData}
+        onSuccess={onSuccess}
+        onCancel={onCancel}
+      />
+    </div>
+  );
+};
 
 const MainContent: React.FC = () => {
-  const [currentView, setCurrentView] = useState('my-appointments');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAppt, setEditingAppt] = useState<Appointment | null>(null);
   const { refresh, loading } = useAppointments();
+  const { user } = useAuth();
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Redirect if visiting login while authenticated
+  useEffect(() => {
+    if (user && location.pathname === '/login') {
+      navigate('/');
+    }
+  }, [user, location.pathname, navigate]);
 
   const handleEdit = (appt: Appointment) => {
     setEditingAppt(appt);
@@ -28,22 +78,37 @@ const MainContent: React.FC = () => {
 
   const handleCreate = () => {
     setEditingAppt(null);
-    setCurrentView('create-appointment');
+    navigate('/create-appointment');
   };
 
   const handleSuccess = () => {
     setIsModalOpen(false);
     setEditingAppt(null);
-    if (currentView === 'create-appointment') {
-      setCurrentView('my-appointments');
+    if (location.pathname === '/create-appointment') {
+      navigate('/');
+    } else {
+      refresh(); // Refresh if we are staying on the same view (e.g. edit modal)
     }
   };
+
+  const currentView = location.pathname;
+  const isLoginPage = currentView === '/login';
+
+  if (isLoginPage) {
+    return (
+      <div className="flex h-screen bg-background text-foreground overflow-hidden">
+        <main className="flex-1 overflow-y-auto">
+          <Routes>
+            <Route path="/login" element={<Login />} />
+          </Routes>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       <Sidebar
-        currentView={currentView}
-        onNavigate={setCurrentView}
         onCreateClick={handleCreate}
       />
 
@@ -52,15 +117,14 @@ const MainContent: React.FC = () => {
           <div className="max-w-7xl mx-auto space-y-8">
             <header className="flex justify-between items-center">
               <h1 className="text-3xl font-bold text-foreground">
-                {currentView === 'my-appointments' && 'Meus Agendamentos'}
-                {currentView === 'all-appointments' && 'Todos os Agendamentos'}
-                {currentView === 'create-appointment' && 'Criar Agendamento'}
-                {currentView === 'metrics' && 'Métricas'}
-                {currentView === 'attendants' && 'Gerenciar Atendentes'}
-                {currentView === 'events' && 'Gerenciar Eventos'}
+                {(currentView === '/' || currentView === '/my-appointments') && 'Meus Agendamentos'}
+                {currentView === '/all-appointments' && 'Todos os Agendamentos'}
+                {currentView === '/create-appointment' && 'Criar Agendamento'}
+                {currentView === '/metrics' && 'Métricas'}
+                {currentView === '/attendants' && 'Gerenciar Atendentes'}
+                {currentView === '/events' && 'Gerenciar Eventos'}
               </h1>
               <div className="flex items-center gap-4">
-                <ThemeToggle />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -71,22 +135,35 @@ const MainContent: React.FC = () => {
                 >
                   <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                 </Button>
+                <div id="header-actions" style={{ display: 'contents' }}></div>
               </div>
             </header>
 
-            {currentView === 'my-appointments' && <MyAppointments onEdit={handleEdit} />}
-            {currentView === 'all-appointments' && <AllAppointments onEdit={handleEdit} />}
-            {currentView === 'create-appointment' && (
-              <div className="bg-surface rounded-lg shadow p-6">
-                <AppointmentForm
-                  onSuccess={handleSuccess}
-                  onCancel={() => setCurrentView('my-appointments')}
-                />
-              </div>
-            )}
-            {currentView === 'metrics' && <Metrics />}
-            {currentView === 'attendants' && <Attendants />}
-            {currentView === 'events' && <Events />}
+            <Routes>
+              {/* Login Route for consistency, though handled above */}
+              <Route path="/login" element={<Navigate to="/" replace />} />
+              {/* Protected Routes - All Authenticated Users */}
+              <Route element={<ProtectedRoute allowedRoles={[]} />}>
+                <Route path="/" element={<MyAppointments onEdit={handleEdit} />} />
+                <Route path="/my-appointments" element={<Navigate to="/" replace />} />
+                <Route path="/create-appointment" element={<CreateAppointmentWrapper onSuccess={handleSuccess} onCancel={() => navigate('/')} />} />
+                <Route path="/all-appointments" element={<AllAppointments onEdit={handleEdit} />} />
+              </Route>
+
+              {/* Metrics - Admin, Líder, Co-Líder */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-Líder', 'Dev', 'Qualidade']} />}>
+                <Route path="/metrics" element={<Metrics />} />
+              </Route>
+
+              {/* Admin/Líder Only Management */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev']} />}>
+                <Route path="/attendants" element={<Attendants />} />
+              </Route>
+
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-Líder', 'Qualidade']} />}>
+                <Route path="/events" element={<Events />} />
+              </Route>
+            </Routes>
           </div>
         </div>
       </main>
@@ -97,7 +174,7 @@ const MainContent: React.FC = () => {
         title="Editar Agendamento"
       >
         <AppointmentForm
-          initialData={editingAppt}
+          initialData={editingAppt || undefined}
           onSuccess={handleSuccess}
           onCancel={() => setIsModalOpen(false)}
         />
@@ -108,11 +185,17 @@ const MainContent: React.FC = () => {
 
 function App() {
   return (
-    <ThemeProvider>
-      <AppointmentProvider>
-        <MainContent />
-      </AppointmentProvider>
-    </ThemeProvider>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
+      <AuthProvider>
+        <ThemeProvider>
+          <AppointmentProvider>
+            <ToastProvider>
+              <MainContent />
+            </ToastProvider>
+          </AppointmentProvider>
+        </ThemeProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

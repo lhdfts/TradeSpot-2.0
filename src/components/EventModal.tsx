@@ -25,7 +25,7 @@ interface EventModalProps {
 export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSuccess, event }) => {
     const [formData, setFormData] = useState<Partial<Event>>({
         event_name: '',
-        status: 'Active'
+        status: true
     });
 
     useEffect(() => {
@@ -34,7 +34,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
         } else {
             setFormData({
                 event_name: '',
-                status: 'Active'
+                status: true
             });
         }
     }, [event, isOpen]);
@@ -52,7 +52,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                     event_name: formData.event_name || '',
                     start_date: now.toISOString(),
                     end_date: oneHourLater.toISOString(),
-                    status: formData.status || 'Active'
+                    status: formData.status ?? true
                 } as Omit<Event, 'id'>);
             }
             onSuccess();
@@ -71,15 +71,16 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, event_name: e.target.value })}
                     required
                     placeholder="Ex: 1125 - Cash Express"
+                    className="text-foreground"
                 />
 
                 <Select
                     label="Status"
-                    value={formData.status}
-                    onChange={e => setFormData({ ...formData, status: e.target.value as any })}
+                    value={formData.status ? 'true' : 'false'}
+                    onChange={(e: any) => setFormData({ ...formData, status: e.target.value === 'true' })}
                     options={[
-                        { value: 'Active', label: 'Ativo' },
-                        { value: 'Archived', label: 'Arquivado' }
+                        { value: 'true', label: 'Ativo' },
+                        { value: 'false', label: 'Arquivado' }
                     ]}
                 />
 

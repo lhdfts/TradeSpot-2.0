@@ -10,6 +10,7 @@ interface TimePickerInputProps {
     disabled?: boolean;
     readOnly?: boolean;
     availableTimes?: string[];
+    minTime?: string;
 }
 
 export const TimePickerInput: React.FC<TimePickerInputProps> = ({
@@ -19,6 +20,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     disabled = false,
     readOnly = false,
     availableTimes: availableTimesParam = [],
+    minTime,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
@@ -92,77 +94,90 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
         }
     };
 
-    const isTimeAvailable = (time: string) => availableTimesSet.has(time);
+    const isTimeAvailable = (time: string) => (minTime ? time >= minTime : true) && availableTimesSet.has(time);
+
+    const hasValue = value !== '' && value !== undefined && value !== null;
 
     return (
-        <div className="space-y-1" ref={containerRef}>
-            <label className="block text-sm font-bold text-foreground">{label}</label>
-            <div className="relative">
-                <button
-                    ref={buttonRef}
-                    type="button"
-                    onClick={() => {
-                        if (!disabled && !readOnly) {
-                            if (!isOpen) updatePosition();
-                            setIsOpen(!isOpen);
-                        }
-                    }}
-                    disabled={disabled || readOnly}
-                    className={cn(
-                        'w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground text-left flex items-center justify-between focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200',
-                        (disabled || readOnly) && 'opacity-50 cursor-not-allowed',
-                        isOpen && 'border-primary ring-1 ring-primary'
-                    )}
-                >
-                    <span className="flex items-center gap-2">
-                        <Clock size={16} className="text-secondary" />
-                        {value || '--:--'}
-                    </span>
-                    <ChevronDown
-                        size={16}
-                        className={cn(
-                            'text-secondary transition-transform duration-200',
-                            isOpen && 'transform rotate-180'
-                        )}
-                    />
-                </button>
-
-                {isOpen && !disabled && !readOnly && createPortal(
-                    <div
-                        className="timepicker-portal absolute z-[9999] bg-surface border border-border rounded-lg shadow-lg p-4 w-96 max-h-96 overflow-y-auto"
-                        style={{
-                            top: coords.top,
-                            left: coords.left,
-                            // We don't force width here to allow it to be wider if needed, but w-96 is fixed width
-                        }}
-                    >
-                        <div className="grid grid-cols-4 gap-2">
-                            {allTimes.map(time => {
-                                const available = isTimeAvailable(time);
-                                return (
-                                    <button
-                                        key={time}
-                                        type="button"
-                                        onClick={() => handleSelectTime(time)}
-                                        disabled={!available}
-                                        className={cn(
-                                            'px-2 py-2 text-sm rounded transition-colors font-medium',
-                                            value === time && available
-                                                ? 'bg-primary text-primary-foreground'
-                                                : available
-                                                    ? 'bg-blue-500/20 text-blue-600 dark:text-white hover:bg-blue-500/30 cursor-pointer'
-                                                    : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
-                                        )}
-                                    >
-                                        {time}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>,
-                    document.body
+        <div className="relative" ref={containerRef}>
+            <button
+                ref={buttonRef}
+                type="button"
+                onClick={() => {
+                    if (!disabled && !readOnly) {
+                        if (!isOpen) updatePosition();
+                        setIsOpen(!isOpen);
+                    }
+                }}
+                disabled={disabled || readOnly}
+                className={cn(
+                    'w-full h-11 px-3 py-0 bg-surface border border-border rounded-md text-foreground text-left flex items-center justify-between outline-none shadow-sm transition-all duration-200',
+                    (disabled || readOnly) && 'opacity-50 cursor-not-allowed',
+                    isOpen
+                        ? "border-[#070707] dark:border-gray-400 focus:border-[#070707] dark:focus:border-gray-400 ring-1 ring-[#070707] dark:ring-gray-400"
+                        : "border-border focus:border-[#070707] dark:focus:border-gray-400 focus:ring-1 focus:ring-[#070707] dark:focus:ring-gray-400"
                 )}
-            </div>
+            >
+                <span className="flex items-center gap-2 pt-1 text-sm">
+                    <Clock size={16} className="text-muted-foreground" />
+                    {value}
+                </span>
+                <ChevronDown
+                    size={16}
+                    className={cn(
+                        'text-muted-foreground transition-transform duration-200',
+                        isOpen && 'transform rotate-180'
+                    )}
+                />
+            </button>
+
+            <label
+                className={cn(
+                    "absolute left-2 bg-surface px-1 transition-all duration-200 pointer-events-none z-10",
+                    hasValue || isOpen
+                        ? "-top-2 text-xs text-[#070707] dark:text-gray-400" // Default to primary when active, can adjust based on error/focus
+                        : "top-3 text-sm text-muted-foreground",
+                    isOpen ? "text-[#070707] dark:text-gray-400" : "text-muted-foreground"
+                )}
+            >
+                {label}
+            </label>
+
+            {isOpen && !disabled && !readOnly && createPortal(
+                <div
+                    className="timepicker-portal absolute z-[9999] bg-surface border border-border rounded-lg shadow-lg p-4 w-96 max-h-96 overflow-y-auto"
+                    style={{
+                        top: coords.top,
+                        left: coords.left,
+                        // We don't force width here to allow it to be wider if needed, but w-96 is fixed width
+                    }}
+                >
+                    <div className="grid grid-cols-4 gap-2">
+                        {allTimes.map(time => {
+                            const available = isTimeAvailable(time);
+                            return (
+                                <button
+                                    key={time}
+                                    type="button"
+                                    onClick={() => handleSelectTime(time)}
+                                    disabled={!available}
+                                    className={cn(
+                                        'px-2 py-2 text-sm rounded transition-colors font-medium',
+                                        value === time && available
+                                            ? 'bg-[#070707] text-white'
+                                            : available
+                                                ? 'bg-blue-500/20 text-blue-600 dark:text-white hover:bg-blue-500/30 cursor-pointer'
+                                                : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
+                                    )}
+                                >
+                                    {time}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 };

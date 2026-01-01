@@ -6,7 +6,12 @@ interface CalendarViewProps {
     appointments: Appointment[];
 }
 
-const SimpleCalendar: React.FC<{ selectedDate: Date | undefined; onSelectDate: (date: Date) => void }> = ({ selectedDate, onSelectDate }) => {
+const SimpleCalendar: React.FC<{
+    selectedDate: Date | undefined;
+    onSelectDate: (date: Date) => void;
+    appointments: Appointment[];
+    isSearching?: boolean;
+}> = ({ selectedDate, onSelectDate, appointments, isSearching }) => {
     const [currentMonth, setCurrentMonth] = useState(selectedDate || new Date());
 
     const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -45,6 +50,16 @@ const SimpleCalendar: React.FC<{ selectedDate: Date | undefined; onSelectDate: (
             today.getFullYear() === currentMonth.getFullYear();
     };
 
+    const hasAppointments = (day: number) => {
+        if (!isSearching) return false;
+        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        const dateStr = `${y}-${m}-${d}`;
+        return appointments.some(a => a.date === dateStr);
+    };
+
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
@@ -78,27 +93,30 @@ const SimpleCalendar: React.FC<{ selectedDate: Date | undefined; onSelectDate: (
                     <button
                         key={day}
                         onClick={() => handleSelectDay(day)}
-                        className={`aspect-square rounded text-sm font-medium transition-colors ${isSelected(day)
-                                ? 'bg-black/50 text-white border border-foreground'
-                                : isToday(day)
-                                    ? 'bg-black/30 text-foreground border border-foreground/30'
-                                    : 'text-foreground hover:bg-black/20'
+                        className={`aspect-square rounded text-sm transition-colors flex items-center justify-center ${isSelected(day)
+                            ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                            : isToday(day)
+                                ? 'bg-[#172554] text-white font-semibold'
+                                : hasAppointments(day)
+                                    ? 'bg-[#172554] text-white font-semibold'
+                                    : 'text-foreground hover:bg-accent'
                             }`}
                     >
                         {day}
                     </button>
                 ))}
             </div>
-        </div>
+        </div >
     );
 };
 
 interface CalendarViewProps {
     appointments: Appointment[];
     onEditAppointment?: (appointment: Appointment) => void;
+    isSearching?: boolean;
 }
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEditAppointment }) => {
+export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEditAppointment, isSearching }) => {
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
     const getAppointmentsForDate = (date: Date) => {
@@ -125,7 +143,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEdit
             {/* Calendar */}
             <div className="lg:col-span-2 bg-surface rounded-lg border border-border p-6 shadow-sm">
 
-                <SimpleCalendar selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+                <SimpleCalendar selectedDate={selectedDate} onSelectDate={setSelectedDate} appointments={appointments} isSearching={isSearching} />
             </div>
 
             {/* Appointments for selected date */}
@@ -139,9 +157,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEdit
                         appointmentsForSelectedDate.map(appt => (
                             <div
                                 key={appt.id}
-                                className="bg-black/30 rounded-md p-3 border border-border/50 hover:border-border transition-colors flex justify-between items-stretch gap-3"
+                                className="bg-white dark:bg-gray-800 rounded-md p-3 border border-border hover:border-primary/50 transition-colors flex justify-between items-stretch gap-3 shadow-sm"
                             >
-                                <div className="flex-1 min-w-0 text-xs text-white space-y-1">
+                                <div className="flex-1 min-w-0 text-xs text-muted-foreground space-y-1">
                                     <p className="font-bold text-foreground truncate">{appt.lead}</p>
                                     <p className="truncate">{appt.email}</p>
                                     <p>{appt.phone}</p>
@@ -154,7 +172,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEdit
                                     </span>
                                     <button
                                         onClick={() => onEditAppointment?.(appt)}
-                                        className="p-1 text-foreground hover:bg-white/10 rounded transition-colors"
+                                        className="p-1 text-foreground hover:bg-accent rounded transition-colors"
                                         aria-label="Detalhes do agendamento"
                                     >
                                         <Menu size={16} />

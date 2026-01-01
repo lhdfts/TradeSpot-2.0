@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
-import { Users, CheckCircle, TrendingUp, Trophy, BarChart2, Filter, Calendar } from 'lucide-react';
+import { Users, CheckCircle, TrendingUp, BarChart2, Filter, Calendar } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Select, Input } from '../components/ui/Input';
 import { ExportIcon } from '../components/ExportIcon';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 export const Metrics: React.FC = () => {
     const { appointments } = useAppointments();
@@ -98,7 +99,7 @@ export const Metrics: React.FC = () => {
 
         filteredAppointments.forEach(app => {
             let sdrId = null;
-            if (app.type === 'SDR Call') {
+            if (app.type === 'Ligação SDR') {
                 sdrId = app.attendantId;
             } else if (app.createdBy) {
                 const found = attendants.find(a => a.name === app.createdBy && a.sector === 'SDR');
@@ -107,9 +108,9 @@ export const Metrics: React.FC = () => {
 
             if (sdrId && metrics[sdrId]) {
                 metrics[sdrId].total++;
-                if (app.type === 'Closer Call') metrics[sdrId].ligacao++;
-                if (app.type === 'Reschedule') metrics[sdrId].reagendamento++;
-                if (app.status === 'Confirmado' || app.status === 'Concluido') metrics[sdrId].confirmed++;
+                if (app.type === 'Ligação Closer') metrics[sdrId].ligacao++;
+                if (app.type === 'Reagendamento Closer') metrics[sdrId].reagendamento++;
+                if (app.status === 'Realizado') metrics[sdrId].confirmed++;
             }
         });
 
@@ -121,7 +122,7 @@ export const Metrics: React.FC = () => {
     // --- CLOSER RANKING LOGIC ---
     const closerRanking = useMemo(() => {
         const closerApps = filteredAppointments.filter(app =>
-            app.type === 'Closer Call' || app.type === 'Reschedule'
+            app.type === 'Ligação Closer' || app.type === 'Reagendamento Closer'
         );
 
         const metrics: Record<string, { name: string, total: number, realized: number }> = {};
@@ -141,7 +142,7 @@ export const Metrics: React.FC = () => {
 
             if (metrics[closerId]) {
                 metrics[closerId].total++;
-                if (app.status === 'Concluido') metrics[closerId].realized++;
+                if (app.status === 'Realizado') metrics[closerId].realized++;
             }
         });
 
@@ -156,13 +157,13 @@ export const Metrics: React.FC = () => {
 
         filteredAppointments.forEach(app => {
             // Filter logic from reference: Only Closer calls/reschedules
-            if (app.type === 'Closer Call' || app.type === 'Reschedule') {
+            if (app.type === 'Ligação Closer' || app.type === 'Reagendamento Closer') {
                 // Normalize date (assuming YYYY-MM-DD)
                 const date = app.date;
                 if (!data[date]) data[date] = { total: 0, realized: 0, notRealized: 0, canceled: 0 };
 
                 data[date].total++;
-                if (app.status === 'Concluido') data[date].realized++;
+                if (app.status === 'Realizado') data[date].realized++;
                 else if (app.status === 'Cancelado') data[date].canceled++;
                 else data[date].notRealized++;
             }
@@ -219,7 +220,7 @@ export const Metrics: React.FC = () => {
 
     // --- KPI CALCULATIONS ---
     const totalAppointments = filteredAppointments.length;
-    const confirmedCount = filteredAppointments.filter(a => a.status === 'Confirmado' || a.status === 'Concluido').length;
+    const confirmedCount = filteredAppointments.filter(a => a.status === 'Realizado').length;
     const conversionRate = totalAppointments > 0 ? Math.round((confirmedCount / totalAppointments) * 100) : 0;
 
     // --- CHART SCALING ---
@@ -247,7 +248,7 @@ export const Metrics: React.FC = () => {
                         <Select
                             value={eventFilter}
                             onChange={e => setEventFilter(e.target.value)}
-                            options={[{ value: '', label: 'Todos os Eventos' }, ...events.map(e => ({ value: e.id, label: e.name }))]}
+                            options={[{ value: '', label: 'Todos os Eventos' }, ...events.map(e => ({ value: e.id, label: e.event_name }))]}
                             className="w-48"
                         />
                     </div>
@@ -282,35 +283,35 @@ export const Metrics: React.FC = () => {
                 </div>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 rounded-lg bg-blue-500/10 text-blue-400">
+            {/* KPI Cards (Merged) */}
+            <div className="bg-surface rounded-xl border border-border shadow-sm p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 divide-y md:divide-y-0 md:divide-x divide-border">
+                    {/* Total */}
+                    <div className="flex flex-col items-center justify-center p-4">
+                        <div className="p-3 rounded-full bg-blue-500/10 text-blue-400 mb-3">
                             <Users size={24} />
                         </div>
-
+                        <p className="text-secondary text-sm font-medium mb-1">Total de Agendamentos</p>
+                        <p className="text-3xl font-bold text-primary">{totalAppointments}</p>
                     </div>
-                    <h3 className="text-secondary text-sm font-medium mb-1">Total Agendamentos</h3>
-                    <p className="text-3xl font-bold text-primary">{totalAppointments}</p>
-                </div>
-                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 rounded-lg bg-green-500/10 text-green-400">
+
+                    {/* Realizados */}
+                    <div className="flex flex-col items-center justify-center p-4">
+                        <div className="p-3 rounded-full bg-green-500/10 text-green-400 mb-3">
                             <CheckCircle size={24} />
                         </div>
+                        <p className="text-secondary text-sm font-medium mb-1">Realizados</p>
+                        <p className="text-3xl font-bold text-primary">{confirmedCount}</p>
                     </div>
-                    <h3 className="text-secondary text-sm font-medium mb-1">Confirmados/Realizados</h3>
-                    <p className="text-3xl font-bold text-primary">{confirmedCount}</p>
-                </div>
-                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 rounded-lg bg-purple-500/10 text-purple-400">
+
+                    {/* Taxa de Conversão */}
+                    <div className="flex flex-col items-center justify-center p-4">
+                        <div className="p-3 rounded-full bg-purple-500/10 text-purple-400 mb-3">
                             <TrendingUp size={24} />
                         </div>
+                        <p className="text-secondary text-sm font-medium mb-1">Taxa de Conversão</p>
+                        <p className="text-3xl font-bold text-primary">{conversionRate}%</p>
                     </div>
-                    <h3 className="text-secondary text-sm font-medium mb-1">Taxa de Conversão</h3>
-                    <p className="text-3xl font-bold text-primary">{conversionRate}%</p>
                 </div>
             </div>
 
@@ -318,61 +319,86 @@ export const Metrics: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* SDR Ranking */}
                 <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                    <div className="flex items-center gap-2 mb-6">
-                        <Trophy className="text-yellow-500" size={20} />
-                        <h3 className="text-lg font-semibold text-primary">Ranking SDRs</h3>
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 className="text-lg font-semibold text-primary">Agendamentos por SDR</h3>
+                            <p className="text-xs text-secondary mt-1">Total de agendamentos marcados (Ligação Closer e Reagendamento Closer)</p>
+                        </div>
+                        <Button size="sm" variant="secondary">Expandir</Button>
                     </div>
-                    <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                        {sdrRanking.map((sdr, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-3 bg-background rounded-lg border border-border">
-                                <div className="flex items-center gap-3">
-                                    <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold border ${idx === 0 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                                        idx === 1 ? 'bg-gray-100 text-gray-700 border-gray-200' :
-                                            idx === 2 ? 'bg-orange-100 text-orange-700 border-orange-200' :
-                                                'bg-surface text-secondary border-border'
-                                        }`}>
-                                        {idx + 1}
-                                    </span>
-                                    <span className="font-medium text-primary truncate max-w-[120px]" title={sdr.name}>{sdr.name}</span>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-sm font-bold text-primary">{sdr.total} <span className="text-xs font-normal text-secondary">agendamentos</span></div>
-                                    <div className="text-xs text-secondary flex gap-2 justify-end">
-                                        <span className="text-blue-600">{sdr.ligacao} Lig</span>
-                                        <span className="text-orange-600">{sdr.reagendamento} Reag</span>
+
+                    <div className="grid grid-cols-12 text-xs font-semibold text-secondary mb-3 px-3">
+                        <div className="col-span-5">Nome</div>
+                        <div className="col-span-2 text-center">Marcados</div>
+                        <div className="col-span-3 text-center">Ligação Closer</div>
+                        <div className="col-span-2 text-center">Reagendamento</div>
+                    </div>
+
+                    <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
+                        {sdrRanking.map((sdr, idx) => {
+                            let rowStyle = 'bg-background border-l-4 border-transparent';
+                            if (idx === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
+                            else if (idx === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]'; // Blueish grey
+                            else if (idx === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]'; // Bronze/Orange
+
+                            return (
+                                <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors`}>
+                                    <div className="col-span-5 font-medium text-primary text-sm truncate" title={sdr.name}>
+                                        {sdr.name}
+                                    </div>
+                                    <div className="col-span-2 text-center font-bold text-blue-600 text-sm">
+                                        {sdr.total}
+                                    </div>
+                                    <div className="col-span-3 text-center text-blue-500 text-sm">
+                                        {sdr.ligacao}
+                                    </div>
+                                    <div className="col-span-2 text-center text-orange-500 text-sm">
+                                        {sdr.reagendamento}
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                         {sdrRanking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
                     </div>
                 </div>
 
                 {/* Closer Ranking */}
                 <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                    <div className="flex items-center gap-2 mb-6">
-                        <Trophy className="text-yellow-500" size={20} />
-                        <h3 className="text-lg font-semibold text-primary">Ranking Closers</h3>
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 className="text-lg font-semibold text-primary">Agendamentos por Closer</h3>
+                            <p className="text-xs text-secondary mt-1">Total de agendamentos recebidos e realizados</p>
+                        </div>
+                        <Button size="sm" variant="secondary">Expandir</Button>
                     </div>
-                    <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                        {closerRanking.map((closer, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-3 bg-background rounded-lg border border-border">
-                                <div className="flex items-center gap-3">
-                                    <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold border ${idx === 0 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                                        idx === 1 ? 'bg-gray-100 text-gray-700 border-gray-200' :
-                                            idx === 2 ? 'bg-orange-100 text-orange-700 border-orange-200' :
-                                                'bg-surface text-secondary border-border'
-                                        }`}>
-                                        {idx + 1}
-                                    </span>
-                                    <span className="font-medium text-primary truncate max-w-[120px]" title={closer.name}>{closer.name}</span>
+
+                    <div className="grid grid-cols-12 text-xs font-semibold text-secondary mb-3 px-3">
+                        <div className="col-span-6">Nome</div>
+                        <div className="col-span-3 text-center">Realizados</div>
+                        <div className="col-span-3 text-center">Total Recebido</div>
+                    </div>
+
+                    <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
+                        {closerRanking.map((closer, idx) => {
+                            let rowStyle = 'bg-background border-l-4 border-transparent';
+                            if (idx === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
+                            else if (idx === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
+                            else if (idx === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
+
+                            return (
+                                <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors`}>
+                                    <div className="col-span-6 font-medium text-primary text-sm truncate" title={closer.name}>
+                                        {closer.name}
+                                    </div>
+                                    <div className="col-span-3 text-center font-bold text-green-600 text-sm">
+                                        {closer.realized}
+                                    </div>
+                                    <div className="col-span-3 text-center font-medium text-green-300 text-sm">
+                                        {closer.total}
+                                    </div>
                                 </div>
-                                <div className="text-right">
-                                    <div className="text-sm font-bold text-green-600">{closer.realized} <span className="text-xs font-normal text-secondary">realizados</span></div>
-                                    <div className="text-xs text-secondary">{closer.total} total</div>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                         {closerRanking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
                     </div>
                 </div>
@@ -385,71 +411,74 @@ export const Metrics: React.FC = () => {
                     <h3 className="text-lg font-semibold text-primary">Agendamentos por Dia (Closer)</h3>
                 </div>
 
-                <div className="h-80 w-full relative">
-                    {/* Simple SVG Line Chart */}
+                <div className="h-96 w-full relative">
+                    {/* Recharts Implementation */}
                     {chartData.length > 0 ? (
-                        <svg className="w-full h-full" viewBox={`0 0 ${chartData.length * 50} 100`} preserveAspectRatio="none">
-                            {/* Grid Lines */}
-                            <line x1="0" y1="0" x2="100%" y2="0" stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="4" />
-                            <line x1="0" y1="25" x2="100%" y2="25" stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="4" />
-                            <line x1="0" y1="50" x2="100%" y2="50" stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="4" />
-                            <line x1="0" y1="75" x2="100%" y2="75" stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="4" />
-                            <line x1="0" y1="100" x2="100%" y2="100" stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="4" />
-
-                            {/* Lines */}
-                            {/* Total - Blue */}
-                            <polyline
-                                fill="none"
-                                stroke="#000AFF"
-                                strokeWidth="2"
-                                points={chartData.map((d, i) => `${i * 50 + 25},${100 - (d.total / maxChartValue) * 100}`).join(' ')}
-                            />
-                            {/* Realized - Green */}
-                            <polyline
-                                fill="none"
-                                stroke="#10b981"
-                                strokeWidth="2"
-                                points={chartData.map((d, i) => `${i * 50 + 25},${100 - (d.realized / maxChartValue) * 100}`).join(' ')}
-                            />
-                            {/* Not Realized - Orange */}
-                            <polyline
-                                fill="none"
-                                stroke="#f59e0b"
-                                strokeWidth="2"
-                                points={chartData.map((d, i) => `${i * 50 + 25},${100 - (d.notRealized / maxChartValue) * 100}`).join(' ')}
-                            />
-
-                            {/* Points and Tooltips (Simplified as circles) */}
-                            {chartData.map((d, i) => (
-                                <g key={i}>
-                                    <circle cx={i * 50 + 25} cy={100 - (d.total / maxChartValue) * 100} r="3" fill="#000AFF" />
-                                    <circle cx={i * 50 + 25} cy={100 - (d.realized / maxChartValue) * 100} r="3" fill="#10b981" />
-                                    <circle cx={i * 50 + 25} cy={100 - (d.notRealized / maxChartValue) * 100} r="3" fill="#f59e0b" />
-
-                                    {/* X Axis Label */}
-                                    <text x={i * 50 + 25} y="115" fontSize="10" textAnchor="middle" fill="#6b7280">{d.displayDate}</text>
-                                </g>
-                            ))}
-                        </svg>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="colorRealized" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.4} />
+                                <XAxis
+                                    dataKey="displayDate"
+                                    stroke="hsl(var(--muted-foreground))"
+                                    fontSize={12}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    dy={10}
+                                />
+                                <YAxis
+                                    stroke="hsl(var(--muted-foreground))"
+                                    fontSize={12}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    dx={-10}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: 'hsl(var(--surface))',
+                                        borderColor: 'hsl(var(--border))',
+                                        borderRadius: '0.5rem',
+                                        color: 'hsl(var(--foreground))'
+                                    }}
+                                    itemStyle={{ color: 'hsl(var(--foreground))' }}
+                                    cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="total"
+                                    name="Total Recebido"
+                                    stroke="#3b82f6"
+                                    strokeWidth={3}
+                                    fillOpacity={1}
+                                    fill="url(#colorTotal)"
+                                    activeDot={{ r: 6, strokeWidth: 0 }}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="realized"
+                                    name="Realizados"
+                                    stroke="#22c55e"
+                                    strokeWidth={3}
+                                    fillOpacity={1}
+                                    fill="url(#colorRealized)"
+                                    activeDot={{ r: 6, strokeWidth: 0 }}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
                     ) : (
                         <div className="flex items-center justify-center h-full text-secondary">
                             Sem dados para exibir no gráfico
                         </div>
                     )}
-                </div>
-                <div className="flex justify-center gap-6 mt-4">
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#000AFF]"></div>
-                        <span className="text-xs text-secondary">Total</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#10b981]"></div>
-                        <span className="text-xs text-secondary">Realizados</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#f59e0b]"></div>
-                        <span className="text-xs text-secondary">Não Realizados</span>
-                    </div>
                 </div>
             </div>
         </div>

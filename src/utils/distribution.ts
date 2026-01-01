@@ -18,7 +18,7 @@ const timeToMinutes = (time: string): number => {
 };
 
 const getDuration = (type: string): number => {
-    if (type === 'Ligação Closer' || type === 'Reschedule') {
+    if (type === 'Ligação Closer' || type === 'Reschedule' || type === 'Reagendamento Closer') {
         return 45;
     }
     return 30;
@@ -31,12 +31,12 @@ export const isAttendantWithinSchedule = (
 ): boolean => {
     if (!attendant.schedule) return false;
 
-    // Parse date to get day of week
-    // Note: "2025-11-28" -> new Date("2025-11-28T00:00:00") to avoid timezone issues
-    const date = new Date(`${dateStr}T00:00:00`);
+    // Parse date to get day of week safely
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
     const dayKey = DAY_MAP[date.getDay()];
 
-    const schedule = attendant.schedule[dayKey];
+    const schedule = attendant.schedule?.[dayKey];
     if (!schedule) return false;
 
     const apptMinutes = timeToMinutes(timeStr);
@@ -49,8 +49,8 @@ export const isAttendantWithinSchedule = (
     }
 
     // Check pauses
-    if (attendant.pauses && attendant.pauses.length > 0) {
-        for (const pause of attendant.pauses) {
+    if (attendant.pauses && attendant.pauses[dayKey] && attendant.pauses[dayKey].length > 0) {
+        for (const pause of attendant.pauses[dayKey]) {
             const pauseStart = timeToMinutes(pause.start);
             const pauseEnd = timeToMinutes(pause.end);
             if (apptMinutes >= pauseStart && apptMinutes < pauseEnd) {
@@ -98,8 +98,8 @@ export const findAvailableCloser = (
     attendants: Attendant[],
     allAppointments: Appointment[]
 ): Attendant | null => {
-    // 1. Filter Closers
-    const closers = attendants.filter(a => a.sector === 'Closer');
+    // 1. Filter Closers (Closer, Líder and Co-Líder)
+    const closers = attendants.filter(a => ['Closer', 'Líder', 'Co-Líder'].includes(a.sector));
     if (closers.length === 0) return null;
 
     // 2. Filter by Schedule (who is working today?)
