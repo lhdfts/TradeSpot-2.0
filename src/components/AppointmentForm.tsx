@@ -29,7 +29,7 @@ interface AppointmentFormProps {
     onCancel: () => void;
 }
 
-export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, prefillData, onSuccess, onCancel }) => {
+export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, prefillData, onSuccess }) => {
     const { createAppointment, updateAppointment, appointments } = useAppointments();
     const { attendants, events, loading } = useFormData();
     const { user } = useAuth();
