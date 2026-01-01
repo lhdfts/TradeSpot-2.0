@@ -6,15 +6,16 @@ import { ChevronDown, Check } from 'lucide-react';
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  unstyled?: boolean;
 }
 
-export const Input: React.FC<InputProps> = ({ label, error, className, ...props }) => {
+export const Input: React.FC<InputProps> = ({ label, error, className, unstyled, ...props }) => {
   return (
     <div className="space-y-1">
       {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
       <input
         className={cn(
-          'w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors',
+          !unstyled && 'w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors',
           error && 'border-danger focus:border-danger focus:ring-danger',
           className
         )}
