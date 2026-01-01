@@ -1,6 +1,6 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { cn } from './Button';
+import { cn } from "@/lib/utils"
+// import { Button } from "./button" // Check if used
 import { ChevronDown, Check } from 'lucide-react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {

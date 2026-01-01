@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Eraser, Save } from 'lucide-react';
-import { Button } from './ui/Button';
+import { Button } from './ui/button';
 import { FloatingDateInput } from './FloatingDateInput';
 import { TimePickerInput } from './TimePickerInput';
 import { FloatingInput } from './FloatingInput';

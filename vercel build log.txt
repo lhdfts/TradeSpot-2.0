@@ -1,0 +1,50 @@
+22:08:44.869 Running build in Washington, D.C., USA (East) – iad1
+22:08:44.870 Build machine configuration: 2 cores, 8 GB
+22:08:44.988 Cloning github.com/lhdfts/TradeSpot-2.0 (Branch: master, Commit: cbbfcf1)
+22:08:44.989 Previous build caches not available.
+22:08:45.166 Cloning completed: 178.000ms
+22:08:45.549 Running "vercel build"
+22:08:45.945 Vercel CLI 50.1.3
+22:08:46.460 Installing dependencies...
+22:08:53.512 
+22:08:53.513 added 277 packages in 7s
+22:08:53.514 
+22:08:53.514 69 packages are looking for funding
+22:08:53.514   run `npm fund` for details
+22:08:53.618 Running "npm run build"
+22:08:53.710 
+22:08:53.710 > v2@0.0.0 build
+22:08:53.710 > tsc -b && vite build
+22:08:53.710 
+22:08:58.955 src/components/AttendantModal.tsx(66,45): error TS2554: Expected 0 arguments, but got 1.
+22:08:58.956 src/components/FloatingDateInput.tsx(3,63): error TS6133: 'X' is declared but its value is never read.
+22:08:58.956 src/components/FloatingDateInput.tsx(29,12): error TS6133: 'isFocused' is declared but its value is never read.
+22:08:58.957 src/components/FloatingDateInput.tsx(35,11): error TS6133: 'dropdownRef' is declared but its value is never read.
+22:08:58.957 src/components/FloatingDateInput.tsx(262,21): error TS6133: 'index' is declared but its value is never read.
+22:08:58.957 src/components/FloatingInput.tsx(3,1): error TS6133: 'Search' is declared but its value is never read.
+22:08:58.958 src/components/ui/Input.tsx(35,112): error TS6133: 'props' is declared but its value is never read.
+22:08:58.958 src/components/ui/Pagination.tsx(27,21): error TS2322: Type '"ghost" | "primary"' is not assignable to type '"link" | "default" | "destructive" | "outline" | "secondary" | "ghost" | null | undefined'.
+22:08:58.958   Type '"primary"' is not assignable to type '"link" | "default" | "destructive" | "outline" | "secondary" | "ghost" | null | undefined'.
+22:08:58.958 src/components/ui/Pagination.tsx(68,25): error TS2322: Type '"ghost" | "primary"' is not assignable to type '"link" | "default" | "destructive" | "outline" | "secondary" | "ghost" | null | undefined'.
+22:08:58.959   Type '"primary"' is not assignable to type '"link" | "default" | "destructive" | "outline" | "secondary" | "ghost" | null | undefined'.
+22:08:58.959 src/components/ui/autocomplete.tsx(7,23): error TS2307: Cannot find module '@/components/ui/input' or its corresponding type declarations.
+22:08:58.959 src/components/ui/combobox.tsx(8,23): error TS2307: Cannot find module '@/components/ui/input' or its corresponding type declarations.
+22:08:58.960 src/components/ui/input-group.tsx(7,40): error TS2307: Cannot find module '@/components/ui/input' or its corresponding type declarations.
+22:08:58.960 src/components/ui/sidebar.tsx(9,29): error TS2307: Cannot find module '@/hooks/use-mobile' or its corresponding type declarations.
+22:08:58.960 src/components/ui/sidebar.tsx(11,24): error TS2307: Cannot find module '@/components/ui/button' or its corresponding type declarations.
+22:08:58.960 src/components/ui/sidebar.tsx(12,23): error TS2307: Cannot find module '@/components/ui/input' or its corresponding type declarations.
+22:08:58.961 src/components/ui/sidebar.tsx(271,17): error TS7006: Parameter 'event' implicitly has an 'any' type.
+22:08:58.961 src/components/ui/toast.tsx(13,32): error TS2307: Cannot find module '@/components/ui/button' or its corresponding type declarations.
+22:08:58.961 src/views/Attendants.tsx(37,41): error TS2554: Expected 0 arguments, but got 1.
+22:08:58.961 src/views/Metrics.tsx(101,17): error TS2367: This comparison appears to be unintentional because the types 'AppointmentType' and '"SDR Call"' have no overlap.
+22:08:58.962 src/views/Metrics.tsx(110,21): error TS2367: This comparison appears to be unintentional because the types 'AppointmentType' and '"Closer Call"' have no overlap.
+22:08:58.962 src/views/Metrics.tsx(112,21): error TS2367: This comparison appears to be unintentional because the types 'AppointmentStatus' and '"Confirmado"' have no overlap.
+22:08:58.962 src/views/Metrics.tsx(112,52): error TS2367: This comparison appears to be unintentional because the types 'AppointmentStatus' and '"Concluido"' have no overlap.
+22:08:58.962 src/views/Metrics.tsx(124,13): error TS2367: This comparison appears to be unintentional because the types 'AppointmentType' and '"Closer Call"' have no overlap.
+22:08:58.963 src/views/Metrics.tsx(144,21): error TS2367: This comparison appears to be unintentional because the types 'AppointmentStatus' and '"Concluido"' have no overlap.
+22:08:58.963 src/views/Metrics.tsx(159,17): error TS2367: This comparison appears to be unintentional because the types 'AppointmentType' and '"Closer Call"' have no overlap.
+22:08:58.964 src/views/Metrics.tsx(165,21): error TS2367: This comparison appears to be unintentional because the types 'AppointmentStatus' and '"Concluido"' have no overlap.
+22:08:58.964 src/views/Metrics.tsx(222,61): error TS2367: This comparison appears to be unintentional because the types 'AppointmentStatus' and '"Confirmado"' have no overlap.
+22:08:58.964 src/views/Metrics.tsx(222,90): error TS2367: This comparison appears to be unintentional because the types 'AppointmentStatus' and '"Concluido"' have no overlap.
+22:08:58.964 src/views/Metrics.tsx(250,125): error TS2339: Property 'name' does not exist on type 'Event'.
+22:08:59.674 Error: Command "npm run build" exited with 2

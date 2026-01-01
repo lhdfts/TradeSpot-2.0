@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Modal } from './ui/Modal';
-import { Input as BaseInput } from './ui/Input';
+import { Modal } from './ui/modal';
+import { Input as BaseInput } from './ui/input';
 import { CustomSelect } from './CustomSelect';
-import { Button } from './ui/Button';
+import { Button } from './ui/button';
 import type { Event } from '../types';
 import { api } from '../services/api';
 

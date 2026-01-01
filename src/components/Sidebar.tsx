@@ -1,7 +1,7 @@
 import React from 'react';
 import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { cn } from './ui/Button';
+import { cn } from './ui/button';
 import { Logo } from './Logo';
 import { LogoIcon } from './LogoIcon';
 import { ThemeToggle } from './ThemeToggle';

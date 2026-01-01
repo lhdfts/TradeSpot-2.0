@@ -17,7 +17,7 @@ if (process.env.GOOGLE_REFRESH_TOKEN) {
 
 const calendar = google.calendar({ version: 'v3', auth });
 
-export const createGoogleMeetLink = async (summary: string, startTime: string, endTime: string, attendeeEmail?: string) => {
+export const createGoogleMeetLink = async (summary: string, startTime: string, endTime: string, attendeeEmails: string[] = []) => {
     try {
         const event = {
             summary: summary,
@@ -30,7 +30,7 @@ export const createGoogleMeetLink = async (summary: string, startTime: string, e
                 dateTime: endTime,
                 timeZone: 'America/Sao_Paulo',
             },
-            attendees: attendeeEmail ? [{ email: attendeeEmail }] : [],
+            attendees: attendeeEmails.map(email => ({ email })),
             conferenceData: {
                 createRequest: {
                     requestId: `sample-${Date.now()}`,

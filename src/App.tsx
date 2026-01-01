@@ -8,7 +8,7 @@ import { Metrics } from './views/Metrics';
 import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
 import { Login } from './views/Login';
-import { Modal } from './components/ui/Modal';
+import { Modal } from './components/ui/modal';
 import { AppointmentForm } from './components/AppointmentForm';
 import type { Appointment } from './types';
 import { RefreshCw } from 'lucide-react';

@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
 import { Users, CheckCircle, TrendingUp, BarChart2, Filter, Calendar } from 'lucide-react';
-import { Button } from '../components/ui/Button';
-import { Select, Input } from '../components/ui/Input';
+import { Button } from '../components/ui/button';
+import { Select, Input } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -224,10 +224,7 @@ export const Metrics: React.FC = () => {
     const conversionRate = totalAppointments > 0 ? Math.round((confirmedCount / totalAppointments) * 100) : 0;
 
     // --- CHART SCALING ---
-    const maxChartValue = Math.max(
-        ...chartData.map(d => Math.max(d.total, d.realized, d.notRealized, d.canceled)),
-        5 // Minimum scale
-    );
+
 
     return (
         <div className="space-y-6">
@@ -238,7 +235,7 @@ export const Metrics: React.FC = () => {
                         <Filter size={18} className="text-secondary" />
                         <Select
                             value={attendantFilter}
-                            onChange={e => setAttendantFilter(e.target.value)}
+                            onChange={(e: any) => setAttendantFilter(e.target.value)}
                             options={[{ value: '', label: 'Todos os Atendentes' }, ...attendants.map(a => ({ value: a.id, label: a.name }))]}
                             className="w-48"
                         />
@@ -247,7 +244,7 @@ export const Metrics: React.FC = () => {
                         <Calendar size={18} className="text-secondary" />
                         <Select
                             value={eventFilter}
-                            onChange={e => setEventFilter(e.target.value)}
+                            onChange={(e: any) => setEventFilter(e.target.value)}
                             options={[{ value: '', label: 'Todos os Eventos' }, ...events.map(e => ({ value: e.id, label: e.event_name }))]}
                             className="w-48"
                         />
@@ -255,7 +252,7 @@ export const Metrics: React.FC = () => {
                     <div className="flex items-center gap-2">
                         <Select
                             value={periodFilter}
-                            onChange={e => setPeriodFilter(e.target.value)}
+                            onChange={(e: any) => setPeriodFilter(e.target.value)}
                             options={[
                                 { value: 'today', label: 'Hoje' },
                                 { value: 'week', label: 'Últimos 7 dias' },
@@ -270,9 +267,9 @@ export const Metrics: React.FC = () => {
                     </div>
                     {periodFilter === 'custom' && (
                         <div className="flex items-center gap-2">
-                            <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} />
+                            <Input type="date" value={customStart} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomStart(e.target.value)} />
                             <span className="text-secondary">até</span>
-                            <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} />
+                            <Input type="date" value={customEnd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomEnd(e.target.value)} />
                         </div>
                     )}
                     <div className="ml-auto">

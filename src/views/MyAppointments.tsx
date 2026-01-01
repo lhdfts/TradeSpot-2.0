@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useAppointments } from '../context/AppointmentContext';
+import { useAuth } from '../context/AuthContext';
 import { Search, Copy, Calendar, Check } from 'lucide-react';
 import type { Appointment } from '../types';
-import { Button } from '../components/ui/Button';
+import { Button } from '../components/ui/button';
 import { FloatingInput } from '../components/FloatingInput';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { DateRangePicker } from '../components/DateRangePicker';
@@ -15,6 +16,7 @@ interface MyAppointmentsProps {
 
 export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const { appointments } = useAppointments();
+    const { user } = useAuth();
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -22,6 +24,9 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const filtered = appointments.filter(a => {
+        const matchesUser = user && (a.attendantId === user.id || a.createdBy === user.id);
+        if (!matchesUser) return false;
+
         const matchesSearch = a.lead.toLowerCase().includes(search.toLowerCase()) || a.phone.toString().includes(search);
         const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
         const matchesDate =

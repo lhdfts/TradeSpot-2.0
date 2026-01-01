@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/Button";
+import { buttonVariants } from "@/components/ui/button";
 
 const toastManager = Toast.createToastManager();
 const anchoredToastManager = Toast.createToastManager();
@@ -151,7 +151,7 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
                 </div>
                 {toast.actionProps && (
                   <Toast.Action
-                    className={buttonVariants({ size: "xs" })}
+                    className={buttonVariants({ size: "sm" })}
                     data-slot="toast-action"
                   >
                     {toast.actionProps.children}
@@ -240,7 +240,7 @@ function AnchoredToasts() {
                     </div>
                     {toast.actionProps && (
                       <Toast.Action
-                        className={buttonVariants({ size: "xs" })}
+                        className={buttonVariants({ size: "sm" })}
                         data-slot="toast-action"
                       >
                         {toast.actionProps.children}

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Modal } from './ui/Modal';
-import { Input as BaseInput } from './ui/Input';
+import { Modal } from './ui/modal';
+import { Input as BaseInput } from './ui/input';
 import { CustomSelect } from './CustomSelect';
-import { Button } from './ui/Button';
+import { Button } from './ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Attendant } from '../types';
 import { api } from '../services/api';
@@ -183,8 +183,8 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => addPause(day)}
-                                    disabled={formData.pauses?.[day]?.length >= 2}
-                                    title={formData.pauses?.[day]?.length >= 2 ? "Máximo de 2 pausas atingido" : "Adicionar pausa"}
+                                    disabled={(formData.pauses?.[day]?.length || 0) >= 2}
+                                    title={(formData.pauses?.[day]?.length || 0) >= 2 ? "Máximo de 2 pausas atingido" : "Adicionar pausa"}
                                 >
                                     <Plus size={16} />
                                 </Button>

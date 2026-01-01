@@ -5,7 +5,7 @@ import { ChevronsUpDownIcon, XIcon } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/Input";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const ComboboxContext = React.createContext<{
@@ -75,7 +75,7 @@ function ComboboxInput({
           className,
         )}
         data-slot="combobox-input"
-        render={<Input className="has-disabled:opacity-100" size={sizeValue} />}
+        render={<Input className="has-disabled:opacity-100" {...(typeof sizeValue === 'number' ? { size: sizeValue } : {})} />}
         {...props}
       />
       {showTrigger && (

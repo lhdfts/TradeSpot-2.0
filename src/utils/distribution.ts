@@ -18,8 +18,8 @@ const timeToMinutes = (time: string): number => {
 };
 
 const getDuration = (type: string): number => {
-    if (type === 'Ligação Closer' || type === 'Reschedule' || type === 'Reagendamento Closer') {
-        return 45;
+    if (['Ligação Closer', 'Reschedule', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal'].includes(type)) {
+        return 60;
     }
     return 30;
 };
@@ -115,7 +115,7 @@ export const findAvailableCloser = (
             appt.attendantId === closer.id &&
             appt.date === dateStr &&
             appt.status === 'Pendente' && // "Pendente" is the active status
-            appt.type !== 'Personal Appointment' // Exclude personal from load count
+            appt.type !== 'Agendamento Pessoal' // Exclude personal from load count
         ).length;
 
         return { ...closer, load: count };

@@ -185,11 +185,30 @@ router.post('/', async (req: Request, res: Response) => {
             const startIso = `${data.date}T${data.time}:00`;
             const endIso = `${data.date}T${endTime}:00`;
 
+            // Fetch emails for Creator and Attendant
+            const guestIds = [finalAttendantId, data.createdBy].filter((id): id is string => !!id);
+            const attendees: string[] = [clientPayload.email].filter(Boolean) as string[];
+
+            if (guestIds.length > 0) {
+                const { data: usersData } = await supabase
+                    .from('user')
+                    .select('email')
+                    .in('id', guestIds);
+
+                if (usersData) {
+                    usersData.forEach(u => {
+                        if (u.email && !attendees.includes(u.email)) {
+                            attendees.push(u.email);
+                        }
+                    });
+                }
+            }
+
             const googleData = await createGoogleMeetLink(
                 `Reunião com ${clientPayload.name}`,
                 startIso,
                 endIso,
-                clientPayload.email
+                attendees
             );
 
             if (googleData) {

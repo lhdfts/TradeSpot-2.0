@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import type { Event } from '../types';
-import { Button } from '../components/ui/Button';
+import { Button } from '../components/ui/button';
 import { Plus, Edit } from 'lucide-react';
 import { EventModal } from '../components/EventModal';
 import { ExportIcon } from '../components/ExportIcon';
