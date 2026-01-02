@@ -1,10 +1,10 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
-import { getAppointmentWebhooks } from '../config/webhooks';
+import { getAppointmentWebhooks } from '../config/webhooks.js';
 import { createClient } from '@supabase/supabase-js';
-import { createAppointmentSchema } from '../schemas/appointmentSchema';
-import { findBestAttendant } from '../utils/distribution';
-import { createGoogleMeetLink } from '../services/googleMeet';
+import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
+import { findBestAttendant } from '../utils/distribution.js';
+import { createGoogleMeetLink } from '../services/googleMeet.js';
 
 const router = Router();
 

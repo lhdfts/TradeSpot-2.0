@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
-import { SearchPersonsSchema, SearchDealsSchema } from '../schemas/pipedriveSchemas';
+import { SearchPersonsSchema, SearchDealsSchema } from '../schemas/pipedriveSchemas.js';
 
 const router = Router();
 
