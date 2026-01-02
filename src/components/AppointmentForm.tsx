@@ -29,7 +29,7 @@ interface AppointmentFormProps {
     onCancel: () => void;
 }
 
-export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, prefillData, onSuccess }) => {
+export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, prefillData, onSuccess, onCancel }) => {
     const { createAppointment, updateAppointment, appointments } = useAppointments();
     const { attendants, events, loading } = useFormData();
     const { user } = useAuth();
@@ -660,7 +660,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 {!initialData && <ClientHistory phone={formData.phone} />}
             </div>
             <div className="flex justify-end gap-3">
-                <Button type="button" variant="ghost" onClick={onCancel} className="flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={() => onCancel()} className="flex items-center gap-2">
                     Cancelar
                 </Button>
                 {!initialData && (
