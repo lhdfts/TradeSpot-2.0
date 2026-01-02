@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useAppointments } from '../context/AppointmentContext';
-import { Search, Copy, Calendar } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Search, Copy, Calendar, Check } from 'lucide-react';
 import type { Appointment } from '../types';
-import { Button } from '../components/ui/Button';
-import { CustomSelect } from '../components/CustomSelect';
+import { Button } from '../components/ui/button';
+import { FloatingInput } from '../components/FloatingInput';
+import { FloatingSelect } from '../components/FloatingSelect';
 import { DateRangePicker } from '../components/DateRangePicker';
+import { toastManager } from '../components/ui/toast';
 
-const Select = CustomSelect;
 
 interface MyAppointmentsProps {
     onEdit: (appt: Appointment) => void;
@@ -14,12 +16,18 @@ interface MyAppointmentsProps {
 
 export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const { appointments } = useAppointments();
+    const { user } = useAuth();
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+
     const filtered = appointments.filter(a => {
-        const matchesSearch = a.lead.toLowerCase().includes(search.toLowerCase()) || a.phone.includes(search);
+        const matchesUser = user && (a.attendantId === user.id || a.createdBy === user.id);
+        if (!matchesUser) return false;
+
+        const matchesSearch = a.lead.toLowerCase().includes(search.toLowerCase()) || a.phone.toString().includes(search);
         const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
         const matchesDate =
             (!dateRange.start || a.date >= dateRange.start) &&
@@ -31,18 +39,33 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
         return dateA.getTime() - dateB.getTime();
     });
 
-    const copyPhone = (phone: string) => {
-        const digitsOnly = phone.replace(/\D/g, '');
-        navigator.clipboard.writeText(digitsOnly);
-        // Could add a toast here
+    const copyPhone = async (phone: number | string, id: string) => {
+        const phoneStr = phone.toString();
+        const digitsOnly = phoneStr.replace(/\D/g, '');
+        try {
+            await navigator.clipboard.writeText(digitsOnly);
+            setCopiedId(id);
+            toastManager.add({
+                title: "Sucesso",
+                description: "Telefone copiado com sucesso!",
+                type: 'success',
+            });
+            setTimeout(() => setCopiedId(null), 2000);
+        } catch (err) {
+            toastManager.add({
+                title: "Erro",
+                description: "Falha ao copiar telefone. Tente manualmente.",
+                type: 'error',
+            });
+        }
     };
 
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'Realizado': return 'bg-green-500/10 text-green-400 border-green-500/20';
-            case 'Pendente': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+            case 'Pendente': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
             case 'Cancelado': return 'bg-red-500/10 text-red-400 border-red-500/20';
-            case 'Reagendado': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+            case 'Reagendado': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
             case 'Esquecimento': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
             case 'Não compareceu': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
             default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
@@ -52,23 +75,21 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     return (
         <div className="space-y-6">
             {/* Filters */}
-            {/* Filters */}
             <div className="flex flex-col md:flex-row gap-4 bg-surface p-4 rounded-lg border border-border shadow-sm">
                 <div className="flex-1">
-                    <label className="block text-sm font-bold text-foreground mb-1">Pesquisa</label>
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Buscar por nome ou telefone..."
-                            className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                        <FloatingInput
+                            label="Pesquisa"
+                            startIcon={<Search size={18} />}
                             value={search}
                             onChange={e => setSearch(e.target.value)}
+                            placeholder=""
+                            className="bg-background"
                         />
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2 items-end">
-                    <Select
+                    <FloatingSelect
                         label="Status"
                         value={statusFilter}
                         onChange={e => setStatusFilter(e.target.value)}
@@ -94,7 +115,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
             {/* Desktop Table */}
             <div className="hidden md:block bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
                 <table className="w-full text-left">
-                    <thead className="bg-[#141414] border-b border-white/10 text-white text-xs uppercase tracking-wider font-bold">
+                    <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                         <tr>
                             <th className="px-6 py-4">Data/Hora</th>
                             <th className="px-6 py-4">Aluno(a)</th>
@@ -116,11 +137,11 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                                     <div className="flex items-center gap-2 text-sm text-secondary">
                                         {appt.phone}
                                         <button
-                                            onClick={() => copyPhone(appt.phone)}
+                                            onClick={() => copyPhone(appt.phone, appt.id)}
                                             className="opacity-0 group-hover:opacity-100 transition-opacity text-foreground hover:text-foreground"
                                             title="Copiar telefone"
                                         >
-                                            <Copy size={12} />
+                                            {copiedId === appt.id ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
                                         </button>
                                     </div>
                                 </td>
@@ -131,7 +152,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-foreground">
-                                    {appt.attendantId === '1' ? 'João (SDR)' : 'Ana (Closer)'}
+                                    {appt.attendantName || appt.attendantId}
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                     <Button
@@ -157,8 +178,8 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                                 <h3 className="text-foreground font-semibold">{appt.lead}</h3>
                                 <div className="flex items-center gap-2 text-sm text-secondary mt-1">
                                     {appt.phone}
-                                    <button onClick={() => copyPhone(appt.phone)} className="text-foreground">
-                                        <Copy size={14} />
+                                    <button onClick={() => copyPhone(appt.phone, appt.id)} className="text-foreground">
+                                        {copiedId === appt.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
                                     </button>
                                 </div>
                             </div>
@@ -195,7 +216,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
             {filtered.length === 0 && (
                 <div className="text-center py-12 text-secondary bg-surface rounded-lg border border-border">
                     <Calendar size={48} className="mx-auto mb-4 opacity-20" />
-                    <p>Nenhum agendamento encontrado.</p>
+                    <p>Você não possui agendamentos encontrados.</p>
                 </div>
             )}
         </div>

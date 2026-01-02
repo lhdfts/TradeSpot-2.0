@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, ChevronDown } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Button } from './ui/Button';
+import { Button } from './ui/button';
 
 interface TimePickerModalProps {
     label: string;

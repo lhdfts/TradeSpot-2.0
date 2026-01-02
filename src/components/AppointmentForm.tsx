@@ -1,38 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { CustomSelect } from './CustomSelect';
-import { Button } from './ui/Button';
+import { Eraser, Save } from 'lucide-react';
+import { Button } from './ui/button';
 import { FloatingDateInput } from './FloatingDateInput';
 import { TimePickerInput } from './TimePickerInput';
+import { FloatingInput } from './FloatingInput';
+import { FloatingTextArea } from './FloatingTextArea';
+import { FloatingSelect } from './FloatingSelect';
 import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
 import { APPOINTMENT_STATUSES } from '../types';
 import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, AppointmentStatus } from '../types';
 import { findAvailableCloser } from '../utils/distribution';
+import { api } from '../services/api';
+import { ClientHistory } from './ClientHistory';
+import { useAuth } from '../context/AuthContext';
+import { toastManager } from './ui/toast';
+import { sanitizeInput } from '../utils/security';
 
-// Wrapper for Input with label support
-const Input: React.FC<any> = ({ label, className, ...props }) => (
-    <div className="space-y-1">
-        {label && <label className="block text-sm font-bold text-foreground">{label}</label>}
-        <input
-            className={`w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all ${className || ''}`}
-            {...props}
-        />
-    </div>
-);
-
-// Wrapper for Select
-const Select = CustomSelect;
 
 interface AppointmentFormProps {
     initialData?: Appointment | null;
+    prefillData?: {
+        lead?: string;
+        email?: string;
+        phone?: string;
+    } | null;
     onSuccess: () => void;
     onCancel: () => void;
 }
 
-export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, onSuccess, onCancel }) => {
+export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, prefillData, onSuccess, onCancel }) => {
     const { createAppointment, updateAppointment, appointments } = useAppointments();
     const { attendants, events, loading } = useFormData();
+    const { user } = useAuth();
     const [rates, setRates] = useState<Record<string, number>>({});
+    const [isExistingClient, setIsExistingClient] = useState(false);
 
     useEffect(() => {
         fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,JPY-BRL')
@@ -67,11 +69,43 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, o
         }
     });
 
+    // When editing, only allow editing Status, Descrição, and Atendente
+    const isEditing = !!initialData;
+
+    const allowedTypes = React.useMemo(() => {
+        const allTypes: { value: AppointmentType, label: string }[] = [
+            { value: 'Ligação SDR', label: 'Ligação SDR' },
+            { value: 'Ligação Closer', label: 'Ligação Closer' },
+            { value: 'Agendamento Pessoal', label: 'Agendamento Pessoal' },
+            { value: 'Reagendamento Closer', label: 'Reagendamento Closer' },
+            { value: 'Upgrade', label: 'Upgrade' }
+        ];
+
+        if (!user) return [];
+        if (user.sector === 'TEI' || user.role === 'Dev') return allTypes;
+
+        if (user.sector === 'SDR') {
+            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer'].includes(t.value));
+        }
+        if (user.sector === 'Closer') {
+            return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
+        }
+
+        return allTypes;
+    }, [user]);
+
+    const attendantOptions = [
+        { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
+        ...attendants
+            .filter(a => formData.type === 'Upgrade' ? a.sector === 'Closer' : true)
+            .map(a => ({ value: a.id, label: a.name }))
+    ];
+
     useEffect(() => {
         if (initialData) {
             setFormData({
                 lead: initialData.lead,
-                phone: initialData.phone,
+                phone: String(initialData.phone || ''),
                 email: initialData.email || '',
                 date: initialData.date,
                 time: initialData.time,
@@ -83,44 +117,59 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, o
                 notes: initialData.notes || '',
                 additionalInfo: initialData.additionalInfo || '',
                 studentProfile: initialData.studentProfile || {
-                    interest: 'Médio',
+                    interest: 'Mediano',
                     knowledge: 'Iniciante',
                     financial: { currency: 'BRL', amount: '' }
                 }
             });
+        } else if (prefillData) {
+            setFormData(prev => ({
+                ...prev,
+                lead: prefillData.lead || prev.lead,
+                email: prefillData.email || prev.email,
+                phone: prefillData.phone || prev.phone
+            }));
         }
-    }, [initialData]);
-
-    // Mock logged-in user (in a real app, this would come from AuthContext)
-    const CURRENT_USER_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
-    const currentUser = attendants.find(a => a.id === CURRENT_USER_ID) || attendants[0];
+    }, [initialData, prefillData]);
 
     // Auto-fill and disable logic
     useEffect(() => {
-        if (!initialData && formData.type) {
+        if (!initialData && formData.type && user) {
             // 1. Ligação SDR
-            if (formData.type === 'Ligação SDR' && currentUser) {
-                setFormData(prev => ({ ...prev, attendantId: currentUser.id }));
+            if (formData.type === 'Ligação SDR') {
+                if (user.sector === 'SDR') {
+                    setFormData(prev => ({ ...prev, attendantId: user.id }));
+                } else if (user.sector === 'TEI') { // Dev override if needed
+                    setFormData(prev => ({ ...prev, attendantId: user.id }));
+                }
             }
             // 2. Ligação Closer
             else if (formData.type === 'Ligação Closer') {
-                setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
+                if (user.sector === 'Closer') {
+                    setFormData(prev => ({ ...prev, attendantId: user.id }));
+                } else {
+                    setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
+                }
             }
             // 3. Agendamento Pessoal
-            else if (formData.type === 'Personal Appointment' && currentUser) {
-                setFormData(prev => ({ ...prev, attendantId: currentUser.id }));
+            else if (formData.type === 'Agendamento Pessoal') {
+                setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
-            // 4. Reagendamento Closer (Reschedule)
-            // 4. Reagendamento Closer (Reschedule)
-            else if (formData.type === 'Reschedule' && formData.email) {
-                // Find last appointment for this email of type 'Ligação Closer' or 'Reschedule'
-                const relevantAppointments = appointments.filter(app =>
-                    app.email === formData.email &&
-                    (app.type === 'Ligação Closer' || app.type === 'Reschedule')
-                );
+            // 4. Reagendamento Closer
+            else if (formData.type === 'Reagendamento Closer' && formData.phone) {
+                const targetPhone = formData.phone.replace(/\D/g, '');
+
+                // Search for relevant past appointments
+                const relevantAppointments = appointments.filter(app => {
+                    const appPhone = String(app.phone);
+                    return appPhone === targetPhone &&
+                        (app.type === 'Ligação Closer' ||
+                            app.type === 'Reagendamento Closer' ||
+                            app.type === 'Agendamento Pessoal');
+                });
 
                 if (relevantAppointments.length > 0) {
-                    // Sort by date/time descending
+                    // Sort by date/time descending to get most recent
                     relevantAppointments.sort((a, b) => {
                         const dateA = new Date(`${a.date}T${a.time}`);
                         const dateB = new Date(`${b.date}T${b.time}`);
@@ -129,46 +178,113 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, o
 
                     const lastAttendantId = relevantAppointments[0].attendantId;
                     setFormData(prev => ({ ...prev, attendantId: lastAttendantId }));
+                } else {
+                    // No history logic needed here, validation handles permissions. 
+                    // Fallback to manual selection or distribution is fine.
                 }
             }
+            // 5. Upgrade
+            else if (formData.type === 'Upgrade') {
+                // Manual selection - do not auto-overwrite if user selected something
+                // Ensure field is enabled in the UI
+            }
         }
-    }, [formData.type, formData.lead, formData.email, currentUser, appointments, initialData]);
+    }, [formData.type, formData.lead, formData.phone, user, appointments, initialData]);
 
-    // Original auto-assign logic (kept for fallback or specific cases, but overridden by above for main types)
-    // We can merge or remove the old one. The old one handled 'Closer' vs 'SDR' sector logic.
-    // The new requirement is more specific. Let's keep the distribution logic trigger but ensure it respects the 'distribuicao_automatica' flag.
-    // Actually, the previous logic was: if type is Closer, findAvailableCloser.
-    // Now, if type is Closer, we set 'distribuicao_automatica'.
-    // The ACTUAL distribution happens on SUBMIT (backend/n8n) or we resolve it here?
-    // The user said: "directed to a closer following the check we have already configured".
-    // This implies we should still run `findAvailableCloser` but maybe assign it immediately?
-    // OR does "filled in with 'Distribuição Automática'" mean the UI shows that, but the data sent has the resolved ID?
-    // Usually "filled in with..." implies the UI value.
-    // Let's assume the UI shows "Distribuição Automática" and we resolve it on submit OR we resolve it and show the name?
-    // "filled in with 'Distribuição Automática'" -> This sounds like a specific option in the dropdown.
-    // But then "directed to a closer...".
-    // If I set `attendantId` to 'distribuicao_automatica', the Select needs to have that option.
-    // And on submit, we probably need to resolve it if it's not resolved yet.
-    // BUT, the previous code resolved it in the Effect.
-    // Let's adapt: If 'Ligação Closer', set to 'distribuicao_automatica'.
-    // The actual assignment might happen later or we keep the `findAvailableCloser` logic to resolve it to a REAL ID but maybe we hide it?
-    // "filled in with 'Distribuição Automática' ... and be disabled".
-    // If I resolve it to "João", the UI shows "João".
-    // If I set it to "distribuicao_automatica", the UI shows "Distribuição Automática".
-    // I will implement the UI showing "Distribuição Automática".
-    // The resolution (finding the closer) should probably happen on SAVE if we want to follow "directed to a closer...".
-    // OR, we resolve it now, but the UI *says* "Distribuição Automática"? That's complex for a Select.
-    // Let's stick to: Set value to 'distribuicao_automatica'.
-    // We need to ensure `findAvailableCloser` is used somewhere.
-    // If the user wants the form to "load times that are and are not available", maybe the resolution happens dynamically?
-    // Let's keep the `findAvailableCloser` logic but maybe it updates a different state or we do it on submit.
-    // For now, I will strictly follow "filled in with 'Distribuição Automática'".
 
-    // We need to remove the OLD useEffect that was doing auto-assignment to avoid conflicts.
-    // I will replace the block from line 94 to 121 with the new logic.
+    const checkEligibility = (phone: string) => {
+        const cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length < 8) return false;
+
+        return appointments.some(app =>
+            String(app.phone) === cleanPhone &&
+            ['Ligação Closer', 'Upgrade'].includes(app.type)
+        );
+    };
+
+    const handlePhoneBlur = async () => {
+        if (!formData.phone) return;
+        const digits = formData.phone.replace(/\D/g, '');
+        if (!digits) return;
+
+        // Validation for Reagendamento Closer
+        if (formData.type === 'Reagendamento Closer') {
+            if (!checkEligibility(formData.phone)) {
+                toastManager.add({
+                    title: "Permissão Negada",
+                    description: "Este cliente não possui um histórico (Ligação Closer ou Upgrade) para realizar um reagendamento.",
+                    type: 'error'
+                });
+                setFormData(prev => ({ ...prev, type: '' as AppointmentType }));
+                return;
+            }
+        }
+
+        try {
+            const client = await api.clients.getByPhone(digits);
+            if (client) {
+                setFormData(prev => ({
+                    ...prev,
+                    lead: client.name,
+                    email: client.email || '',
+                    studentProfile: {
+                        interest: client.interest_level || '',
+                        knowledge: client.knowledge_level || '',
+                        financial: {
+                            currency: client.financial_currency || 'BRL',
+                            amount: client.financial_amount ? String(client.financial_amount) : ''
+                        }
+                    }
+                }));
+                setIsExistingClient(true);
+            } else {
+                setIsExistingClient(false);
+            }
+        } catch (error) {
+            console.error('Error checking client phone:', error);
+            setIsExistingClient(false);
+        }
+    };
+
+
+    const handleClear = () => {
+        setFormData({
+            lead: '',
+            phone: '',
+            email: '',
+            date: '',
+            time: '',
+            type: '' as AppointmentType,
+            status: 'Pendente' as AppointmentStatus,
+            attendantId: '',
+            eventId: '',
+            meetLink: '',
+            notes: '',
+            additionalInfo: '',
+            studentProfile: {
+                interest: '' as ProfileLevel,
+                knowledge: '' as KnowledgeLevel,
+                financial: { currency: 'BRL', amount: '' }
+            }
+        });
+        setIsExistingClient(false);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Final Validation Gatekeeper
+        if (formData.type === 'Reagendamento Closer') {
+            if (!checkEligibility(formData.phone)) {
+                toastManager.add({
+                    title: "Erro",
+                    description: "Este cliente não possui um histórico (Ligação Closer ou Upgrade) para realizar um reagendamento.",
+                    type: 'error'
+                });
+                return;
+            }
+        }
+
         try {
             let finalAttendantId = formData.attendantId;
 
@@ -189,16 +305,32 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, o
                 }
             }
 
+            // Map creatorId
+            const creatorId = user?.id;
+
             if (initialData) {
-                await updateAppointment(initialData.id, { ...formData, attendantId: finalAttendantId } as any);
+                await updateAppointment(initialData.id, {
+                    ...formData,
+                    phone: Number(formData.phone.replace(/\D/g, '')),
+                    attendantId: finalAttendantId,
+                    updatedBy: user?.id // Pass current user for status tracking
+                } as any);
             } else {
-                // Use a valid UUID for createdBy. In a real app, this would be the logged-in user's ID.
-                const creatorId = currentUser ? currentUser.id : 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
-                await createAppointment({ ...formData, attendantId: finalAttendantId, createdBy: creatorId } as any);
+                await createAppointment({
+                    ...formData,
+                    phone: Number(formData.phone.replace(/\D/g, '')),
+                    attendantId: finalAttendantId,
+                    createdBy: creatorId
+                } as any);
             }
             onSuccess();
         } catch (error) {
             console.error('Error saving appointment:', error);
+            toastManager.add({
+                title: "Erro",
+                description: "Erro ao salvar agendamento.",
+                type: 'error'
+            });
         }
     };
 
@@ -214,15 +346,27 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, o
         if (!amount || currency === 'BRL') return null;
         const rate = rates[currency];
         if (!rate) return null;
-        return (parseFloat(amount) * rate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        // Parse formatted string "1.000,00" -> 1000.00
+        const cleanAmount = String(amount).replace(/\./g, '').replace(',', '.');
+        const value = parseFloat(cleanAmount);
+
+        if (isNaN(value)) return null;
+
+        return (value * rate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     };
 
-    // Calculate end time (start time + 45 minutes)
     // Calculate end time (start time + duration)
     const calculateEndTime = (startTime: string) => {
         if (!startTime) return '';
         const [hours, minutes] = startTime.split(':').map(Number);
-        const duration = (formData.type === 'Ligação Closer' || formData.type === 'Reschedule') ? 45 : 30;
+
+        let duration = 30; // Default (Ligação SDR)
+
+        if (['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal'].includes(formData.type)) {
+            duration = 60;
+        }
+
         const totalMinutes = hours * 60 + minutes + duration;
         const endHours = Math.floor(totalMinutes / 60) % 24;
         const endMinutes = totalMinutes % 60;
@@ -233,251 +377,300 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, o
 
     if (loading) return <div>Carregando...</div>;
 
-    // When editing, only allow editing Status, Descrição, and Atendente
-    const isEditing = !!initialData;
+    const getBrazilStats = () => {
+        const now = new Date();
+        const brazilTimeStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+        const brazilDate = new Date(brazilTimeStr);
+        const year = brazilDate.getFullYear();
+        const month = brazilDate.getMonth();
+        const day = brazilDate.getDate();
+
+        const todayDate = new Date(year, month, day);
+        const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        const hours = String(brazilDate.getHours()).padStart(2, '0');
+        const minutes = String(brazilDate.getMinutes()).padStart(2, '0');
+        const nowTimeStr = `${hours}:${minutes}`;
+
+        return { todayDate, todayStr, nowTimeStr };
+    };
+
+    const { todayDate, todayStr, nowTimeStr } = getBrazilStats();
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4 px-1">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Row 1: ID (if exists) */}
-                {initialData && (
-                    <div className="col-span-2">
-                        <Input
-                            label="ID:"
-                            value={initialData.id}
-                            disabled
-                            className="opacity-50 cursor-not-allowed"
-                        />
-                    </div>
-                )}
-
-                {/* Row 2: Email and Aluno */}
-                <Input
-                    label="Email:"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="email@exemplo.com"
-                    disabled={isEditing}
-                    required
-                />
-
-                {/* Row 3: Aluno and Telefone (shifted) */}
-                <Input
-                    label="Aluno:"
-                    value={formData.lead}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, lead: e.target.value })}
-                    required
-                    placeholder="Nome completo do aluno"
-                    disabled={isEditing}
-                />
-                <Input
-                    label="Telefone:"
-                    value={formData.phone}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, phone: e.target.value })}
-                    required
-                    placeholder="Apenas números"
-                    disabled={isEditing}
-                />
-
-                {/* Row 3: Email and Evento */}
-
-                <Select
-                    label="Evento:"
-                    value={formData.eventId}
-                    onChange={e => setFormData({ ...formData, eventId: e.target.value })}
-                    options={[{ value: '', label: 'Selecione o evento' }, ...events.filter(e => e.status === 'Active').map(e => ({ value: e.id, label: e.event_name }))]}
-                    disabled={isEditing}
-                    required
-                />
-
-                {/* Row 4: Tipo and Perfil Financeiro */}
-                <Select
-                    label="Tipo:"
-                    value={formData.type}
-                    onChange={e => setFormData({ ...formData, type: e.target.value as AppointmentType })}
-                    options={[
-                        { value: '', label: 'Selecione' },
-                        // Only show "Ligação SDR" if user is SDR
-                        ...(currentUser?.sector === 'SDR' ? [{ value: 'Ligação SDR', label: 'Ligação SDR' }] : []),
-                        { value: 'Ligação Closer', label: 'Ligação Closer' },
-                        { value: 'Personal Appointment', label: 'Agendamento Pessoal' },
-                        { value: 'Reschedule', label: 'Reagendamento Closer' } // Mapped to "Reagendamento Closer" logic
-                    ]}
-                    disabled={isEditing}
-                />
-                <div className="space-y-1">
-                    <label className="block text-sm font-bold text-foreground">Perfil Financeiro:</label>
-                    <div className="flex gap-2">
-                        <div className="w-24">
-                            <Select
-                                value={formData.studentProfile.financial.currency}
-                                onChange={e => setFormData(prev => ({
-                                    ...prev,
-                                    studentProfile: {
-                                        ...prev.studentProfile,
-                                        financial: { ...prev.studentProfile.financial, currency: e.target.value }
-                                    }
-                                }))}
-                                options={[
-                                    { value: 'BRL', label: 'BRL' },
-                                    { value: 'USD', label: 'USD' },
-                                    { value: 'EUR', label: 'EUR' },
-                                    { value: 'JPY', label: 'JPY' }
-                                ]}
-                                disabled={isEditing}
-                            />
+        <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="flex border border-border rounded-lg bg-surface shadow-sm overflow-hidden">
+                <div className="flex-1 p-6 space-y-4 min-w-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Row 2: Telefone (First) and Aluno */}
+                        <div className="col-span-1 md:col-span-2 relative mt-0 mb-2">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-border" />
+                            </div>
+                            <div className="relative flex justify-center text-xs">
+                                <span className="bg-surface px-2 text-muted-foreground font-medium">
+                                    Cliente
+                                </span>
+                            </div>
                         </div>
-                        <div className="flex-1">
-                            <Input
-                                value={formData.studentProfile.financial.amount}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                    const val = e.target.value.replace(/[^0-9]/g, '');
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        studentProfile: {
-                                            ...prev.studentProfile,
-                                            financial: { ...prev.studentProfile.financial, amount: val }
-                                        }
-                                    }))
-                                }}
-                                placeholder="Valor"
-                                disabled={isEditing}
-                                required
-                            />
-                            {getConvertedValue() && (
-                                <div className="text-xs text-white mt-1 text-right">
-                                    ≈ {getConvertedValue()}
+                        <FloatingInput
+                            label="Telefone"
+                            value={formData.phone}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, phone: sanitizeInput.digits(e.target.value) })}
+                            onBlur={handlePhoneBlur}
+                            required
+                            disabled={isEditing || isExistingClient}
+                        />
+                        <FloatingInput
+                            label="Aluno"
+                            value={formData.lead}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                setFormData({ ...formData, lead: sanitizeInput.name(e.target.value) });
+                            }}
+                            onBlur={() => setFormData(prev => ({ ...prev, lead: prev.lead.trim() }))}
+                            required
+                            disabled={isEditing || isExistingClient}
+                        />
+
+                        {/* Row 2: Email and Perfil de Interesse */}
+                        <FloatingInput
+                            label="Email"
+                            type="email"
+                            value={formData.email}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                const val = sanitizeInput.email(e.target.value);
+                                setFormData({ ...formData, email: val });
+                                if (isExistingClient && val !== formData.email) {
+                                    setIsExistingClient(false);
+                                }
+                            }}
+                            required
+                            disabled={isEditing}
+                        />
+                        <FloatingSelect
+                            label="Perfil de Interesse"
+                            value={formData.studentProfile.interest}
+                            onChange={(e: any) => updateProfile('interest', e.target.value)}
+                            options={[{ value: 'Alto', label: 'Alto' }, { value: 'Mediano', label: 'Mediano' }, { value: 'Desconhecido', label: 'Desconhecido' }]}
+                            disabled={isEditing}
+                        />
+
+                        {/* Row 3: Moeda/Financeiro and Perfil de Conhecimento */}
+                        <div className="space-y-1">
+                            <div className="flex gap-2">
+                                <div className="w-24">
+                                    <FloatingSelect
+                                        label="Moeda"
+                                        value={formData.studentProfile.financial.currency}
+                                        onChange={(e: any) => setFormData(prev => ({
+                                            ...prev,
+                                            studentProfile: {
+                                                ...prev.studentProfile,
+                                                financial: { ...prev.studentProfile.financial, currency: e.target.value }
+                                            }
+                                        }))}
+                                        options={[
+                                            { value: 'BRL', label: 'BRL' },
+                                            { value: 'USD', label: 'USD' },
+                                            { value: 'EUR', label: 'EUR' },
+                                            { value: 'JPY', label: 'JPY' }
+                                        ]}
+                                        disabled={isEditing}
+                                    />
                                 </div>
-                            )}
+                                <div className="flex-1">
+                                    <FloatingInput
+                                        label="Perfil Financeiro (Valor)"
+                                        value={formData.studentProfile.financial.amount}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                            const formatted = sanitizeInput.currency(e.target.value);
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                studentProfile: {
+                                                    ...prev.studentProfile,
+                                                    financial: { ...prev.studentProfile.financial, amount: formatted }
+                                                }
+                                            }))
+                                        }}
+                                        disabled={isEditing}
+                                        required
+                                    />
+                                    {getConvertedValue() && (
+                                        <div className="text-xs text-muted-foreground mt-1 text-right">
+                                            ≈ {getConvertedValue()}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <FloatingSelect
+                            label="Perfil de Conhecimento"
+                            value={formData.studentProfile.knowledge}
+                            onChange={(e: any) => updateProfile('knowledge', e.target.value)}
+                            options={[{ value: 'Iniciante', label: 'Iniciante' }, { value: 'Intermediário', label: 'Intermediário' }, { value: 'Avançado', label: 'Avançado' }]}
+                            disabled={isEditing}
+                        />
+
+                        {/* Row 4: Evento and Tipo */}
+                        <div className="col-span-1 md:col-span-2 relative mt-1 mb-2">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-border" />
+                            </div>
+                            <div className="relative flex justify-center text-xs">
+                                <span className="bg-surface px-2 text-muted-foreground font-medium">
+                                    Agendamento
+                                </span>
+                            </div>
+                        </div>
+                        <FloatingSelect
+                            label="Evento"
+                            value={formData.eventId}
+                            onChange={(e: any) => setFormData({ ...formData, eventId: e.target.value })}
+                            options={[...events.filter(e => e.status === true).map(e => ({ value: e.id, label: e.event_name }))]}
+                            disabled={isEditing}
+                        />
+                        <FloatingSelect
+                            label="Tipo"
+                            value={formData.type}
+                            onChange={(e: any) => {
+                                const newType = e.target.value as AppointmentType;
+                                if (newType === 'Reagendamento Closer' && formData.phone) {
+                                    if (!checkEligibility(formData.phone)) {
+                                        toastManager.add({
+                                            title: "Permissão Negada",
+                                            description: "Este cliente não possui um histórico (Ligação Closer ou Upgrade) para realizar um reagendamento.",
+                                            type: 'error'
+                                        });
+                                        return; // Prevent selection
+                                    }
+                                }
+                                setFormData({ ...formData, type: newType });
+                            }}
+                            options={[...allowedTypes]}
+                            disabled={isEditing}
+                        />
+
+                        {/* Row 5: Data and Horário */}
+                        <FloatingDateInput
+                            label="Data"
+                            value={formData.date}
+                            onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
+                            minDate={todayDate}
+                            disabled={isEditing || !formData.email || !formData.lead || !formData.phone || !formData.eventId || !formData.type}
+                        />
+                        <div className="grid grid-cols-2 gap-4">
+                            <TimePickerInput
+                                label="Horário"
+                                value={formData.time}
+                                onChange={(time) => setFormData({ ...formData, time })}
+                                minTime={formData.date === todayStr ? nowTimeStr : undefined}
+                                disabled={isEditing || !formData.date}
+                            />
+                            <FloatingInput
+                                label="Horário Final"
+                                type="text"
+                                value={endTime}
+                                disabled
+                                className="opacity-50 cursor-not-allowed"
+                            />
                         </div>
                     </div>
-                </div>
 
-                {/* Row 5: Perfil de Interesse and Perfil de Conhecimento */}
-                <Select
-                    label="Perfil de Interesse:"
-                    value={formData.studentProfile.interest}
-                    onChange={e => updateProfile('interest', e.target.value)}
-                    options={[{ value: '', label: 'Selecione' }, { value: 'Baixo', label: 'Baixo' }, { value: 'Médio', label: 'Médio' }, { value: 'Alto', label: 'Alto' }]}
-                    disabled={isEditing}
-                />
-                <Select
-                    label="Perfil de Conhecimento:"
-                    value={formData.studentProfile.knowledge}
-                    onChange={e => updateProfile('knowledge', e.target.value)}
-                    options={[{ value: '', label: 'Selecione' }, { value: 'Iniciante', label: 'Iniciante' }, { value: 'Intermediário', label: 'Intermediário' }, { value: 'Avançado', label: 'Avançado' }]}
-                    disabled={isEditing}
-                />
-
-                {/* Row 6: Data and Horário */}
-                <FloatingDateInput
-                    label="Data:"
-                    value={formData.date}
-                    onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
-                    disabled={isEditing || !formData.email || !formData.lead || !formData.phone || !formData.eventId || !formData.type}
-                />
-                <div className="grid grid-cols-2 gap-4">
-                    <TimePickerInput
-                        label="Horário:"
-                        value={formData.time}
-                        onChange={(time) => setFormData({ ...formData, time })}
-                        disabled={isEditing || !formData.date}
-                    />
-                    <div className="space-y-1">
-                        <label className="block text-sm font-bold text-foreground">Horário Final:</label>
-                        <Input
-                            type="text"
-                            value={endTime}
-                            disabled
-                            className="opacity-50 cursor-not-allowed"
+                    {/* Row 7: Informações Adicionais */}
+                    <div className="relative">
+                        <FloatingTextArea
+                            label="Informações Adicionais"
+                            value={formData.additionalInfo}
+                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                                setFormData({ ...formData, additionalInfo: sanitizeInput.strictText(e.target.value) });
+                            }}
+                            maxLength={300}
+                            disabled={isEditing}
+                            rows={3}
+                            className="pb-6"
                         />
+                        <div className="absolute bottom-2 right-3 text-xs text-muted-foreground pointer-events-none">
+                            {formData.additionalInfo.length}/300
+                        </div>
                     </div>
+
+                    {/* Row 7: Descrição do Agendamento (TextArea) - ONLY VISIBLE WHEN EDITING */}
+                    {initialData && (
+                        <div className="space-y-1">
+                            <label className="block text-sm font-bold text-foreground">Descrição do Agendamento:</label>
+                            <textarea
+                                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
+                                rows={4}
+                                value={formData.notes}
+                                onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                                maxLength={500}
+                                placeholder="Digite a descrição do agendamento..."
+                            />
+                        </div>
+                    )}
+
+                    {/* Row 8: Atendente and Status */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className={!initialData ? "col-span-2" : ""}>
+                            <FloatingSelect
+                                label="Atendente"
+                                value={formData.attendantId}
+                                onChange={(e: any) => setFormData({ ...formData, attendantId: e.target.value })}
+                                options={attendantOptions}
+                                disabled={
+                                    // Enabled if:
+                                    // 1. Creating new 'Upgrade' appointment
+                                    // 2. Editing existing appointment AND user has specific role permissions
+                                    isEditing
+                                        ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
+                                        : formData.type !== 'Upgrade'
+                                }
+                            />
+                        </div>
+                        {initialData && (
+                            <FloatingSelect
+                                label="Status"
+                                value={formData.status}
+                                onChange={(e: any) => setFormData({ ...formData, status: e.target.value as AppointmentStatus })}
+                                options={APPOINTMENT_STATUSES.map(status => ({ value: status, label: status }))}
+                            />
+                        )}
+                        {initialData && (initialData.updater || initialData.updatedBy) && (
+                            <div className="col-span-1 md:col-span-2 flex justify-end -mt-3">
+                                <span className="text-xs text-muted-foreground">
+                                    Editado por: {initialData.updater?.name || 'Sistema'}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Row 9: Google Meet */}
+                    {initialData && (
+                        <FloatingInput
+                            label="Google Meet"
+                            value={formData.meetLink}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, meetLink: e.target.value })}
+                            className="text-blue-500"
+                            disabled={isEditing}
+                        />
+                    )}
+
                 </div>
+
+                {!initialData && <ClientHistory phone={formData.phone} />}
             </div>
-
-            {/* Row 7: Informações Adicionais */}
-            <div className="space-y-1">
-                <label className="block text-sm font-bold text-foreground">Informações Adicionais:</label>
-                <textarea
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50 resize-none"
-                    rows={3}
-                    value={formData.additionalInfo}
-                    onChange={e => setFormData({ ...formData, additionalInfo: e.target.value })}
-                    maxLength={300}
-                    placeholder="Nenhuma informação adicional"
-                    disabled={isEditing}
-                    required
-                />
-                <div className="text-xs text-muted-foreground text-right">
-                    {formData.additionalInfo.length}/300
-                </div>
-            </div>
-
-            {/* Row 7: Descrição do Agendamento (TextArea) - ONLY VISIBLE WHEN EDITING */}
-            {initialData && (
-                <div className="space-y-1">
-                    <label className="block text-sm font-bold text-foreground">Descrição do Agendamento:</label>
-                    <textarea
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
-                        rows={4}
-                        value={formData.notes}
-                        onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                        maxLength={500}
-                        placeholder="Digite a descrição do agendamento..."
-                    />
-                </div>
-            )}
-
-            {/* Row 8: Atendente and Status */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className={!initialData ? "col-span-2" : ""}>
-                    <Select
-                        label="Atendente:"
-                        value={formData.attendantId}
-                        onChange={e => setFormData({ ...formData, attendantId: e.target.value })}
-                        options={[
-                            { value: '', label: 'Selecione' },
-                            { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
-                            ...attendants.map(a => ({ value: a.id, label: a.name }))
-                        ]}
-                        required
-                        disabled={
-                            // Disabled for specific types as per requirements
-                            formData.type === 'Ligação SDR' ||
-                            formData.type === 'Ligação Closer' ||
-                            formData.type === 'Personal Appointment' ||
-                            formData.type === 'Reschedule'
-                        }
-                    />
-                </div>
-                {initialData && (
-                    <Select
-                        label="Status:"
-                        value={formData.status}
-                        onChange={e => setFormData({ ...formData, status: e.target.value as AppointmentStatus })}
-                        options={APPOINTMENT_STATUSES.map(status => ({ value: status, label: status }))}
-                    />
-                )}
-            </div>
-
-            {/* Row 9: Google Meet */}
-            {initialData && (
-                <Input
-                    label="Google Meet:"
-                    value={formData.meetLink}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, meetLink: e.target.value })}
-                    placeholder="Link do Google Meet"
-                    className="text-blue-500"
-                    disabled={isEditing}
-                />
-            )}
-
-            <div className="flex justify-end gap-3 pt-6 border-t border-border">
-                <Button type="button" variant="secondary" onClick={onCancel}>
-                    Fechar
+            <div className="flex justify-end gap-3">
+                <Button type="button" variant="ghost" onClick={() => onCancel()} className="flex items-center gap-2">
+                    Cancelar
                 </Button>
-                <Button type="submit">
+                {!initialData && (
+                    <Button type="button" variant="secondary" onClick={handleClear} className="flex items-center gap-2">
+                        <Eraser size={18} />
+                        Limpar
+                    </Button>
+                )}
+                <Button type="submit" className="flex items-center gap-2">
+                    <Save size={18} />
                     Salvar
                 </Button>
             </div>

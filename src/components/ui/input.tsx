@@ -1,19 +1,33 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { cn } from './Button';
+import { cn } from "@/lib/utils"
+// import { Button } from "./button" // Check if used
 import { ChevronDown, Check } from 'lucide-react';
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  unstyled?: boolean;
 }
 
-export const Input: React.FC<InputProps> = ({ label, error, className, ...props }) => {
+export const Input: React.FC<InputProps> = ({ label, error, className, unstyled, ...props }) => {
+  if (unstyled) {
+    return (
+      <input
+        className={cn(
+          'w-full bg-transparent border-0 p-0 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0',
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+
   return (
     <div className="space-y-1">
       {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
       <input
         className={cn(
-          'w-full px-3 py-2 bg-background border border-border rounded-lg text-primary placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors',
+          'w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors',
           error && 'border-danger focus:border-danger focus:ring-danger',
           className
         )}
@@ -32,7 +46,7 @@ interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>
   onChange?: (e: { target: { value: string; name?: string } }) => void;
 }
 
-export const Select: React.FC<SelectProps> = ({ label, options, className, value, onChange, disabled, name, ...props }) => {
+export const Select: React.FC<SelectProps> = ({ label, options, className, value, onChange, disabled, name }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -64,7 +78,7 @@ export const Select: React.FC<SelectProps> = ({ label, options, className, value
           type="button"
           onClick={() => !disabled && setIsOpen(!isOpen)}
           className={cn(
-            'w-full px-3 py-2 bg-background border border-border rounded-lg text-primary text-left flex items-center justify-between focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200',
+            'w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground text-left flex items-center justify-between focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200',
             disabled && 'opacity-50 cursor-not-allowed',
             className
           )}
@@ -95,7 +109,7 @@ export const Select: React.FC<SelectProps> = ({ label, options, className, value
                 onClick={() => handleSelect(opt.value)}
                 className={cn(
                   "px-3 py-2 cursor-pointer flex items-center justify-between hover:bg-primary/10 transition-colors",
-                  value === opt.value ? "text-primary font-medium bg-primary/5" : "text-secondary"
+                  value === opt.value ? "text-foreground font-medium bg-primary/5" : "text-secondary"
                 )}
               >
                 <span className="block truncate">{opt.label}</span>

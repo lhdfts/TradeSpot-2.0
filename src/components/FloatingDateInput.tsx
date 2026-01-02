@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface FloatingDateInputProps {
@@ -12,6 +12,7 @@ interface FloatingDateInputProps {
     name?: string;
     className?: string;
     maxDate?: Date;
+    minDate?: Date;
     error?: { message: string };
 }
 
@@ -24,15 +25,16 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
     name,
     className = "",
     maxDate,
+    minDate,
     error,
 }) => {
-    const [isFocused, setIsFocused] = useState(false);
+
     const [isOpen, setIsOpen] = useState(false);
     const [displayValue, setDisplayValue] = useState("");
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [coords, setCoords] = useState({ top: 0, left: 0 });
     const inputRef = useRef<HTMLInputElement>(null);
-    const dropdownRef = useRef<HTMLDivElement>(null);
+
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Formata a data para exibição (DD/MM/YYYY)
@@ -164,7 +166,6 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
     };
 
     const handleBlur = () => {
-        setIsFocused(false);
         // Se a data é incompleta ao sair do campo, limpa
         if (displayValue && displayValue.length < 10) {
             setDisplayValue("");
@@ -175,7 +176,6 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
     };
 
     const handleFocus = () => {
-        setIsFocused(true);
         inputRef.current?.select();
     };
 
@@ -213,8 +213,8 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
         }
 
         // Dias do próximo mês
-        const totalCells = 42; // 6 semanas
-        const remainingDays = totalCells - days.length;
+        // Dias do próximo mês
+        const remainingDays = (7 - (days.length % 7)) % 7;
         for (let i = 1; i <= remainingDays; i++) {
             days.push({ day: i, isOtherMonth: true });
         }
@@ -230,8 +230,16 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
         );
 
         // Verifica se a data excede maxDate
-        if (maxDate && selected > maxDate) {
-            return; // Não permite selecionar data futura
+        if (maxDate) {
+            const cleanMax = new Date(maxDate);
+            cleanMax.setHours(23, 59, 59, 999);
+            if (selected > cleanMax) return;
+        }
+
+        if (minDate) {
+            const cleanMin = new Date(minDate);
+            cleanMin.setHours(0, 0, 0, 0);
+            if (selected < cleanMin) return;
         }
 
         const formatted = `${String(selected.getDate()).padStart(2, "0")}/${String(
@@ -259,7 +267,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
 
     const formattedMonthName = `${currentMonth.toLocaleDateString('pt-BR', { month: 'long' })} - ${currentMonth.getFullYear()}`
         .split(" ")
-        .map((word, index) => {
+        .map((word, _index) => {
             if (word === "-") return "-";
             return word.charAt(0).toUpperCase() + word.slice(1);
         })
@@ -283,154 +291,180 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
             currentMonth.getMonth(),
             day
         );
-        return maxDate ? date > maxDate : false;
+        date.setHours(0, 0, 0, 0);
+
+        if (maxDate) {
+            const cleanMax = new Date(maxDate);
+            cleanMax.setHours(0, 0, 0, 0);
+            if (date > cleanMax) return true;
+        }
+        if (minDate) {
+            const cleanMin = new Date(minDate);
+            cleanMin.setHours(0, 0, 0, 0);
+            if (date < cleanMin) return true;
+        }
+        return false;
     };
 
+    const hasValue = value && value.length > 0;
+
     return (
-        <div className={className} ref={containerRef}>
-            {/* Label estático */}
-            {label && <label className="block text-sm font-bold text-foreground mb-1">{label}</label>}
-
-            <div className="relative">
-                {/* Input visual (DD/MM/YYYY) */}
-                <input
-                    type="text"
-                    id={id}
-                    ref={inputRef}
-                    value={displayValue}
-                    onChange={handleChange}
-                    onFocus={handleFocus}
-                    onBlur={handleBlur}
-                    placeholder="DD/MM/AAAA"
-                    disabled={disabled}
-                    maxLength={10}
-                    className={cn(
-                        "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-background text-foreground",
-                        error
-                            ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"
-                            : isOpen
-                                ? "border-primary focus:border-primary ring-1 ring-primary"
-                                : "border-border focus:border-primary focus:ring-1 focus:ring-primary",
-                        disabled && "opacity-50 cursor-not-allowed"
-                    )}
-                />
-
-                {/* Ícone do calendário - clicável */}
-                <button
-                    type="button"
-                    onClick={openDatePicker}
-                    disabled={disabled}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center w-6 h-6"
-                    aria-label="Abrir calendário"
-                >
-                    <CalendarIcon size={18} />
-                </button>
-
-                {/* Datepicker customizado */}
-                {isOpen && !disabled && createPortal(
-                    <div
-                        className="datepicker-portal absolute z-[9999] bg-surface border border-border rounded-lg shadow-lg p-4 w-80"
-                        style={{
-                            top: coords.top,
-                            left: coords.left
-                        }}
-                    >
-                        {/* Header com navegação */}
-                        <div className="flex items-center justify-between mb-4">
-                            <button
-                                type="button"
-                                onClick={handlePrevMonth}
-                                className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
-                            >
-                                <ChevronLeft size={16} />
-                            </button>
-                            <span className="text-sm font-bold capitalize text-foreground">
-                                {formattedMonthName}
-                            </span>
-                            <button
-                                type="button"
-                                onClick={handleNextMonth}
-                                className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
-                            >
-                                <ChevronRight size={16} />
-                            </button>
-                        </div>
-
-                        {/* Grid de dias da semana */}
-                        <div className="grid grid-cols-7 gap-1 mb-2">
-                            {weekDays.map((day) => (
-                                <div
-                                    key={day}
-                                    className="text-center text-xs font-semibold text-muted-foreground py-2"
-                                >
-                                    {day.replace(/\d/g, "")}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Grid de dias */}
-                        <div className="grid grid-cols-7 gap-1 mb-4">
-                            {calendarDays.map((dayObj, index) => (
-                                <button
-                                    key={index}
-                                    type="button"
-                                    onClick={() =>
-                                        !dayObj.isOtherMonth && !isDateDisabled(dayObj.day) && handleDateSelect(dayObj.day)
-                                    }
-                                    disabled={dayObj.isOtherMonth || isDateDisabled(dayObj.day)}
-                                    className={cn(
-                                        "h-8 rounded text-sm font-medium transition-colors",
-                                        dayObj.isOtherMonth
-                                            ? "text-muted-foreground/30 cursor-default"
-                                            : isDateDisabled(dayObj.day)
-                                                ? "text-muted-foreground/50 cursor-not-allowed"
-                                                : isDateSelected(dayObj.day)
-                                                    ? "bg-primary text-primary-foreground font-bold cursor-pointer hover:bg-primary/90"
-                                                    : "text-foreground hover:bg-accent cursor-pointer"
-                                    )}
-                                >
-                                    {dayObj.day}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Footer com botões */}
-                        <div className="flex gap-2 justify-between pt-4 border-t border-border">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setDisplayValue("");
-                                    if (onChange) {
-                                        onChange({ target: { id, name, value: "" } });
-                                    }
-                                    setIsOpen(false);
-                                }}
-                                className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
-                            >
-                                Limpar
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const today = new Date();
-                                    setCurrentMonth(today);
-                                    handleDateSelect(today.getDate());
-                                }}
-                                className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
-                            >
-                                Hoje
-                            </button>
-                        </div>
-                    </div>,
-                    document.body
+        <div className={cn("relative", className)} ref={containerRef}>
+            <input
+                type="text"
+                id={id}
+                ref={inputRef}
+                value={displayValue}
+                onChange={handleChange}
+                onFocus={() => {
+                    if (!isOpen) openDatePicker();
+                    handleFocus();
+                }}
+                onBlur={handleBlur}
+                placeholder=" "
+                disabled={disabled}
+                maxLength={10}
+                className={cn(
+                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-surface text-foreground",
+                    error
+                        ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"
+                        : isOpen
+                            ? "border-[#070707] dark:border-gray-400 focus:border-[#070707] dark:focus:border-gray-400 ring-1 ring-[#070707] dark:ring-gray-400"
+                            : "border-border focus:border-[#070707] dark:focus:border-gray-400 focus:ring-1 focus:ring-[#070707] dark:focus:ring-gray-400",
+                    disabled && "opacity-50 cursor-not-allowed"
                 )}
+            />
 
-            </div>
+            <label
+                className={cn(
+                    "absolute left-2 bg-surface px-1 transition-all duration-200 pointer-events-none z-10",
+                    hasValue || isOpen
+                        ? "-top-2 text-xs text-[#070707] dark:text-gray-400"
+                        : "top-3 text-sm text-muted-foreground",
+                    error && "text-destructive",
+                    isOpen && !error && "text-[#070707] dark:text-gray-400"
+                )}
+            >
+                {label}
+            </label>
+
+            <button
+                type="button"
+                onClick={openDatePicker}
+                disabled={disabled}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center w-6 h-6"
+                aria-label="Abrir calendário"
+            >
+                <CalendarIcon size={18} />
+            </button>
+
+            {/* Datepicker customizado */}
+            {isOpen && !disabled && createPortal(
+                <div
+                    className="datepicker-portal absolute z-[9999] bg-surface border border-border rounded-lg shadow-lg p-4 w-80"
+                    style={{
+                        top: coords.top,
+                        left: coords.left
+                    }}
+                >
+                    {/* Header com navegação */}
+                    <div className="flex items-center justify-between mb-4">
+                        <button
+                            type="button"
+                            onClick={handlePrevMonth}
+                            className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-sm font-bold capitalize text-foreground">
+                            {formattedMonthName}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleNextMonth}
+                            className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+
+                    {/* Grid de dias da semana */}
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                        {weekDays.map((day) => (
+                            <div
+                                key={day}
+                                className="text-center text-xs font-normal text-foreground py-2"
+                            >
+                                {day.replace(/\d/g, "")}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Grid de dias */}
+                    <div className="grid grid-cols-7 gap-1 mb-4">
+                        {calendarDays.map((dayObj, index) => (
+                            <button
+                                key={index}
+                                type="button"
+                                onClick={() =>
+                                    !dayObj.isOtherMonth && !isDateDisabled(dayObj.day) && handleDateSelect(dayObj.day)
+                                }
+                                disabled={dayObj.isOtherMonth || isDateDisabled(dayObj.day)}
+                                className={cn(
+                                    "h-8 rounded text-sm transition-colors",
+                                    dayObj.isOtherMonth
+                                        ? "text-muted-foreground font-normal cursor-default"
+                                        : isDateDisabled(dayObj.day)
+                                            ? "text-muted-foreground/50 cursor-not-allowed font-medium"
+                                            : isDateSelected(dayObj.day)
+                                                ? "bg-[#070707] text-white font-bold cursor-pointer hover:bg-[#070707]/90"
+                                                : "text-foreground font-bold hover:bg-accent cursor-pointer"
+                                )}
+                            >
+                                {dayObj.day}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Footer com botões */}
+                    <div className="flex gap-2 justify-between pt-4 border-t border-border">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setDisplayValue("");
+                                if (onChange) {
+                                    onChange({ target: { id, name, value: "" } });
+                                }
+                                setIsOpen(false);
+                            }}
+                            className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
+                        >
+                            Limpar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const today = new Date();
+                                setCurrentMonth(today);
+                                handleDateSelect(today.getDate());
+                            }}
+                            className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
+                        >
+                            Hoje
+                        </button>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+
 
             {/* Mensagem de erro */}
-            {error && (
-                <p className="mt-1 text-xs text-destructive">{error.message}</p>
-            )}
-        </div>
+            {
+                error && (
+                    <p className="mt-1 text-xs text-destructive">{error.message}</p>
+                )
+            }
+        </div >
     );
 };

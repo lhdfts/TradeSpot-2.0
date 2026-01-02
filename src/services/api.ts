@@ -20,6 +20,10 @@ export interface ApiService {
         update: (id: string, data: Partial<Event>) => Promise<Event>;
         delete: (id: string) => Promise<void>;
     };
+    clients: {
+        getByEmail: (email: string) => Promise<any | null>;
+        getByPhone: (phone: string | number) => Promise<any | null>;
+    };
 }
 
 import { SupabaseApiService } from './supabaseApi';
