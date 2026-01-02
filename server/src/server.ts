@@ -2,13 +2,17 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
-import pipedriveRoutes from './routes/pipedriveRoutes';
+import { fileURLToPath } from 'url';
+import pipedriveRoutes from './routes/pipedriveRoutes.js';
+import appointmentRoutes from './routes/appointmentRoutes.js';
 
-// Load environment variables from the root .env file (going up two levels from src)
 // Load environment variables
-// 1. Try to load from server/.env (current working directory usually)
 dotenv.config();
-// 2. Try to load from root .env (going up two levels) - this wont overwrite existing vars from step 1
+
+// ESM alternative for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const app = express();
@@ -20,7 +24,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/pipedrive', pipedriveRoutes);
-app.use('/api/appointments', require('./routes/appointmentRoutes').default);
+app.use('/api/appointments', appointmentRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend is running' });
@@ -29,8 +33,8 @@ app.get('/api/health', (req, res) => {
 // Export the app for Vercel serverless functions
 export default app;
 
-// Only listen if executed directly (e.g., node server.js) or if explicitly started
-if (require.main === module) {
+// Only listen if executed directly
+if (process.argv[1] === __filename) {
     app.listen(PORT, () => {
         console.log(`Server is running on port ${PORT}`);
     });
