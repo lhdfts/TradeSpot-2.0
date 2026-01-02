@@ -16,7 +16,7 @@ import { useAppointments } from './context/AppointmentContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Button } from './components/ui/Button';
+import { Button } from './components/ui/button';
 import { ToastProvider } from './components/ui/toast';
 
 // Wrapper for Create Appointment to handle search params
