@@ -11,10 +11,15 @@ const VALID_KNOWLEDGE_LEVELS = ['Iniciante', 'Intermediário', 'Avançado'] as c
 
 export const createAppointmentSchema = z.object({
     // Strict number validation (Backend removes mask, but we validate strictly numbers)
-    phone: z.coerce.string().regex(/^\d+$/, "Only numbers are allowed").min(8, "Phone too short").max(20, "Phone number is too long"),
+    phone: z.coerce.string()
+        .regex(/^\d+$/, "O telefone deve conter apenas números")
+        .min(8, "O telefone informado é muito curto")
+        .max(20, "O telefone informado é muito longo"),
 
     // Name validation
-    lead: z.string().regex(nameRegex, "Invalid name (check for double spaces)").max(100, "Name is too long"),
+    lead: z.string()
+        .regex(nameRegex, "Nome inválido (verifique espaços duplos)")
+        .max(100, "Nome muito longo"),
 
     // Secure email validation
     email: z.string()

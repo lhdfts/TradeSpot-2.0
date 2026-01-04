@@ -348,13 +348,59 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 } as any);
             }
             onSuccess();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving appointment:', error);
-            toastManager.add({
-                title: "Erro",
-                description: "Erro ao salvar agendamento.",
-                type: 'error'
-            });
+
+            if (error.response) {
+                const status = error.response.status;
+                const data = error.response.data;
+
+                // Handle Validation Errors (400)
+                if (status === 400 && data.details) {
+                    // Zod formatted error structure usually has _errors array or field specific errors
+                    // Flattening the errors for display
+                    const errorMessages: string[] = [];
+
+                    if (data.details._errors) {
+                        errorMessages.push(...data.details._errors);
+                    }
+
+                    // Iterate over keys to find field-specific errors
+                    Object.keys(data.details).forEach(key => {
+                        if (key !== '_errors' && data.details[key]._errors) {
+                            errorMessages.push(...data.details[key]._errors);
+                        }
+                    });
+
+                    // If no structured details found, fallback to generic message
+                    if (errorMessages.length === 0 && data.error) {
+                        errorMessages.push(data.error);
+                    }
+
+                    // Display unique messages
+                    [...new Set(errorMessages)].forEach(msg => {
+                        toastManager.add({
+                            title: "Erro de Validação",
+                            description: msg,
+                            type: 'error'
+                        });
+                    });
+                } else {
+                    // Generic Server Errors (4xx, 5xx)
+                    toastManager.add({
+                        title: "Erro",
+                        description: `Erro ${status}`,
+                        type: 'error'
+                    });
+                }
+            } else {
+                // Network or other errors
+                toastManager.add({
+                    title: "Erro",
+                    description: "Ocorreu um erro inesperado. Verifique sua conexão.",
+                    type: 'error'
+                });
+            }
         }
     };
 

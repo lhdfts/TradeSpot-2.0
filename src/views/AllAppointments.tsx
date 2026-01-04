@@ -235,7 +235,9 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                             <div className="text-sm text-secondary">{appt.time}</div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="text-foreground font-medium">{appt.lead}</div>
+                                            <div className="text-foreground font-medium" title={appt.lead}>
+                                                {appt.lead.length > 25 ? `${appt.lead.substring(0, 25)}...` : appt.lead}
+                                            </div>
                                             <div className="flex items-center gap-2 text-sm text-secondary">
                                                 {appt.phone}
                                                 <button
