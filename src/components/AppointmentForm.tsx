@@ -87,7 +87,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (user.sector === 'TEI' || user.role === 'Dev') return allTypes;
 
         if (user.sector === 'SDR') {
-            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer'].includes(t.value));
+            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
         }
         if (user.sector === 'Closer') {
             return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
