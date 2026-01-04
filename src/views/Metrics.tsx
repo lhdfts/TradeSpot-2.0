@@ -221,7 +221,7 @@ export const Metrics: React.FC = () => {
     // --- KPI CALCULATIONS ---
     const totalAppointments = filteredAppointments.length;
     const confirmedCount = filteredAppointments.filter(a => a.status === 'Realizado').length;
-    const conversionRate = totalAppointments > 0 ? Math.round((confirmedCount / totalAppointments) * 100) : 0;
+    // const conversionRate = totalAppointments > 0 ? Math.round((confirmedCount / totalAppointments) * 100) : 0;
 
     // --- CHART SCALING ---
 
@@ -307,7 +307,7 @@ export const Metrics: React.FC = () => {
                             <TrendingUp size={24} />
                         </div>
                         <p className="text-secondary text-sm font-medium mb-1">Taxa de Conversão</p>
-                        <p className="text-3xl font-bold text-primary">{conversionRate}%</p>
+                        <p className="text-3xl font-bold text-primary">Em breve</p>
                     </div>
                 </div>
             </div>

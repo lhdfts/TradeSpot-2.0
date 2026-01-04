@@ -1,37 +1,37 @@
-Running build in Washington, D.C., USA (East) – iad1
-Build machine configuration: 2 cores, 8 GB
-Cloning github.com/lhdfts/TradeSpot-2.0 (Branch: master, Commit: e4d6db2)
-Cloning completed: 273.000ms
-Restored build cache from previous deployment (7EhSh1uTH5BRyJq1S4SkzC519oq2)
-Running "vercel build"
-Vercel CLI 50.1.3
-Installing dependencies...
-up to date in 1s
-112 packages are looking for funding
-  run `npm fund` for details
-Running "npm run build"
-> v2@0.0.0 build
-> tsc -b && vite build
-vite v7.2.4 building client environment for production...
-transforming...
-✓ 2595 modules transformed.
-rendering chunks...
-computing gzip size...
-dist/index.html                     0.74 kB │ gzip:   0.41 kB
-dist/assets/index-D_v6Pgvd.css     71.27 kB │ gzip:  13.04 kB
-dist/assets/index-B-oA3SUg.js   1,037.97 kB │ gzip: 313.57 kB
-(!) Some chunks are larger than 500 kB after minification. Consider:
-- Using dynamic import() to code-split the application
-- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
-- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
-✓ built in 7.43s
-Using TypeScript 5.9.3 (local user-provided)
-server/src/routes/pipedriveRoutes.ts(3,56): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean '../schemas/pipedriveSchemas.js'?
-server/src/routes/appointmentRoutes.ts(3,40): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean '../config/webhooks.js'?
-server/src/routes/appointmentRoutes.ts(5,41): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean '../schemas/appointmentSchema.js'?
-server/src/routes/appointmentRoutes.ts(6,35): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean '../utils/distribution.js'?
-server/src/routes/appointmentRoutes.ts(7,38): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean '../services/googleMeet.js'?
-Build Completed in /vercel/output [50s]
-Deploying outputs...
-Deployment completed
-Creating build cache...
+15:52:06.125 Running build in Washington, D.C., USA (East) – iad1
+15:52:06.126 Build machine configuration: 2 cores, 8 GB
+15:52:06.258 Cloning github.com/lhdfts/TradeSpot-2.0 (Branch: main, Commit: 5183cba)
+15:52:06.523 Cloning completed: 265.000ms
+15:52:07.331 Restored build cache from previous deployment (9UfYuFrh6pdE5j5G8ZAczVRGcNfb)
+15:52:08.216 Running "vercel build"
+15:52:08.633 Vercel CLI 50.1.3
+15:52:09.364 Installing dependencies...
+15:52:10.834 
+15:52:10.835 up to date in 1s
+15:52:10.835 
+15:52:10.835 112 packages are looking for funding
+15:52:10.836   run `npm fund` for details
+15:52:10.871 Running "npm run build"
+15:52:10.971 
+15:52:10.972 > v2@0.0.0 build
+15:52:10.972 > tsc -b && vite build
+15:52:10.973 
+15:52:18.554 [36mvite v7.2.4 [32mbuilding client environment for production...[36m[39m
+15:52:18.626 transforming...
+15:52:25.430 [32m✓[39m 2595 modules transformed.
+15:52:26.160 rendering chunks...
+15:52:26.178 computing gzip size...
+15:52:26.211 [2mdist/[22m[32mindex.html                 [39m[1m[2m    0.74 kB[22m[1m[22m[2m │ gzip:   0.41 kB[22m
+15:52:26.212 [2mdist/[22m[2massets/[22m[35mindex-D_v6Pgvd.css  [39m[1m[2m   71.27 kB[22m[1m[22m[2m │ gzip:  13.04 kB[22m
+15:52:26.212 [2mdist/[22m[2massets/[22m[36mindex-B-oA3SUg.js   [39m[1m[33m1,037.97 kB[39m[22m[2m │ gzip: 313.57 kB[22m
+15:52:26.212 [32m✓ built in 7.63s[39m
+15:52:26.213 [33m
+15:52:26.213 (!) Some chunks are larger than 500 kB after minification. Consider:
+15:52:26.213 - Using dynamic import() to code-split the application
+15:52:26.213 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+15:52:26.213 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+15:52:26.584 Using TypeScript 5.9.3 (local user-provided)
+15:53:03.565 Build Completed in /vercel/output [54s]
+15:53:04.165 Deploying outputs...
+15:53:10.716 Deployment completed
+15:53:11.674 Creating build cache...

@@ -43,7 +43,10 @@ export interface SearchDealsOptions {
     exact_match?: boolean;
     limit?: number;
     start?: number;
+    status?: string;
 }
+
+import { PIPEDRIVE_PRODUCT_MAP, CANCELLED_STAGE_IDS } from '../utils/pipedriveMap';
 
 // --- Helper Functions ---
 
@@ -62,10 +65,6 @@ const getParams = (): SearchParams => {
 };
 
 // --- Main Functions ---
-
-/**
- * Search for persons in Pipedrive.
- */
 
 /**
  * Search for persons in Pipedrive.
@@ -117,16 +116,34 @@ export const searchPersons = async (
 };
 
 /**
+ * Helper to find a person strictly by email
+ */
+export const findPersonByEmail = async (email: string): Promise<any | null> => {
+    if (!email) return null;
+    try {
+        const data = await searchPersons(email, 'email', true);
+        if (data.success && data.data && data.data.items && data.data.items.length > 0) {
+            // Return the first match's person object (contains id)
+            return data.data.items[0].item;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error finding person by email:", error);
+        return null;
+    }
+};
+
+/**
  * Search for deals in Pipedrive.
  */
-// ... continuation of searchDeals ...
 export const searchDeals = async ({
     term,
     person_id,
     fields,
     exact_match = false,
     limit = 10,
-    start = 0
+    start = 0,
+    status = 'all_not_deleted' // Default to all active/won/lost non-deleted
 }: SearchDealsOptions): Promise<any> => {
 
     // 1. Zod Validation
@@ -149,7 +166,7 @@ export const searchDeals = async ({
         // List deals for a specific person
         url = `${settings.PIPEDRIVE_API_URL}/deals`;
         params.person_id = person_id;
-        params.status = "open";
+        params.status = status;
     } else {
 
         if (!term) {
@@ -177,5 +194,54 @@ export const searchDeals = async ({
             console.error(`Pipedrive API Error (searchDeals): ${error.response?.data?.error || error.message}`);
         }
         throw error;
+    }
+};
+
+/**
+ * Orchestrator: Get purchase history by email
+ * Returns list of { productName, date, status, id }
+ */
+export const getPurchasesByEmail = async (email: string) => {
+    try {
+        const person = await findPersonByEmail(email);
+        if (!person) return [];
+
+        // Fetch deals for this person
+        const dealsData = await searchDeals({ person_id: person.id, status: 'all_not_deleted', limit: 50 });
+
+        if (!dealsData.success || !dealsData.data) return [];
+
+        const deals = dealsData.data; // Array of deal objects
+
+        const purchases = deals.map((deal: any) => {
+            const pipelineId = deal.pipeline_id;
+            const stageId = deal.stage_id;
+
+            // 1. Check if pipeline matches one of our products
+            const productName = PIPEDRIVE_PRODUCT_MAP[pipelineId];
+            if (!productName) return null;
+
+            // 2. Check if stage is cancelled/blocked
+            const cancelledStages = CANCELLED_STAGE_IDS[pipelineId] || [];
+            if (cancelledStages.includes(stageId)) return null;
+
+            // 3. Check if deal status is 'deleted' (should be filtered by API but double check)
+            if (deal.status === 'deleted') return null;
+
+            return {
+                id: deal.id,
+                productName: productName,
+                date: deal.add_time.split(' ')[0], // YYYY-MM-DD
+                time: deal.add_time.split(' ')[1], // HH:MM:SS
+                status: deal.status, // open, won, lost
+                stageId: stageId
+            };
+        }).filter((p: any) => p !== null);
+
+        return purchases;
+
+    } catch (error) {
+        console.error("Error getting purchases by email:", error);
+        return [];
     }
 };

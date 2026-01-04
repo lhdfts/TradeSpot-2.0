@@ -16,6 +16,7 @@ import { ClientHistory } from './ClientHistory';
 import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
+import { getPurchasesByEmail } from '../services/pipedriveService';
 
 
 interface AppointmentFormProps {
@@ -35,6 +36,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     const { user } = useAuth();
     const [rates, setRates] = useState<Record<string, number>>({});
     const [isExistingClient, setIsExistingClient] = useState(false);
+    const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
 
     useEffect(() => {
         fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,JPY-BRL')
@@ -202,6 +204,19 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         );
     };
 
+    const fetchPurchaseHistory = async (email: string) => {
+        if (!email) {
+            setPurchaseHistory([]);
+            return;
+        }
+        try {
+            const history = await getPurchasesByEmail(email);
+            setPurchaseHistory(history);
+        } catch (error) {
+            console.error("Error fetching purchase history:", error);
+        }
+    };
+
     const handlePhoneBlur = async () => {
         if (!formData.phone) return;
         const digits = formData.phone.replace(/\D/g, '');
@@ -237,15 +252,23 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     }
                 }));
                 setIsExistingClient(true);
+
+                // Fetch Pipedrive History if email exists
+                if (client.email) {
+                    fetchPurchaseHistory(client.email);
+                } else {
+                    setPurchaseHistory([]);
+                }
             } else {
                 setIsExistingClient(false);
+                setPurchaseHistory([]);
             }
         } catch (error) {
             console.error('Error checking client phone:', error);
             setIsExistingClient(false);
+            setPurchaseHistory([]);
         }
     };
-
 
     const handleClear = () => {
         setFormData({
@@ -268,6 +291,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
         });
         setIsExistingClient(false);
+        setPurchaseHistory([]);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -420,6 +444,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             onBlur={handlePhoneBlur}
                             required
                             disabled={isEditing || isExistingClient}
+                            maxLength={20}
                         />
                         <FloatingInput
                             label="Aluno"
@@ -430,6 +455,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             onBlur={() => setFormData(prev => ({ ...prev, lead: prev.lead.trim() }))}
                             required
                             disabled={isEditing || isExistingClient}
+                            maxLength={100}
                         />
 
                         {/* Row 2: Email and Perfil de Interesse */}
@@ -444,9 +470,15 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                     setIsExistingClient(false);
                                 }
                             }}
+                            onBlur={() => {
+                                if (formData.email) {
+                                    fetchPurchaseHistory(formData.email);
+                                }
+                            }}
                             required
                             disabled={isEditing}
                         />
+
                         <FloatingSelect
                             label="Perfil de Interesse"
                             value={formData.studentProfile.interest}
@@ -574,91 +606,92 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 className="opacity-50 cursor-not-allowed"
                             />
                         </div>
-                    </div>
 
-                    {/* Row 7: Informações Adicionais */}
-                    <div className="relative">
-                        <FloatingTextArea
-                            label="Informações Adicionais"
-                            value={formData.additionalInfo}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                                setFormData({ ...formData, additionalInfo: sanitizeInput.strictText(e.target.value) });
-                            }}
-                            maxLength={300}
-                            disabled={isEditing}
-                            rows={3}
-                            className="pb-6"
-                        />
-                        <div className="absolute bottom-2 right-3 text-xs text-muted-foreground pointer-events-none">
-                            {formData.additionalInfo.length}/300
-                        </div>
-                    </div>
-
-                    {/* Row 7: Descrição do Agendamento (TextArea) - ONLY VISIBLE WHEN EDITING */}
-                    {initialData && (
-                        <div className="space-y-1">
-                            <label className="block text-sm font-bold text-foreground">Descrição do Agendamento:</label>
-                            <textarea
-                                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
-                                rows={4}
-                                value={formData.notes}
-                                onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                                maxLength={500}
-                                placeholder="Digite a descrição do agendamento..."
+                        {/* Row 7: Informações Adicionais */}
+                        <div className="relative">
+                            <FloatingTextArea
+                                label="Informações Adicionais"
+                                value={formData.additionalInfo}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                                    setFormData({ ...formData, additionalInfo: sanitizeInput.strictText(e.target.value) });
+                                }}
+                                maxLength={300}
+                                disabled={isEditing}
+                                rows={3}
+                                className="pb-6"
                             />
+                            <div className="absolute bottom-2 right-3 text-xs text-muted-foreground pointer-events-none">
+                                {formData.additionalInfo.length}/300
+                            </div>
                         </div>
-                    )}
 
-                    {/* Row 8: Atendente and Status */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className={!initialData ? "col-span-2" : ""}>
-                            <FloatingSelect
-                                label="Atendente"
-                                value={formData.attendantId}
-                                onChange={(e: any) => setFormData({ ...formData, attendantId: e.target.value })}
-                                options={attendantOptions}
-                                disabled={
-                                    // Enabled if:
-                                    // 1. Creating new 'Upgrade' appointment
-                                    // 2. Editing existing appointment AND user has specific role permissions
-                                    isEditing
-                                        ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
-                                        : formData.type !== 'Upgrade'
-                                }
-                            />
-                        </div>
+                        {/* Row 7: Descrição do Agendamento (TextArea) - ONLY VISIBLE WHEN EDITING */}
                         {initialData && (
-                            <FloatingSelect
-                                label="Status"
-                                value={formData.status}
-                                onChange={(e: any) => setFormData({ ...formData, status: e.target.value as AppointmentStatus })}
-                                options={APPOINTMENT_STATUSES.map(status => ({ value: status, label: status }))}
-                            />
-                        )}
-                        {initialData && (initialData.updater || initialData.updatedBy) && (
-                            <div className="col-span-1 md:col-span-2 flex justify-end -mt-3">
-                                <span className="text-xs text-muted-foreground">
-                                    Editado por: {initialData.updater?.name || 'Sistema'}
-                                </span>
+                            <div className="space-y-1">
+                                <label className="block text-sm font-bold text-foreground">Descrição do Agendamento:</label>
+                                <textarea
+                                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
+                                    rows={4}
+                                    value={formData.notes}
+                                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                                    maxLength={500}
+                                    placeholder="Digite a descrição do agendamento..."
+                                />
                             </div>
                         )}
+
+                        {/* Row 8: Atendente and Status */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className={!initialData ? "col-span-2" : ""}>
+                                <FloatingSelect
+                                    label="Atendente"
+                                    value={formData.attendantId}
+                                    onChange={(e: any) => setFormData({ ...formData, attendantId: e.target.value })}
+                                    options={attendantOptions}
+                                    disabled={
+                                        // Enabled if:
+                                        // 1. Creating new 'Upgrade' appointment
+                                        // 2. Editing existing appointment AND user has specific role permissions
+                                        isEditing
+                                            ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
+                                            : formData.type !== 'Upgrade'
+                                    }
+                                />
+                            </div>
+                            {initialData && (
+                                <FloatingSelect
+                                    label="Status"
+                                    value={formData.status}
+                                    onChange={(e: any) => setFormData({ ...formData, status: e.target.value as AppointmentStatus })}
+                                    options={APPOINTMENT_STATUSES.map(status => ({ value: status, label: status }))}
+                                />
+                            )}
+                            {initialData && (initialData.updater || initialData.updatedBy) && (
+                                <div className="col-span-1 md:col-span-2 flex justify-end -mt-3">
+                                    <span className="text-xs text-muted-foreground">
+                                        Editado por: {initialData.updater?.name || 'Sistema'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Row 9: Google Meet */}
+                        {initialData && (
+                            <FloatingInput
+                                label="Google Meet"
+                                value={formData.meetLink}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, meetLink: e.target.value })}
+                                className="text-blue-500"
+                                disabled={isEditing}
+                            />
+                        )}
                     </div>
-
-                    {/* Row 9: Google Meet */}
-                    {initialData && (
-                        <FloatingInput
-                            label="Google Meet"
-                            value={formData.meetLink}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, meetLink: e.target.value })}
-                            className="text-blue-500"
-                            disabled={isEditing}
-                        />
-                    )}
-
                 </div>
 
-                {!initialData && <ClientHistory phone={formData.phone} />}
-            </div>
+
+
+                {!initialData && <ClientHistory phone={formData.phone} externalHistory={purchaseHistory} />}
+            </div >
             <div className="flex justify-end gap-3">
                 <Button type="button" variant="ghost" onClick={() => onCancel()} className="flex items-center gap-2">
                     Cancelar
@@ -674,6 +707,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     Salvar
                 </Button>
             </div>
-        </form>
+        </form >
     );
 };
