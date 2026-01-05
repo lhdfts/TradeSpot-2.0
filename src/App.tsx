@@ -20,7 +20,7 @@ import { Button } from './components/ui/button';
 import { ToastProvider } from './components/ui/toast';
 
 // Wrapper for Create Appointment to handle search params
-const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void; onCancel: () => void }> = ({ onSuccess, onCancel }) => {
+const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const prefillData = useMemo(() => {
@@ -49,7 +49,6 @@ const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void; onCancel: () =
       <AppointmentForm
         prefillData={prefillData}
         onSuccess={onSuccess}
-        onCancel={onCancel}
       />
     </div>
   );
@@ -146,7 +145,7 @@ const MainContent: React.FC = () => {
               <Route element={<ProtectedRoute allowedRoles={[]} />}>
                 <Route path="/" element={<MyAppointments onEdit={handleEdit} />} />
                 <Route path="/my-appointments" element={<Navigate to="/" replace />} />
-                <Route path="/create-appointment" element={<CreateAppointmentWrapper onSuccess={handleSuccess} onCancel={() => navigate('/')} />} />
+                <Route path="/create-appointment" element={<CreateAppointmentWrapper onSuccess={handleSuccess} />} />
                 <Route path="/all-appointments" element={<AllAppointments onEdit={handleEdit} />} />
               </Route>
 
@@ -176,7 +175,6 @@ const MainContent: React.FC = () => {
         <AppointmentForm
           initialData={editingAppt || undefined}
           onSuccess={handleSuccess}
-          onCancel={() => setIsModalOpen(false)}
         />
       </Modal>
     </div>
