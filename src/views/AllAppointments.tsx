@@ -62,7 +62,8 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         const matchesSearch =
             a.lead.toLowerCase().includes(search.toLowerCase()) ||
             a.phone.toString().includes(search) ||
-            a.id.includes(search);
+            a.id.includes(search) ||
+            a.email?.toLowerCase().includes(search.toLowerCase());
 
         const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
         // Check exact match for attendant ID
