@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eraser, Save } from 'lucide-react';
+import { Eraser, Save, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { FloatingDateInput } from './FloatingDateInput';
 import { TimePickerInput } from './TimePickerInput';
@@ -37,6 +37,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     const [rates, setRates] = useState<Record<string, number>>({});
     const [isExistingClient, setIsExistingClient] = useState(false);
     const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,JPY-BRL')
@@ -297,6 +298,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (isSaving) return;
+
         // Final Validation Gatekeeper
         if (formData.type === 'Reagendamento Closer') {
             if (!checkEligibility(formData.phone)) {
@@ -308,6 +311,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 return;
             }
         }
+
+        setIsSaving(true);
 
         try {
             let finalAttendantId = formData.attendantId;
@@ -325,6 +330,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     finalAttendantId = bestCloser.id;
                 } else {
                     alert('Não há closers disponíveis para este horário.');
+                    setIsSaving(false);
                     return;
                 }
             }
@@ -350,6 +356,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             onSuccess();
         } catch (error: any) {
             console.error('Error saving appointment:', error);
+            setIsSaving(false);
 
             if (error.response) {
                 const status = error.response.status;
@@ -431,10 +438,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (!startTime) return '';
         const [hours, minutes] = startTime.split(':').map(Number);
 
-        let duration = 30; // Default (Ligação SDR)
+        let duration = 60; // Default for most types
 
-        if (['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal'].includes(formData.type)) {
-            duration = 60;
+        if (formData.type === 'Ligação SDR') {
+            duration = 30;
         }
 
         const totalMinutes = hours * 60 + minutes + duration;
@@ -493,7 +500,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             maxLength={20}
                         />
                         <FloatingInput
-                            label="Aluno"
+                            label="Nome"
                             value={formData.lead}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 setFormData({ ...formData, lead: sanitizeInput.name(e.target.value) });
@@ -758,9 +765,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         Limpar
                     </Button>
                 )}
-                <Button type="submit" className="flex items-center gap-2">
-                    <Save size={18} />
-                    Salvar
+                <Button type="submit" className="flex items-center gap-2" disabled={isSaving}>
+                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    {isSaving ? 'Salvando...' : 'Salvar'}
                 </Button>
             </div>
         </form >

@@ -2,6 +2,10 @@ import { google } from 'googleapis';
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load env from root
 dotenv.config({ path: path.join(__dirname, '../../../.env') });
@@ -34,8 +38,15 @@ app.get('/oauth2callback', async (req, res) => {
             console.log(tokens.refresh_token);
             console.log('\n--------------------------\n');
             console.log('Copy this token and add it to your .env file as GOOGLE_REFRESH_TOKEN');
+
+            // Save token to file
+            import('fs').then(fs => {
+                fs.writeFileSync(path.join(__dirname, 'refresh_token.txt'), tokens.refresh_token || 'No token found');
+            });
+
             res.send('Authentication successful! Check your terminal for the Refresh Token.');
-            process.exit(0);
+            // Allow time for file write
+            setTimeout(() => process.exit(0), 1000);
         } catch (error) {
             console.error('Error retrieving access token', error);
             res.send('Error retrieving access token');
@@ -63,4 +74,9 @@ app.listen(PORT, () => {
     console.log(`\n1. Ensure your Redirect URI in Google Cloud Console is set to: ${redirectUri}`);
     console.log(`2. Open this URL in your browser:\n\n${url}\n`);
     console.log('3. Grant access (even if it says unsafe, since this is your own app).');
+
+    // Write URL to file to avoid truncation
+    import('fs').then(fs => {
+        fs.writeFileSync(path.join(__dirname, 'auth_url.txt'), url);
+    });
 });

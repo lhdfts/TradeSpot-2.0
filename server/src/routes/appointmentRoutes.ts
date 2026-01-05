@@ -29,11 +29,10 @@ const supabase = createClient(supabaseUrl!, supabaseKey!);
 
 // Calculate End Time (Spec 2.B.8)
 const calculateEndTime = (startTime: string, type: string): string => {
-    let duration = 30; // Default (Ligação SDR, Upgrade)
-    if (type === 'Ligação Closer' || type === 'Reagendamento Closer') {
-        duration = 45;
-    } else if (type === 'Agendamento Pessoal') {
-        duration = 60;
+    let duration = 60; // Default to 1 hour for most types (Ligação Closer, Reagendamento, Upgrade, Pessoal, etc.)
+
+    if (type === 'Ligação SDR') {
+        duration = 30;
     }
 
     const [hours, minutes] = startTime.split(':').map(Number);
