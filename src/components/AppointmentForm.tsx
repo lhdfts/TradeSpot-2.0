@@ -10,7 +10,7 @@ import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
 import { APPOINTMENT_STATUSES } from '../types';
 import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, AppointmentStatus } from '../types';
-import { findAvailableCloser } from '../utils/distribution';
+import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment } from '../utils/distribution';
 import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
 import { useAuth } from '../context/AuthContext';
@@ -309,6 +309,42 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     type: 'error'
                 });
                 return;
+            }
+        }
+
+        // Helper to check availability
+        const checkAvailability = (attendantId: string) => {
+            const selectedAttendant = attendants.find(a => a.id === attendantId);
+            if (!selectedAttendant) return true; // Can't validate if not found
+
+            // 1. Check Schedule (Work hours + Pauses)
+            if (!isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time)) {
+                toastManager.add({
+                    title: "Indisponibilidade",
+                    description: `${selectedAttendant.name} não está disponível neste horário (Fora de expediente ou Pausa).`,
+                    type: 'error'
+                });
+                return false;
+            }
+
+            // 2. Check Conflicts (Overlapping appointments)
+            if (hasConflictingAppointment(attendantId, formData.date, formData.time, formData.type, appointments)) {
+                toastManager.add({
+                    title: "Conflito de Agenda",
+                    description: `${selectedAttendant.name} já possui um agendamento conflitante neste horário.`,
+                    type: 'error'
+                });
+                return false;
+            }
+            return true;
+        };
+
+        // Validate 'Upgrade' and 'Reagendamento Closer' manual selections
+        if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer') {
+            if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
+                if (!checkAvailability(formData.attendantId)) {
+                    return;
+                }
             }
         }
 
