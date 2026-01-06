@@ -38,7 +38,12 @@ const getDuration = (type: string): number => {
 };
 
 // Check if attendant is working at this time
-const isAttendantWithinSchedule = (attendant: Attendant, dateStr: string, timeStr: string): boolean => {
+const isAttendantWithinSchedule = (
+    attendant: Attendant,
+    dateStr: string,
+    timeStr: string,
+    appointmentType: string
+): boolean => {
     if (!attendant.schedule) return false;
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
@@ -47,17 +52,23 @@ const isAttendantWithinSchedule = (attendant: Attendant, dateStr: string, timeSt
 
     if (!schedule) return false;
 
-    const apptMinutes = timeToMinutes(timeStr);
     const startMinutes = timeToMinutes(schedule.start);
     const endMinutes = timeToMinutes(schedule.end);
 
-    if (apptMinutes < startMinutes || apptMinutes >= endMinutes) return false;
+    const apptStart = timeToMinutes(timeStr);
+    const duration = getDuration(appointmentType);
+    const apptEnd = apptStart + duration;
+
+    // Check work hours (End must be <= Schedule End)
+    if (apptStart < startMinutes || apptEnd > endMinutes) return false;
 
     if (attendant.pauses && attendant.pauses[dayKey]) {
         for (const pause of attendant.pauses[dayKey]) {
             const pauseStart = timeToMinutes(pause.start);
             const pauseEnd = timeToMinutes(pause.end);
-            if (apptMinutes >= pauseStart && apptMinutes < pauseEnd) return false;
+
+            // Check for overlap: (StartA < EndB) and (EndA > StartB)
+            if (apptStart < pauseEnd && apptEnd > pauseStart) return false;
         }
     }
     return true;
@@ -114,7 +125,7 @@ export const findBestAttendant = async (
     }
 
     // 3. Filter by Schedule
-    const available = attendants.filter(a => isAttendantWithinSchedule(a, date, time));
+    const available = attendants.filter(a => isAttendantWithinSchedule(a, date, time, type));
     if (available.length === 0) return null;
 
     // 4. Calculate Load

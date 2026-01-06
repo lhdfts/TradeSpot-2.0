@@ -317,7 +317,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             if (!selectedAttendant) return true; // Can't validate if not found
 
             // 1. Check Schedule (Work hours + Pauses)
-            if (!isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time)) {
+            if (!isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time, formData.type)) {
                 toastManager.add({
                     title: "Indisponibilidade",
                     description: `${selectedAttendant.name} não está disponível neste horário (Fora de expediente ou Pausa).`,

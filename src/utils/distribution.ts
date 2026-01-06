@@ -27,7 +27,8 @@ const getDuration = (type: string): number => {
 export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string, // YYYY-MM-DD
-    timeStr: string  // HH:MM
+    timeStr: string,  // HH:MM
+    appointmentType: string // Added type to calculate duration
 ): boolean => {
     if (!attendant.schedule) return false;
 
@@ -39,21 +40,27 @@ export const isAttendantWithinSchedule = (
     const schedule = attendant.schedule?.[dayKey];
     if (!schedule) return false;
 
-    const apptMinutes = timeToMinutes(timeStr);
     const startMinutes = timeToMinutes(schedule.start);
     const endMinutes = timeToMinutes(schedule.end);
 
-    // Check work hours
-    if (apptMinutes < startMinutes || apptMinutes >= endMinutes) {
+    const apptStart = timeToMinutes(timeStr);
+    const duration = getDuration(appointmentType);
+    const apptEnd = apptStart + duration;
+
+    // Check work hours (End time must be <= Schedule End)
+    if (apptStart < startMinutes || apptEnd > endMinutes) {
         return false;
     }
 
     // Check pauses
+    // Interval [apptStart, apptEnd) must not overlap with any pause [pauseStart, pauseEnd)
     if (attendant.pauses && attendant.pauses[dayKey] && attendant.pauses[dayKey].length > 0) {
         for (const pause of attendant.pauses[dayKey]) {
             const pauseStart = timeToMinutes(pause.start);
             const pauseEnd = timeToMinutes(pause.end);
-            if (apptMinutes >= pauseStart && apptMinutes < pauseEnd) {
+
+            // Check for overlap: (StartA < EndB) and (EndA > StartB)
+            if (apptStart < pauseEnd && apptEnd > pauseStart) {
                 return false;
             }
         }
@@ -104,7 +111,7 @@ export const findAvailableCloser = (
 
     // 2. Filter by Schedule (who is working today?)
     const closersWithSchedule = closers.filter(closer =>
-        isAttendantWithinSchedule(closer, dateStr, timeStr)
+        isAttendantWithinSchedule(closer, dateStr, timeStr, appointmentType)
     );
 
     if (closersWithSchedule.length === 0) return null;
