@@ -440,13 +440,16 @@ router.put('/:id', async (req: Request, res: Response) => {
             updatePayload.financial_currency = updates.studentProfile.financial.currency;
             updatePayload.financial_amount = updates.studentProfile.financial.amount;
         }
-        // Handle updatedBy
-        // Since we are not strictly using auth middleware yet, we rely on body passed `updatedBy` or ignore.
-        // Frontend SupabaseApiService passes `updatedBy` via headers or body? Body usually in this schema.
-        // schema has `updatedBy`? No, schema doesn't have it explicitly as a field top level in `createAppointmentSchema`.
-        // It's not in the schema I read earlier. 
-        // We can check `req.body` directly for `updatedBy` valid UUID if needed.
-        if (req.body.updatedBy) updatePayload.updater_id = req.body.updatedBy; // Assuming column name
+
+        // Handle updatedBy (Column is 'updatedBy')
+        if (req.body.updatedBy) {
+            updatePayload.updatedBy = req.body.updatedBy;
+        }
+
+        // Handle oldStatus Logic
+        if (updates.status && currentApp.status !== updates.status) {
+            updatePayload.oldStatus = currentApp.status;
+        }
 
         // Perform Update
         const { data: updated, error: updateError } = await supabase
