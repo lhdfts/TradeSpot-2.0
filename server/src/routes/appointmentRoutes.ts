@@ -237,6 +237,7 @@ router.post('/', async (req: Request, res: Response) => {
             knowledge_level: data.studentProfile.knowledge,
             financial_currency: data.studentProfile.financial.currency,
             financial_amount: financialAmount,
+            created_at: new Date().toISOString(), // Ensure timestamptz compatibility
             created_by: null // Initialize
         };
 
@@ -287,13 +288,61 @@ router.post('/', async (req: Request, res: Response) => {
             }
         };
 
+        // --- Fetch Names for Webhook ---
+        const names: any = {
+            attendant_name: null,
+            created_by_name: null,
+            event_name: null
+        };
+
+        const idsToFetch = [];
+        if (finalAttendantId) idsToFetch.push(finalAttendantId);
+        if (finalCreatedBy) idsToFetch.push(finalCreatedBy);
+
+        if (idsToFetch.length > 0) {
+            const { data: users } = await supabase
+                .from('user')
+                .select('id, name')
+                .in('id', idsToFetch);
+
+            if (users) {
+                const attendant = users.find(u => u.id === finalAttendantId);
+                if (attendant) names.attendant_name = attendant.name;
+
+                const creator = users.find(u => u.id === finalCreatedBy);
+                if (creator) names.created_by_name = creator.name;
+            }
+        }
+
+        if (data.eventId) {
+            const { data: event } = await supabase
+                .from('events')
+                .select('event_name')
+                .eq('id', data.eventId)
+                .single();
+
+            if (event) names.event_name = event.event_name;
+        }
+
         // --- Webhook Integration ---
+        const webhookResponse = {
+            ...responseData,
+            attendant_name: names.attendant_name,
+            created_by_name: names.created_by_name,
+            event_name: names.event_name,
+            // Remove IDs from webhook payload as requested
+            attendant_id: undefined,
+            created_by: undefined,
+            event_id: undefined,
+            updatedBy: undefined // Ensure consistency
+        };
+
         const webhookUrl = getAppointmentWebhooks()[data.type];
         if (webhookUrl) {
             try {
                 console.log(`Sending webhook for ${data.type} to ${webhookUrl}`);
                 // Fire and forget (awaiting to log success/fail but not blocking response significantly if it's fast)
-                await axios.post(webhookUrl, responseData);
+                await axios.post(webhookUrl, webhookResponse);
                 console.log(`Webhook sent successfully.`);
             } catch (webhookError: any) {
                 console.error(`Failed to send webhook for ${data.type}:`, webhookError.message);
