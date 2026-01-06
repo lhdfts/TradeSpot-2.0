@@ -102,65 +102,48 @@ export class SupabaseApiService implements ApiService {
             } as Appointment;
         },
         update: async (id: string | number, data: Partial<Appointment>): Promise<Appointment> => {
-            const updateData: any = {};
-            if (data.date) updateData.date = data.date;
-            if (data.time) updateData.time = data.time;
-            if (data.type) updateData.type = data.type;
-            if (data.status) updateData.status = data.status;
-            if (data.attendantId) updateData.attendant_id = data.attendantId;
-            if (data.eventId) updateData.event_id = data.eventId;
-            if (data.meetLink) updateData.meet_link = data.meetLink;
-            if (data.notes) updateData.notes = data.notes;
-            if (data.additionalInfo) updateData.additional_info = data.additionalInfo;
+            // New Secure Flow: Send to Node.js Backend for Update & Webhook Trigger
+            const response = await fetch(`/api/appointments/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
 
-            // Update student profile fields if they exist in the update data
-            if (data.studentProfile) {
-                if (data.studentProfile.interest) updateData.interest_level = data.studentProfile.interest;
-                if (data.studentProfile.knowledge) updateData.knowledge_level = data.studentProfile.knowledge;
-                if (data.studentProfile.financial) {
-                    if (data.studentProfile.financial.currency) updateData.financial_currency = data.studentProfile.financial.currency;
-                    if (data.studentProfile.financial.amount) updateData.financial_amount = data.studentProfile.financial.amount;
-                }
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error("Backend Update Error:", errorData);
+                throw new Error(errorData.error || 'Failed to update appointment via backend');
             }
 
-            // Status tracking logic
-            if (data.status) {
-                let userId = data.updatedBy;
+            const updatedAppointment = await response.json();
 
-                // Fallback: Get current user from session if not provided
-                if (!userId) {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    userId = user?.id;
-                }
+            // Map Backend Response (Snake_case DB columns) to Frontend Model (camelCase)
+            return {
+                id: updatedAppointment.id,
 
-                if (userId) {
-                    updateData.updatedBy = userId;
-
-                    // Fetch current status to set as oldStatus if not provided
-                    const { data: currentApp } = await supabase
-                        .from('appointments')
-                        .select('status')
-                        .eq('id', id)
-                        .single();
-
-                    if (currentApp && currentApp.status !== data.status) {
-                        updateData.oldStatus = currentApp.status;
+                lead: updatedAppointment.lead || data.lead, // DB has 'lead' column? Yes.
+                phone: updatedAppointment.phone || data.phone,
+                email: updatedAppointment.email || data.email,
+                date: updatedAppointment.date,
+                time: updatedAppointment.time ? updatedAppointment.time.slice(0, 5) : '',
+                type: updatedAppointment.type,
+                status: updatedAppointment.status,
+                attendantId: updatedAppointment.attendant_id,
+                eventId: updatedAppointment.event_id,
+                meetLink: updatedAppointment.meet_link,
+                notes: updatedAppointment.notes,
+                additionalInfo: updatedAppointment.additional_info,
+                createdBy: updatedAppointment.created_by,
+                studentProfile: updatedAppointment.student_profile || {
+                    interest: updatedAppointment.interest_level,
+                    knowledge: updatedAppointment.knowledge_level,
+                    financial: {
+                        currency: updatedAppointment.financial_currency,
+                        amount: updatedAppointment.financial_amount
                     }
                 }
-            }
-
-            const { data: appData, error } = await supabase
-                .from('appointments')
-                .update(updateData)
-                .eq('id', id)
-                .select()
-                .single();
-
-            if (error) throw new Error(error.message);
-
-            return {
-                ...data,
-                id: appData.id
             } as Appointment;
         }
     };

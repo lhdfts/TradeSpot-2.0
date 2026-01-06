@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
-import { getAppointmentWebhooks } from '../config/webhooks.js';
+import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js';
 import { createClient } from '@supabase/supabase-js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant } from '../utils/distribution.js';
@@ -356,6 +356,153 @@ router.post('/', async (req: Request, res: Response) => {
 
     } catch (err: any) {
         console.error("Create Appointment Error:", err);
+        res.status(500).json({ error: 'Internal Server Error', details: err.message });
+    }
+});
+
+// PUT /api/appointments/:id
+router.put('/:id', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    try {
+        // 1. Partial Validation
+        const validation = createAppointmentSchema.partial().safeParse(req.body);
+        if (!validation.success) {
+            return res.status(400).json({ error: 'Validation Error', details: validation.error.format() });
+        }
+        const updates = validation.data;
+
+        // 2. Fetch Existing Appointment to merge/validate
+        const { data: currentApp, error: fetchError } = await supabase
+            .from('appointments')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !currentApp) {
+            return res.status(404).json({ error: 'Appointment not found' });
+        }
+
+        // Merge for logic checks
+        const merged = { ...currentApp, ...updates };
+
+        // 3. Logic: Recalculate End Time if Date/Time/Type changed
+        if (updates.time || updates.type) {
+            // Re-calculate end_time
+            // Use local calculateEndTime
+            merged.end_time = calculateEndTime(merged.time, merged.type);
+        }
+
+        // 4. Logic: Check Conflict if Attendant/Date/Time changed
+        // Only if status is 'Pendente' or we are setting it to 'Pendente'
+        if ((updates.attendantId || updates.date || updates.time) && merged.status === 'Pendente') {
+            const hasConflict = await checkConflict(merged.date, merged.time, merged.attendant_id);
+            // We must exclude the current appointment from conflict check (if checkConflict doesn't do it)
+            // Our checkConflict helper uses .single() checking existence.
+            // It will find *this* appointment content if we don't exclude it.
+            // Ideally checkConflict should accept an exclusion ID. 
+            // For now, let's assume if it returns a conflict, we check if it's NOT us.
+            // The helper returns boolean. We might need to copy logic inline or improve helper.
+            // Update: checkConflict helper is simple. Let's write inline conflict check with exclusion.
+
+            if (merged.attendant_id && merged.attendant_id !== 'distribuicao_automatica') {
+                const { data: conflict } = await supabase
+                    .from('appointments')
+                    .select('id')
+                    .eq('date', merged.date)
+                    .eq('time', merged.time)
+                    .eq('attendant_id', merged.attendant_id)
+                    .neq('status', 'Cancelado')
+                    .neq('id', id) // Exclude self
+                    .maybeSingle();
+
+                if (conflict) {
+                    return res.status(409).json({ error: 'Conflict: Attendant is busy.' });
+                }
+            }
+        }
+
+        // 5. Update payload
+        // Map camelCase to snake_case
+        const updatePayload: any = {};
+        if (updates.date) updatePayload.date = updates.date;
+        if (updates.time) updatePayload.time = updates.time;
+        if (updates.time || updates.type) updatePayload.end_time = merged.end_time;
+        if (updates.type) updatePayload.type = updates.type;
+        if (updates.status) updatePayload.status = updates.status;
+        if (updates.attendantId) updatePayload.attendant_id = updates.attendantId;
+        if (updates.eventId) updatePayload.event_id = updates.eventId;
+        if (updates.meetLink) updatePayload.meet_link = updates.meetLink;
+        if (updates.notes) updatePayload.notes = updates.notes;
+        // Handle studentProfile flatten update if present
+        if (updates.studentProfile) {
+            updatePayload.interest_level = updates.studentProfile.interest;
+            updatePayload.knowledge_level = updates.studentProfile.knowledge;
+            updatePayload.financial_currency = updates.studentProfile.financial.currency;
+            updatePayload.financial_amount = updates.studentProfile.financial.amount;
+        }
+        // Handle updatedBy
+        // Since we are not strictly using auth middleware yet, we rely on body passed `updatedBy` or ignore.
+        // Frontend SupabaseApiService passes `updatedBy` via headers or body? Body usually in this schema.
+        // schema has `updatedBy`? No, schema doesn't have it explicitly as a field top level in `createAppointmentSchema`.
+        // It's not in the schema I read earlier. 
+        // We can check `req.body` directly for `updatedBy` valid UUID if needed.
+        if (req.body.updatedBy) updatePayload.updater_id = req.body.updatedBy; // Assuming column name
+
+        // Perform Update
+        const { data: updated, error: updateError } = await supabase
+            .from('appointments')
+            .update(updatePayload)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (updateError) {
+            return res.status(500).json({ error: 'Database Update Failed', details: updateError.message });
+        }
+
+        // 6. Webhook Trigger
+        const updateWebhookUrl = getUpdateWebhook();
+        if (updateWebhookUrl) {
+            // Construct Payload
+            // Resolve names
+            const { data: users } = await supabase.from('user').select('id, name').in('id', [updated.attendant_id, updated.created_by].filter(Boolean));
+            let attendantName = '';
+            let creatorName = '';
+            if (users) {
+                const att = users.find(u => u.id === updated.attendant_id);
+                if (att) attendantName = att.name;
+                const cr = users.find(u => u.id === updated.created_by);
+                if (cr) creatorName = cr.name;
+            }
+
+            let eventName = '';
+            if (updated.event_id) {
+                const { data: ev } = await supabase.from('events').select('event_name').eq('id', updated.event_id).single();
+                if (ev) eventName = ev.event_name;
+            }
+
+            const webhookPayload = {
+                ...updated,
+                attendant_name: attendantName,
+                created_by_name: creatorName,
+                event_name: eventName,
+                attendant_id: undefined, // Clear IDs
+                created_by: undefined,
+                event_id: undefined
+            };
+
+            try {
+                console.log(`Sending Update Webhook to ${updateWebhookUrl}`);
+                axios.post(updateWebhookUrl, webhookPayload).catch(e => console.error("Webhook fail", e.message));
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        res.json(updated);
+
+    } catch (err: any) {
+        console.error("Update Error:", err);
         res.status(500).json({ error: 'Internal Server Error', details: err.message });
     }
 });

@@ -5,3 +5,7 @@ export const getAppointmentWebhooks = (): Record<string, string> => ({
     'Reagendamento Closer': process.env.WEBHOOK_REAGENDAMENTO_CLOSER || '',
     'Upgrade': process.env.WEBHOOK_UPGRADE || ''
 });
+
+export const getUpdateWebhook = (): string => {
+    return process.env.APPOINTMENT_UPDATE_WEBHOOK_URL || '';
+};
