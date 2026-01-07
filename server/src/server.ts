@@ -1,10 +1,10 @@
-import './config/init';
+import './config/init.js';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import pipedriveRoutes from './routes/pipedriveRoutes';
-import appointmentRoutes from './routes/appointmentRoutes';
+import pipedriveRoutes from './routes/pipedriveRoutes.js';
+import appointmentRoutes from './routes/appointmentRoutes.js';
 
 // ESM alternative for __dirname
 const __filename = fileURLToPath(import.meta.url);
