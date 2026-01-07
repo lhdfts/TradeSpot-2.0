@@ -8,6 +8,8 @@ interface ExternalHistoryItem {
     date: string;
     time?: string;
     status: string;
+    statusLabel?: string;
+    warn?: boolean;
 }
 
 interface ClientHistoryProps {
@@ -18,7 +20,9 @@ interface ClientHistoryProps {
 export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHistory = [] }) => {
     const { appointments } = useAppointments();
 
-    if (!phone && externalHistory.length === 0) return null;
+    // Requests from user: "hide the client History if the number field is empty"
+    // We expect a valid phone to show ANY history (internal or external).
+    if (!phone || phone.trim() === '') return null;
 
     // Clean phone for comparison
     const cleanPhone = String(phone).replace(/\D/g, '');
@@ -36,16 +40,19 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
         }));
 
     // 2. Get External History
-    const externalItems = externalHistory.map(item => ({
-        ...item,
-        source: 'external' as const,
-        type: `Comprou ${item.productName}`, // Display text
-        sortDate: new Date(`${item.date}T${item.time || '00:00:00'}`)
-    }));
+    const externalItems = externalHistory.map(item => {
+        const prefix = item.statusLabel || 'Comprou';
+        return {
+            ...item,
+            source: 'external' as const,
+            type: `${prefix} ${item.productName}`, // Display text e.g. "Comprou Name"
+            sortDate: new Date(`${item.date}T${item.time || '00:00:00'}`)
+        };
+    });
 
     // 3. Merge and Sort
     const combinedHistory = [...internalHistory, ...externalItems].sort((a, b) => {
-        return b.sortDate.getTime() - a.sortDate.getTime(); // Descending (newest first)
+        return a.sortDate.getTime() - b.sortDate.getTime(); // Ascending (oldest first)
     });
 
     if (combinedHistory.length === 0) return null;
@@ -71,7 +78,15 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                 <path d="M16 10a4 4 0 0 1-8 0"></path>
                             </svg>
                         );
-                        bgColor = 'bg-emerald-500'; // Greenish for purchase
+                        const prefix = item.statusLabel || 'Comprou';
+
+                        // Icon logic: if it's a status event (Blocked/Cancelled), use Red bg. 
+                        // Otherwise (Comprou), use Green.
+                        if (prefix === 'Bloqueado' || prefix === 'Cancelado') {
+                            bgColor = 'bg-red-500'; // Red for blocked/cancelled status
+                        } else {
+                            bgColor = 'bg-emerald-500'; // Greenish for component
+                        }
                     } else {
                         // Internal Appointment Status Logic
                         if (status === 'Realizado' || (status as any) === 'Confirmado' || (status as any) === 'Concluido') {
@@ -150,9 +165,32 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
 
                             {/* Text */}
                             <div className="flex flex-col pt-0.5">
-                                <span className={`text-sm font-medium leading-none text-foreground`}>
-                                    {displayType}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-sm font-medium leading-none text-foreground`}>
+                                        {displayType}
+                                    </span>
+                                    {/* Warning Icon for Blocked/Cancelled External Items */}
+                                    {isExternal && (item as any).warn && (
+                                        <span title={(item as any).tooltip || undefined} className="cursor-help flex items-center">
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                width="16"
+                                                height="16"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                className="text-yellow-500"
+                                            >
+                                                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                                                <path d="M12 9v4" />
+                                                <path d="M12 17h.01" />
+                                            </svg>
+                                        </span>
+                                    )}
+                                </div>
                                 <span className="text-xs text-muted-foreground mt-1">
                                     {dateStr} {timeStr && `- ${timeStr}`}
                                 </span>

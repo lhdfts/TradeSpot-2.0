@@ -210,10 +210,32 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return;
         }
         try {
+            // toastManager.add({ title: "Pipedrive", description: "Buscando histórico...", type: 'info', duration: 2000 });
             const history = await getPurchasesByEmail(email);
             setPurchaseHistory(history);
-        } catch (error) {
+
+            if (history.length > 0) {
+                toastManager.add({
+                    title: "Pipedrive",
+                    description: `${history.length} compra(s) encontrada(s).`,
+                    type: 'success'
+                });
+            } else {
+                // Optional: Notify if nothing found, helpful for debugging why panel doesn't open
+                toastManager.add({
+                    title: "Pipedrive",
+                    description: "Nenhuma compra encontrada.",
+                    type: 'info'
+                });
+            }
+        } catch (error: any) {
             console.error("Error fetching purchase history:", error);
+            toastManager.add({
+                title: "Erro Pipedrive",
+                description: "Falha ao buscar histórico.",
+                type: 'error'
+            });
+            setPurchaseHistory([]);
         }
     };
 
@@ -261,7 +283,14 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 }
             } else {
                 setIsExistingClient(false);
-                setPurchaseHistory([]);
+                // If we have an email, try to fetch Pipedrive history again (or keep it), 
+                // instead of blindly clearing it. This handles the case of a new client 
+                // where we typed Email then Phone, or corrected Phone.
+                if (formData.email) {
+                    fetchPurchaseHistory(formData.email);
+                } else {
+                    setPurchaseHistory([]);
+                }
             }
         } catch (error) {
             console.error('Error checking client phone:', error);

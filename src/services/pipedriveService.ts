@@ -12,10 +12,12 @@ const rawToken = (typeof process !== 'undefined' && process.env.VITE_PIPEDRIVE_A
     '';
 
 // 2. Define a URL para apontar para o seu backend local
-// Fallback robusto para suportar tanto Vite (browser) quanto Node/tsx (testes)
-const rawUrl = (typeof process !== 'undefined' && process.env.VITE_PIPEDRIVE_API_URL) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_PIPEDRIVE_API_URL) ||
-    'http://localhost:3000/api/pipedrive';
+// 2. Define a URL para apontar para o seu backend local
+// Force relative path for browser to use Vite proxy -> Backend -> Pipedrive
+// This avoids CORS issues if VITE_PIPEDRIVE_API_URL is set to the external API in .env
+const rawUrl = (typeof window !== 'undefined')
+    ? '/api/pipedrive'
+    : (process.env.VITE_PIPEDRIVE_API_URL || 'http://localhost:3000/api/pipedrive');
 
 // 3. Cria o objeto settings centralizado
 const settings = {
@@ -46,7 +48,7 @@ export interface SearchDealsOptions {
     status?: string;
 }
 
-import { PIPEDRIVE_PRODUCT_MAP, CANCELLED_STAGE_IDS } from '../utils/pipedriveMap';
+import { PIPEDRIVE_PRODUCT_MAP, CANCELLED_STAGE_IDS, BLOCKED_STAGE_IDS } from '../utils/pipedriveMap';
 
 // --- Helper Functions ---
 
@@ -164,8 +166,7 @@ export const searchDeals = async ({
 
     if (person_id) {
         // List deals for a specific person
-        url = `${settings.PIPEDRIVE_API_URL}/deals`;
-        params.person_id = person_id;
+        url = `${settings.PIPEDRIVE_API_URL}/persons/${person_id}/deals`;
         params.status = status;
     } else {
 
@@ -202,46 +203,73 @@ export const searchDeals = async ({
  * Returns list of { productName, date, status, id }
  */
 export const getPurchasesByEmail = async (email: string) => {
-    try {
-        const person = await findPersonByEmail(email);
-        if (!person) return [];
+    // Removed try/catch to propagate errors to UI
+    const person = await findPersonByEmail(email);
+    if (!person) return [];
 
-        // Fetch deals for this person
-        const dealsData = await searchDeals({ person_id: person.id, status: 'all_not_deleted', limit: 50 });
+    // Fetch deals for this person
+    const dealsData = await searchDeals({ person_id: person.id, status: 'all_not_deleted', limit: 50 });
 
-        if (!dealsData.success || !dealsData.data) return [];
+    if (!dealsData.success || !dealsData.data) return [];
 
-        const deals = dealsData.data; // Array of deal objects
+    const deals = dealsData.data; // Array of deal objects
 
-        const purchases = deals.map((deal: any) => {
-            const pipelineId = deal.pipeline_id;
-            const stageId = deal.stage_id;
+    const purchases = deals.flatMap((deal: any) => {
+        const pipelineId = deal.pipeline_id;
+        const stageId = deal.stage_id;
 
-            // 1. Check if pipeline matches one of our products
-            const productName = PIPEDRIVE_PRODUCT_MAP[pipelineId];
-            if (!productName) return null;
+        // 1. Check if pipeline matches one of our products
+        const productName = PIPEDRIVE_PRODUCT_MAP[pipelineId];
+        if (!productName) return [];
 
-            // 2. Check if stage is cancelled/blocked
-            const cancelledStages = CANCELLED_STAGE_IDS[pipelineId] || [];
-            if (cancelledStages.includes(stageId)) return null;
+        // 3. Check if deal status is 'deleted' (Always filter out deleted deals unless specified otherwise)
+        if (deal.status === 'deleted') return [];
 
-            // 3. Check if deal status is 'deleted' (should be filtered by API but double check)
-            if (deal.status === 'deleted') return null;
+        // 2. Check Stage Status
+        const isBlocked = BLOCKED_STAGE_IDS[pipelineId] === stageId;
+        const isCancelled = CANCELLED_STAGE_IDS[pipelineId] === stageId;
 
-            return {
-                id: deal.id,
+        const resultItems: any[] = [];
+
+        // --- Item 1: The Purchase ("Comprou") ---
+        // Always created. 
+        // If blocked/cancelled -> adds warning + tooltip.
+        const addTimeParts = deal.add_time.split(' ');
+
+        const purchaseItem = {
+            id: deal.id, // Base ID
+            productName: productName,
+            statusLabel: 'Comprou',
+            warn: isBlocked || isCancelled,
+            tooltip: isBlocked ? 'Bloqueado' : (isCancelled ? 'Cancelado' : undefined),
+            date: addTimeParts[0],
+            time: addTimeParts[1],
+            status: deal.status,
+            stageId: stageId
+        };
+        resultItems.push(purchaseItem);
+
+        // --- Item 2: The Status Event ("Bloqueado" / "Cancelado") ---
+        // Only created if currently in that state.
+        if (isBlocked || isCancelled) {
+            const updateTimeParts = (deal.update_time || deal.add_time).split(' ');
+
+            const statusItem = {
+                id: deal.id + 999999, // Artificial ID to distinguish in keys
                 productName: productName,
-                date: deal.add_time.split(' ')[0], // YYYY-MM-DD
-                time: deal.add_time.split(' ')[1], // HH:MM:SS
-                status: deal.status, // open, won, lost
+                statusLabel: isBlocked ? 'Bloqueado' : 'Cancelado',
+                warn: false, // User requested: No ! icon for this item
+                tooltip: undefined,
+                date: updateTimeParts[0],
+                time: updateTimeParts[1],
+                status: deal.status,
                 stageId: stageId
             };
-        }).filter((p: any) => p !== null);
+            resultItems.push(statusItem);
+        }
 
-        return purchases;
+        return resultItems;
+    });
 
-    } catch (error) {
-        console.error("Error getting purchases by email:", error);
-        return [];
-    }
+    return purchases;
 };
