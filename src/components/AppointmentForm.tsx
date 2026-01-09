@@ -822,7 +822,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             <div className="flex justify-end gap-3">
 
                 {!initialData && (
-                    <Button type="button" variant="secondary" onClick={handleClear} className="flex items-center gap-2">
+                    <Button type="button" variant="secondary" onClick={handleClear} className="flex items-center gap-2" disabled={isSaving}>
                         <Eraser size={18} />
                         Limpar
                     </Button>

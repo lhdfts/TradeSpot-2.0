@@ -34,9 +34,11 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             wed: { start: '09:00', end: '18:00' },
             thu: { start: '09:00', end: '18:00' },
             fri: { start: '09:00', end: '18:00' },
+            sat: { start: '09:00', end: '18:00' },
+            sun: { start: '09:00', end: '18:00' },
         },
         pauses: {
-            mon: [], tue: [], wed: [], thu: [], fri: []
+            mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: []
         }
     });
 
@@ -54,9 +56,11 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                     wed: { start: '09:00', end: '18:00' },
                     thu: { start: '09:00', end: '18:00' },
                     fri: { start: '09:00', end: '18:00' },
+                    sat: { start: '09:00', end: '18:00' },
+                    sun: { start: '09:00', end: '18:00' },
                 },
                 pauses: {
-                    mon: [], tue: [], wed: [], thu: [], fri: []
+                    mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: []
                 }
             });
         }
@@ -158,7 +162,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
 
                 <div className="space-y-4">
                     <h4 className="text-sm font-medium text-foreground">Horários e Pausas</h4>
-                    {['mon', 'tue', 'wed', 'thu', 'fri'].map(day => (
+                    {['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map(day => (
                         <div key={day} className="border border-border rounded-lg p-3 space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-medium text-foreground uppercase w-12">{day}</span>

@@ -18,6 +18,10 @@ export const Metrics: React.FC = () => {
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
 
+    // --- UI STATE ---
+    const [isSdrExpanded, setIsSdrExpanded] = useState(false);
+    const [isCloserExpanded, setIsCloserExpanded] = useState(false);
+
     // Helper: Get Date Range based on filter
     const getDateRange = () => {
         const now = new Date();
@@ -321,7 +325,13 @@ export const Metrics: React.FC = () => {
                             <h3 className="text-lg font-semibold text-primary">Agendamentos por SDR</h3>
                             <p className="text-xs text-secondary mt-1">Total de agendamentos marcados (Ligação Closer e Reagendamento Closer)</p>
                         </div>
-                        <Button size="sm" variant="secondary">Expandir</Button>
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setIsSdrExpanded(!isSdrExpanded)}
+                        >
+                            {isSdrExpanded ? 'Recolher' : 'Expandir'}
+                        </Button>
                     </div>
 
                     <div className="grid grid-cols-12 text-xs font-semibold text-secondary mb-3 px-3">
@@ -331,8 +341,8 @@ export const Metrics: React.FC = () => {
                         <div className="col-span-2 text-center">Reagendamento</div>
                     </div>
 
-                    <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
-                        {sdrRanking.map((sdr, idx) => {
+                    <div className={`space-y-2 ${isSdrExpanded ? 'max-h-96 overflow-y-auto custom-scrollbar' : ''}`}>
+                        {(isSdrExpanded ? sdrRanking : sdrRanking.slice(0, 5)).map((sdr, idx) => {
                             let rowStyle = 'bg-background border-l-4 border-transparent';
                             if (idx === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
                             else if (idx === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]'; // Blueish grey
@@ -366,7 +376,13 @@ export const Metrics: React.FC = () => {
                             <h3 className="text-lg font-semibold text-primary">Agendamentos por Closer</h3>
                             <p className="text-xs text-secondary mt-1">Total de agendamentos recebidos e realizados</p>
                         </div>
-                        <Button size="sm" variant="secondary">Expandir</Button>
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setIsCloserExpanded(!isCloserExpanded)}
+                        >
+                            {isCloserExpanded ? 'Recolher' : 'Expandir'}
+                        </Button>
                     </div>
 
                     <div className="grid grid-cols-12 text-xs font-semibold text-secondary mb-3 px-3">
@@ -375,8 +391,8 @@ export const Metrics: React.FC = () => {
                         <div className="col-span-3 text-center">Total Recebido</div>
                     </div>
 
-                    <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
-                        {closerRanking.map((closer, idx) => {
+                    <div className={`space-y-2 ${isCloserExpanded ? 'max-h-96 overflow-y-auto custom-scrollbar' : ''}`}>
+                        {(isCloserExpanded ? closerRanking : closerRanking.slice(0, 5)).map((closer, idx) => {
                             let rowStyle = 'bg-background border-l-4 border-transparent';
                             if (idx === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
                             else if (idx === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
