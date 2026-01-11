@@ -57,3 +57,17 @@ export const createGoogleMeetLink = async (summary: string, startTime: string, e
         return null;
     }
 };
+
+export const deleteGoogleMeetEvent = async (eventId: string) => {
+    try {
+        await calendar.events.delete({
+            calendarId: 'primary',
+            eventId: eventId,
+        });
+        console.log(`Google Meet event ${eventId} deleted successfully.`);
+        return true;
+    } catch (error) {
+        console.error(`Error deleting Google Meet event ${eventId}:`, error);
+        return false;
+    }
+};

@@ -4,7 +4,7 @@ import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js'
 import { createClient } from '@supabase/supabase-js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant } from '../utils/distribution.js';
-import { createGoogleMeetLink } from '../services/googleMeet.js';
+import { createGoogleMeetLink, deleteGoogleMeetEvent } from '../services/googleMeet.js';
 
 const router = Router();
 
@@ -229,6 +229,7 @@ router.post('/', async (req: Request, res: Response) => {
             meet_link: meetLink,
             notes: data.notes,
             additional_info: data.additionalInfo,
+            google_event_id: googleEventId,
             // We could store google_event_id if the DB schema supports it, but for now we skip or add to metadata if needed. 
             // Assuming meet_link is the critical field.
 
@@ -450,6 +451,14 @@ router.put('/:id', async (req: Request, res: Response) => {
         // Handle oldStatus Logic
         if (updates.status && currentApp.status !== updates.status) {
             updatePayload.oldStatus = currentApp.status;
+
+            // Trigger Google Meet Deletion if status is Cancelado
+            if (updates.status === 'Cancelado' && currentApp.google_event_id && currentApp.status !== 'Cancelado') {
+                await deleteGoogleMeetEvent(currentApp.google_event_id);
+                // We'll trust it deleted or logged error. 
+                // We don't necessarily clear the google_event_id from DB in case we need audit, 
+                // but checking currentApp.status !== 'Cancelado' prevents double deletion attempts if logic allows re-cancellation.
+            }
         }
 
         // Perform Update
