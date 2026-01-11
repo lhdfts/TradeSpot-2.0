@@ -92,6 +92,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (user.sector === 'Closer') {
             return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
         }
+        if (user.sector === 'Tribo') {
+            return allTypes.filter(t => ['Agendamento Pessoal'].includes(t.value));
+        }
 
         return allTypes;
     }, [user]);
@@ -155,6 +158,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
             // 3. Agendamento Pessoal
             else if (formData.type === 'Agendamento Pessoal') {
+                setFormData(prev => ({ ...prev, attendantId: user.id }));
+            }
+
+            // Special case for Tribo: Always force attendant to self if type matches (which is enforced by allowedTypes)
+            if (user.sector === 'Tribo') {
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
             // 4. Reagendamento Closer
@@ -760,20 +768,29 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         {/* Row 8: Atendente and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={!initialData ? "col-span-2" : ""}>
-                                <FloatingSelect
-                                    label="Atendente"
-                                    value={formData.attendantId}
-                                    onChange={(e: any) => setFormData({ ...formData, attendantId: e.target.value })}
-                                    options={attendantOptions}
-                                    disabled={
-                                        // Enabled if:
-                                        // 1. Creating new 'Upgrade' appointment
-                                        // 2. Editing existing appointment AND user has specific role permissions
-                                        isEditing
-                                            ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
-                                            : formData.type !== 'Upgrade'
-                                    }
-                                />
+                                {formData.type === 'Agendamento Pessoal' && user ? (
+                                    <FloatingInput
+                                        label="Atendente"
+                                        value={user.name}
+                                        disabled
+                                        className="opacity-100 bg-muted/50 text-foreground"
+                                    />
+                                ) : (
+                                    <FloatingSelect
+                                        label="Atendente"
+                                        value={formData.attendantId}
+                                        onChange={(e: any) => setFormData({ ...formData, attendantId: e.target.value })}
+                                        options={attendantOptions}
+                                        disabled={
+                                            // Enabled if:
+                                            // 1. Creating new 'Upgrade' appointment
+                                            // 2. Editing existing appointment AND user has specific role permissions
+                                            isEditing
+                                                ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
+                                                : formData.type !== 'Upgrade'
+                                        }
+                                    />
+                                )}
                             </div>
                             {initialData && (
                                 <FloatingSelect
