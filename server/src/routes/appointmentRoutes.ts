@@ -327,6 +327,7 @@ router.post('/', async (req: Request, res: Response) => {
         // --- Webhook Integration ---
         const webhookResponse = {
             ...responseData,
+            type: data.type, // Explicitly include type
             attendant_name: names.attendant_name,
             created_by_name: names.created_by_name,
             event_name: names.event_name,
