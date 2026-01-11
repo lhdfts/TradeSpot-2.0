@@ -4,7 +4,7 @@ import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js'
 import { createClient } from '@supabase/supabase-js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant } from '../utils/distribution.js';
-import { createGoogleMeetLink, deleteGoogleMeetEvent } from '../services/googleMeet.js';
+import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 
 const router = Router();
 
@@ -452,12 +452,12 @@ router.put('/:id', async (req: Request, res: Response) => {
         if (updates.status && currentApp.status !== updates.status) {
             updatePayload.oldStatus = currentApp.status;
 
-            // Trigger Google Meet Deletion if status is Cancelado
-            if (updates.status === 'Cancelado' && currentApp.google_event_id && currentApp.status !== 'Cancelado') {
-                await deleteGoogleMeetEvent(currentApp.google_event_id);
-                // We'll trust it deleted or logged error. 
-                // We don't necessarily clear the google_event_id from DB in case we need audit, 
-                // but checking currentApp.status !== 'Cancelado' prevents double deletion attempts if logic allows re-cancellation.
+            // Trigger Google Meet Deletion if status is Cancelado or Reagendado
+            if ((updates.status === 'Cancelado' || updates.status === 'Reagendado') && currentApp.google_event_id) {
+                // Check if we haven't already processed this state (though usually UI prevents same-status updates)
+                if (currentApp.status !== updates.status) {
+                    await deleteGoogleMeetEvent(currentApp.google_event_id);
+                }
             }
         }
 
@@ -471,6 +471,28 @@ router.put('/:id', async (req: Request, res: Response) => {
 
         if (updateError) {
             return res.status(500).json({ error: 'Database Update Failed', details: updateError.message });
+        }
+
+        // 7. Sync Google Guests if Attendant Changed
+        if (updates.attendantId && currentApp.attendant_id !== updates.attendantId && currentApp.google_event_id && updated.status !== 'Cancelado') {
+            try {
+                const guestIds = [updated.attendant_id, updated.created_by].filter(Boolean);
+                const { data: usersData } = await supabase.from('user').select('email').in('id', guestIds);
+                const { data: clientData } = await supabase.from('clients').select('email').eq('id', updated.client_id).single();
+
+                const attendees: string[] = [];
+                if (clientData?.email) attendees.push(clientData.email);
+                if (usersData) {
+                    usersData.forEach((u: any) => {
+                        if (u.email && !attendees.includes(u.email)) attendees.push(u.email);
+                    });
+                }
+
+                await updateGoogleMeetEvent(currentApp.google_event_id, attendees);
+            } catch (syncError) {
+                console.error("Failed to sync Google Guests:", syncError);
+                // Non-blocking
+            }
         }
 
         // 6. Webhook Trigger

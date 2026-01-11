@@ -71,3 +71,37 @@ export const deleteGoogleMeetEvent = async (eventId: string) => {
         return false;
     }
 };
+
+export const updateGoogleMeetEvent = async (eventId: string, attendeeEmails?: string[], startTime?: string, endTime?: string) => {
+    try {
+        const resource: any = {};
+
+        if (attendeeEmails) {
+            resource.attendees = attendeeEmails.map(email => ({ email }));
+        }
+
+        if (startTime && endTime) {
+            resource.start = {
+                dateTime: startTime,
+                timeZone: 'America/Sao_Paulo',
+            };
+            resource.end = {
+                dateTime: endTime,
+                timeZone: 'America/Sao_Paulo',
+            };
+        }
+
+        if (Object.keys(resource).length === 0) return true;
+
+        await calendar.events.patch({
+            calendarId: 'primary',
+            eventId: eventId,
+            requestBody: resource,
+        });
+        console.log(`Google Meet event ${eventId} updated successfully.`);
+        return true;
+    } catch (error) {
+        console.error(`Error updating Google Meet event ${eventId}:`, error);
+        return false;
+    }
+};
