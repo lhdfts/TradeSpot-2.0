@@ -212,7 +212,7 @@ export class SupabaseApiService implements ApiService {
         list: async (): Promise<Event[]> => {
             const { data, error } = await supabase
                 .from('events')
-                .select('*');
+                .select('*, sector');
 
             if (error) throw new Error(error.message);
 
@@ -222,7 +222,8 @@ export class SupabaseApiService implements ApiService {
                 start_date: event.start_date,
                 end_date: event.end_date,
                 status: event.status,
-                created_at: event.created_at
+                created_at: event.created_at,
+                sector: event.sector
             }));
         },
         create: async (data: Omit<Event, 'id'>): Promise<Event> => {

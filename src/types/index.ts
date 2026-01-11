@@ -19,6 +19,7 @@ export interface Event {
     end_date: string;
     status: boolean;
     created_at?: string;
+    sector?: string;
 }
 
 export interface Attendant {

@@ -109,6 +109,7 @@ export const Events: React.FC = () => {
                     <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                         <tr>
                             <th className="px-6 py-4">Nome do Evento</th>
+                            <th className="px-6 py-4">Setor</th>
                             <th className="px-6 py-4">Data de Criação</th>
                             <th className="px-6 py-4">Status</th>
                             <th className="px-6 py-4 text-center">Ações</th>
@@ -126,6 +127,7 @@ export const Events: React.FC = () => {
                                         {event.event_name}
                                     </span>
                                 </td>
+                                <td className="px-6 py-4 text-foreground">{event.sector || '-'}</td>
                                 <td className="px-6 py-4 text-foreground">{event.created_at ? new Date(event.created_at).toLocaleDateString('pt-BR') : '-'}</td>
                                 <td className="px-6 py-4">
                                     <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${event.status ? 'bg-green-500/10 text-green-400 border-green-500/20' :

@@ -683,7 +683,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             label="Evento"
                             value={formData.eventId}
                             onChange={(e: any) => setFormData({ ...formData, eventId: e.target.value })}
-                            options={[...events.filter(e => e.status === true).map(e => ({ value: e.id, label: e.event_name }))]}
+                            options={[...events.filter(e => e.status === true && (!e.sector || (user && user.sector === e.sector))).map(e => ({ value: e.id, label: e.event_name }))]}
                             disabled={isEditing}
                         />
                         <FloatingSelect

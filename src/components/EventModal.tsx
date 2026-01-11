@@ -25,8 +25,23 @@ interface EventModalProps {
 export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSuccess, event }) => {
     const [formData, setFormData] = useState<Partial<Event>>({
         event_name: '',
-        status: true
+        status: true,
+        sector: ''
     });
+    const [sectors, setSectors] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchSectors = async () => {
+            try {
+                const attendants = await api.attendants.list();
+                const uniqueSectors = Array.from(new Set(attendants.map(a => a.sector).filter(Boolean))).sort();
+                setSectors(uniqueSectors);
+            } catch (error) {
+                console.error('Failed to fetch sectors', error);
+            }
+        };
+        fetchSectors();
+    }, []);
 
     useEffect(() => {
         if (event) {
@@ -34,7 +49,8 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
         } else {
             setFormData({
                 event_name: '',
-                status: true
+                status: true,
+                sector: ''
             });
         }
     }, [event, isOpen]);
@@ -72,6 +88,15 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                     required
                     placeholder="Ex: 1125 - Cash Express"
                     className="text-foreground"
+                />
+
+                <Select
+                    label="Setor"
+                    value={formData.sector || ''}
+                    onChange={(e: any) => setFormData({ ...formData, sector: e.target.value })}
+                    options={[
+                        ...sectors.map(s => ({ value: s, label: s }))
+                    ]}
                 />
 
                 <Select
