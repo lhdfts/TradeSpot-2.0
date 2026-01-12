@@ -37,7 +37,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
 
         if (!dateRange.start && !dateRange.end) {
             const today = new Date();
-            const todayStr = today.toLocaleDateString('sv-SE'); // YYYY-MM-DD
+            // YYYY-MM-DD
             // Fallback for environments where sv-SE might not work as expected (though universal in modern browsers/node)
             // simplified manual string construction if needed, but sv-SE is standard for ISO format.
             // Actually, let's be safer with manual YYYY-MM-DD construction to avoid locale issues.
