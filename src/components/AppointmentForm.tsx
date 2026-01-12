@@ -39,13 +39,14 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
-        fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,JPY-BRL')
+        fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,JPY-BRL,AOA-BRL')
             .then(res => res.json())
             .then(data => {
                 setRates({
                     USD: parseFloat(data.USDBRL.bid),
                     EUR: parseFloat(data.EURBRL.bid),
-                    JPY: parseFloat(data.JPYBRL.bid)
+                    JPY: parseFloat(data.JPYBRL.bid),
+                    AOA: parseFloat(data.AOABRL.bid)
                 });
             })
             .catch(err => console.error('Failed to fetch rates', err));
@@ -640,7 +641,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                             { value: 'USD', label: 'USD' },
                                             { value: 'EUR', label: 'EUR' },
                                             { value: 'JPY', label: 'JPY' },
-                                            { value: 'AOA', label: 'AOA' }
+                                            { value: 'AOA', label: 'KWZ' }
                                         ]}
                                         disabled={isEditing}
                                     />
