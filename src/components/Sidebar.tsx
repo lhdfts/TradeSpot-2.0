@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { cn } from './ui/button';
 import { Logo } from './Logo';
@@ -39,7 +39,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, to, collapsed }) => (
 export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
     const [isCollapsed, setIsCollapsed] = React.useState(false);
     const [isAgendamentosOpen, setIsAgendamentosOpen] = React.useState(true);
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const { theme } = useTheme();
 
     return (
@@ -193,10 +193,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                         <User size={16} />
                     </div>
                     {!isCollapsed && (
-                        <div className="flex flex-col overflow-hidden transition-opacity duration-300">
-                            <span className="text-sm font-medium text-white truncate">{user?.name || 'Usuário'}</span>
-                            <span className="text-xs text-gray-400 truncate">{user?.role || 'Guest'}</span>
-                        </div>
+                        <>
+                            <div className="flex flex-col overflow-hidden transition-opacity duration-300 flex-1">
+                                <span className="text-sm font-medium text-white truncate">{user?.name || 'Usuário'}</span>
+                                <span className="text-xs text-gray-400 truncate">{user?.role || 'Guest'}</span>
+                            </div>
+                            <button
+                                onClick={logout}
+                                className="text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10"
+                                title="Sair"
+                            >
+                                <LogOut size={16} />
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
