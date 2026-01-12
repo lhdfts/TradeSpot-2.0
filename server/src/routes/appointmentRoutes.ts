@@ -547,7 +547,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
             try {
                 console.log(`Sending Update Webhook to ${updateWebhookUrl}`);
-                axios.post(updateWebhookUrl, webhookPayload).catch(e => console.error("Webhook fail", e.message));
+                await axios.post(updateWebhookUrl, webhookPayload).catch(e => console.error("Webhook fail", e.message));
             } catch (e) {
                 // ignore
             }
