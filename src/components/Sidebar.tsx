@@ -106,17 +106,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                                 <span className="ml-2">Meus agendamentos</span>
                             </NavLink>
 
-                            <NavLink
-                                to="/all-appointments"
-                                className={({ isActive }) => cn(
-                                    'w-full flex items-center rounded-lg transition-colors text-sm font-medium relative py-2 pl-12 pr-4 justify-start',
-                                    isActive
-                                        ? 'text-white'
-                                        : 'text-gray-400 hover:text-white'
-                                )}
-                            >
-                                <span className="ml-2">Todos os Agendamentos</span>
-                            </NavLink>
+                            {!(user?.role === 'Colaborador' && user?.sector === 'Closer') && (
+                                <NavLink
+                                    to="/all-appointments"
+                                    className={({ isActive }) => cn(
+                                        'w-full flex items-center rounded-lg transition-colors text-sm font-medium relative py-2 pl-12 pr-4 justify-start',
+                                        isActive
+                                            ? 'text-white'
+                                            : 'text-gray-400 hover:text-white'
+                                    )}
+                                >
+                                    <span className="ml-2">Todos os Agendamentos</span>
+                                </NavLink>
+                            )}
                         </div>
                     )}
                 </div>

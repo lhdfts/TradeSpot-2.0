@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAppointments } from '../context/AppointmentContext';
+import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
 import { Search, Calendar as CalendarIcon, List, Copy, Check } from 'lucide-react';
 import type { Appointment } from '../types';
@@ -21,6 +22,14 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const { appointments } = useAppointments();
     const { attendants, events } = useFormData();
     const [searchParams] = useSearchParams();
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (user?.role === 'Colaborador' && user?.sector === 'Closer') {
+            navigate('/');
+        }
+    }, [user, navigate]);
 
     const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
     const [search, setSearch] = useState('');

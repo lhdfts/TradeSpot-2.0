@@ -73,7 +73,7 @@ export interface User {
     firebase_id?: string; // New field
     name: string;
     email: string; // Added email as it is in the DB
-    role: 'Suporte' | 'Qualidade' | 'Co-Líder' | 'Líder' | 'Admin' | 'Dev';
+    role: 'Suporte' | 'Qualidade' | 'Co-Líder' | 'Líder' | 'Admin' | 'Dev' | 'Colaborador';
     sector?: string; // Added sector
     // Removed level
 }
