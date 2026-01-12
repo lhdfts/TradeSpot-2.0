@@ -29,9 +29,29 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
 
         const matchesSearch = a.lead.toLowerCase().includes(search.toLowerCase()) || a.phone.toString().includes(search) || a.email?.toLowerCase().includes(search.toLowerCase());
         const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
-        const matchesDate =
-            (!dateRange.start || a.date >= dateRange.start) &&
-            (!dateRange.end || a.date <= dateRange.end);
+
+        // Default: Show Only Today and Future
+        // If filters are empty, we hide past appointments (yesterday or older).
+        // If filters are present, we respect them.
+        let matchesDate = true;
+
+        if (!dateRange.start && !dateRange.end) {
+            const today = new Date();
+            const todayStr = today.toLocaleDateString('sv-SE'); // YYYY-MM-DD
+            // Fallback for environments where sv-SE might not work as expected (though universal in modern browsers/node)
+            // simplified manual string construction if needed, but sv-SE is standard for ISO format.
+            // Actually, let's be safer with manual YYYY-MM-DD construction to avoid locale issues.
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const safeTodayStr = `${yyyy}-${mm}-${dd}`;
+
+            matchesDate = a.date >= safeTodayStr;
+        } else {
+            matchesDate =
+                (!dateRange.start || a.date >= dateRange.start) &&
+                (!dateRange.end || a.date <= dateRange.end);
+        }
         return matchesSearch && matchesStatus && matchesDate;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);

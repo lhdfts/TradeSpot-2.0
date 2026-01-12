@@ -516,8 +516,27 @@ router.put('/:id', async (req: Request, res: Response) => {
                 if (ev) eventName = ev.event_name;
             }
 
+            // Fetch Client Details for Webhook
+            let clientData: any = {};
+            if (updated.client_id) {
+                const { data: client } = await supabase
+                    .from('clients')
+                    .select('name, phone, email')
+                    .eq('id', updated.client_id)
+                    .single();
+
+                if (client) {
+                    clientData = {
+                        name: client.name,
+                        phone: client.phone,
+                        email: client.email
+                    };
+                }
+            }
+
             const webhookPayload = {
                 ...updated,
+                ...clientData, // Spread client details (name, phone, email)
                 attendant_name: attendantName,
                 created_by_name: creatorName,
                 event_name: eventName,

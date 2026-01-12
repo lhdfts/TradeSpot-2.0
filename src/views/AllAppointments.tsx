@@ -70,9 +70,22 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         const matchesAttendant = attendantFilter === 'all' || a.attendantId === attendantFilter;
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
 
-        const matchesDate =
-            (!dateRange.start || a.date >= dateRange.start) &&
-            (!dateRange.end || a.date <= dateRange.end);
+        // Default: Show Only Today and Future
+        let matchesDate = true;
+
+        if (!dateRange.start && !dateRange.end) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const safeTodayStr = `${yyyy}-${mm}-${dd}`;
+
+            matchesDate = a.date >= safeTodayStr;
+        } else {
+            matchesDate =
+                (!dateRange.start || a.date >= dateRange.start) &&
+                (!dateRange.end || a.date <= dateRange.end);
+        }
 
         return matchesSearch && matchesStatus && matchesAttendant && matchesEvent && matchesDate;
     }).sort((a, b) => {

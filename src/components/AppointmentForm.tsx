@@ -336,6 +336,15 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         if (isSaving) return;
 
+        // Manual validation for required fields to provide better feedback
+        if (!formData.lead) { toastManager.add({ title: "Erro", description: "Nome é obrigatório", type: 'error' }); return; }
+        if (!formData.phone) { toastManager.add({ title: "Erro", description: "Telefone é obrigatório", type: 'error' }); return; }
+        if (!formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
+        if (!formData.studentProfile.financial.amount) {
+            toastManager.add({ title: "Erro", description: "Valor do Perfil Financeiro é obrigatório", type: 'error' });
+            return;
+        }
+
         // Final Validation Gatekeeper
         if (formData.type === 'Reagendamento Closer') {
             if (!checkEligibility(formData.phone)) {
@@ -600,7 +609,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                     fetchPurchaseHistory(formData.email);
                                 }
                             }}
-                            required
+                            required // Keep required on main fields but handled manually too
                             disabled={isEditing}
                         />
 
@@ -650,7 +659,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                             }))
                                         }}
                                         disabled={isEditing}
-                                        required
+                                    // required - Validation handled manually for better UX
                                     />
                                     {getConvertedValue() && (
                                         <div className="text-xs text-muted-foreground mt-1 text-right">
@@ -787,7 +796,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                             // 2. Editing existing appointment AND user has specific role permissions
                                             isEditing
                                                 ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
-                                                : formData.type !== 'Upgrade'
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Reagendamento Closer')
                                         }
                                     />
                                 )}
