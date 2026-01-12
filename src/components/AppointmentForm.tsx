@@ -814,10 +814,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         !user || (
                                             user.id !== initialData.createdBy && // not creator
                                             user.id !== initialData.attendantId && // not attendant
-                                            user.role !== 'Líder' &&
-                                            user.role !== 'Co-Líder' && // Usually Co-Líder has similar perms, but request said specifically 'sector Líder'. I'll stick to 'Líder' role if strict, but maybe 'Co-Líder' too? The request says "sector Líder". Let's assume role 'Líder' covers it. I'll include 'Admin' and 'Dev' for safety as they usually have super powers.
-                                            user.role !== 'Admin' &&
-                                            user.role !== 'Dev'
+                                            !['Líder', 'Co-Líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
+                                        ) || (
+                                            // Lock for ALL Colaboradores if already edited (not Pendente)
+                                            user.role === 'Colaborador' &&
+                                            initialData.status !== 'Pendente'
                                         )
                                     }
                                 />
