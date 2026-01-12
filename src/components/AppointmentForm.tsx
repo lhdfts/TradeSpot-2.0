@@ -639,7 +639,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                             { value: 'BRL', label: 'BRL' },
                                             { value: 'USD', label: 'USD' },
                                             { value: 'EUR', label: 'EUR' },
-                                            { value: 'JPY', label: 'JPY' }
+                                            { value: 'JPY', label: 'JPY' },
+                                            { value: 'AOA', label: 'AOA' }
                                         ]}
                                         disabled={isEditing}
                                     />
