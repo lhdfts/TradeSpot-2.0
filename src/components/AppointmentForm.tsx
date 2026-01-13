@@ -733,9 +733,18 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         <FloatingSelect
                             label="Evento"
                             value={formData.eventId}
-                            onChange={(e: any) => setFormData({ ...formData, eventId: e.target.value })}
+                            onChange={(e: any) => {
+                                setFormData({ ...formData, eventId: e.target.value });
+                                if (errors.eventId) setErrors(prev => ({ ...prev, eventId: '' }));
+                            }}
+                            onBlur={() => {
+                                if (!formData.eventId) {
+                                    setErrors(prev => ({ ...prev, eventId: 'Evento é obrigatório' }));
+                                }
+                            }}
                             options={[...events.filter(e => e.status === true && (!e.sector || (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder'].includes(user.role) || user.sector === e.sector)))).map(e => ({ value: e.id, label: e.event_name }))]}
                             disabled={isEditing}
+                            error={errors.eventId}
                         />
                         <FloatingSelect
                             label="Tipo"
@@ -753,9 +762,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                     }
                                 }
                                 setFormData({ ...formData, type: newType });
+                                if (errors.type) setErrors(prev => ({ ...prev, type: '' }));
+                            }}
+                            onBlur={() => {
+                                if (!formData.type) {
+                                    setErrors(prev => ({ ...prev, type: 'Tipo de agendamento é obrigatório' }));
+                                }
                             }}
                             options={[...allowedTypes]}
                             disabled={isEditing}
+                            error={errors.type}
                         />
 
                         {/* Row 5: Data and Horário */}
@@ -830,7 +846,17 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                     <FloatingSelect
                                         label="Atendente"
                                         value={formData.attendantId}
-                                        onChange={(e: any) => setFormData({ ...formData, attendantId: e.target.value })}
+                                        onChange={(e: any) => {
+                                            setFormData({ ...formData, attendantId: e.target.value });
+                                            if (errors.attendantId) setErrors(prev => ({ ...prev, attendantId: '' }));
+                                        }}
+                                        onBlur={() => {
+                                            // Optional: Validate if required. 
+                                            // Since 'distribuicao_automatica' is a valid value, we just check if empty
+                                            if (!formData.attendantId) {
+                                                setErrors(prev => ({ ...prev, attendantId: 'Atendente é obrigatório' }));
+                                            }
+                                        }}
                                         options={attendantOptions}
                                         disabled={
                                             // Enabled if:

@@ -8,6 +8,7 @@ interface FloatingSelectProps {
     options: { value: string; label: string }[];
     value: string;
     onChange: (e: { target: { value: string; name?: string } }) => void;
+    onBlur?: () => void;
     name?: string;
     disabled?: boolean;
     className?: string;
@@ -19,6 +20,7 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
     options,
     value,
     onChange,
+    onBlur,
     name,
     disabled,
     className,
@@ -134,11 +136,22 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
         </div>
     );
 
+    const handleBlur = (e: React.FocusEvent) => {
+        // Delay minimal time to allow click event on option to fire first
+        setTimeout(() => {
+            if (!isOpen) {
+                onBlur?.();
+            }
+            setIsOpen(false);
+        }, 150);
+    };
+
     return (
         <div className={cn("relative", className)} ref={containerRef}>
             <button
                 type="button"
                 onClick={() => !disabled && setIsOpen(!isOpen)}
+                onBlur={handleBlur}
                 className={cn(
                     "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-surface text-foreground text-left flex items-center justify-between",
                     error
