@@ -56,13 +56,13 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
     <Toast.Portal data-slot="toast-portal">
       <Toast.Viewport
         className={cn(
-          "fixed z-[9999] flex max-w-[280px]",
+          "fixed z-[9999] w-[280px]",
           // Vertical positioning
           "data-[position*=top]:top-4",
           "data-[position*=bottom]:bottom-4",
-          // Horizontal positioning
-          "data-[position*=left]:left-2.5",
-          "data-[position*=right]:right-2.5",
+          // Horizontal positioning - right-2.5 = 10px, left-auto ensures right-based positioning
+          "data-[position*=left]:left-2.5 data-[position*=left]:right-auto",
+          "data-[position*=right]:right-2.5 data-[position*=right]:left-auto",
           "data-[position*=center]:left-1/2 data-[position*=center]:-translate-x-1/2",
         )}
         data-position={position}
