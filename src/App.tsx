@@ -187,7 +187,7 @@ function App() {
       <AuthProvider>
         <ThemeProvider>
           <AppointmentProvider>
-            <ToastProvider>
+            <ToastProvider position="top-right">
               <MainContent />
             </ToastProvider>
           </AppointmentProvider>
