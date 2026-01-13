@@ -56,13 +56,13 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
     <Toast.Portal data-slot="toast-portal">
       <Toast.Viewport
         className={cn(
-          "fixed z-[9999] flex max-w-[40ch] sm:w-auto",
+          "fixed z-[9999] flex max-w-[280px]",
           // Vertical positioning
-          "data-[position*=top]:top-[10px]",
-          "data-[position*=bottom]:bottom-[10px]",
+          "data-[position*=top]:top-4",
+          "data-[position*=bottom]:bottom-4",
           // Horizontal positioning
-          "data-[position*=left]:left-[10px]",
-          "data-[position*=right]:right-[10px]",
+          "data-[position*=left]:left-2.5",
+          "data-[position*=right]:right-2.5",
           "data-[position*=center]:left-1/2 data-[position*=center]:-translate-x-1/2",
         )}
         data-position={position}
@@ -140,11 +140,11 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
 
                   <div className="flex flex-col gap-0.5">
                     <Toast.Title
-                      className="font-medium break-words"
+                      className="font-medium"
                       data-slot="toast-title"
                     />
                     <Toast.Description
-                      className="text-muted-foreground break-words whitespace-normal"
+                      className="text-muted-foreground"
                       data-slot="toast-description"
                     />
                   </div>
