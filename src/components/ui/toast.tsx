@@ -56,14 +56,14 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
     <Toast.Portal data-slot="toast-portal">
       <Toast.Viewport
         className={cn(
-          "fixed z-50 mx-auto flex w-[calc(100%-var(--toast-inset)*2)] max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
+          "fixed z-[9999] mx-auto flex w-[calc(100%-32px)] max-w-90 sm:w-auto",
           // Vertical positioning
-          "data-[position*=top]:top-(--toast-inset)",
-          "data-[position*=bottom]:bottom-(--toast-inset)",
+          "data-[position*=top]:top-4",
+          "data-[position*=bottom]:bottom-4",
           // Horizontal positioning
-          "data-[position*=left]:left-(--toast-inset)",
-          "data-[position*=right]:right-(--toast-inset)",
-          "data-[position*=center]:-translate-x-1/2 data-[position*=center]:left-1/2",
+          "data-[position*=left]:left-4",
+          "data-[position*=right]:right-4",
+          "data-[position*=center]:left-1/2 data-[position*=center]:-translate-x-1/2",
         )}
         data-position={position}
         data-slot="toast-viewport"
