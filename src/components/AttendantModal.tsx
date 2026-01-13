@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Attendant } from '../types';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const Input: React.FC<any> = ({ label, ...props }) => (
     <div className="space-y-1">
@@ -24,10 +25,12 @@ interface AttendantModalProps {
 }
 
 export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose, onSuccess, attendant }) => {
+    const { user } = useAuth();
     const [formData, setFormData] = useState<Partial<Attendant>>({
         name: '',
         email: '',
-        sector: 'Suporte',
+        role: 'Colaborador',
+        sector: 'SDR',
         schedule: {
             mon: { start: '09:00', end: '18:00' },
             tue: { start: '09:00', end: '18:00' },
@@ -49,7 +52,8 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             setFormData({
                 name: '',
                 email: '',
-                sector: 'Suporte',
+                role: 'Colaborador',
+                sector: 'SDR',
                 schedule: {
                     mon: { start: '09:00', end: '18:00' },
                     tue: { start: '09:00', end: '18:00' },
@@ -131,6 +135,39 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
         });
     };
 
+    const getAvailableRoles = () => {
+        const allRoles = [
+            { value: 'Colaborador', label: 'Colaborador' },
+            { value: 'Qualidade', label: 'Qualidade' },
+            { value: 'Co-Líder', label: 'Co-Líder' },
+            { value: 'Líder', label: 'Líder' },
+            { value: 'Admin', label: 'Admin' },
+            { value: 'Dev', label: 'Dev' },
+        ];
+
+        if (!user) return [];
+
+        const userRole = user.role;
+
+        if (userRole === 'Dev') {
+            return allRoles;
+        }
+
+        if (userRole === 'Admin') {
+            return allRoles.filter(r => r.value !== 'Dev');
+        }
+
+        if (userRole === 'Líder') {
+            return allRoles.filter(r => ['Colaborador', 'Qualidade', 'Co-Líder', 'Líder'].includes(r.value));
+        }
+
+        if (userRole === 'Co-Líder' || userRole === 'Qualidade') {
+            return allRoles.filter(r => ['Colaborador', 'Qualidade', 'Co-Líder'].includes(r.value));
+        }
+
+        return [];
+    };
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={attendant ? 'Editar Atendente' : 'Novo Atendente'}>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -147,18 +184,26 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
                     required
                 />
-                <Select
-                    label="Setor"
-                    value={formData.sector}
-                    onChange={e => setFormData({ ...formData, sector: e.target.value as any })}
-                    options={[
-                        { value: 'Suporte', label: 'Suporte' },
-                        { value: 'Qualidade', label: 'Qualidade' },
-                        { value: 'Co-Líder', label: 'Co-Líder' },
-                        { value: 'Líder', label: 'Líder' },
-                        { value: 'Admin', label: 'Admin' }
-                    ]}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                    <Select
+                        label="Função"
+                        value={formData.role}
+                        onChange={(e: any) => setFormData({ ...formData, role: e.target.value as any })}
+                        options={getAvailableRoles()}
+                    />
+                    <Select
+                        label="Setor"
+                        value={formData.sector}
+                        onChange={(e: any) => setFormData({ ...formData, sector: e.target.value as any })}
+                        options={[
+                            { value: 'SDR', label: 'SDR' },
+                            { value: 'Closer', label: 'Closer' },
+                            { value: 'Tribo', label: 'Tribo' },
+                            { value: 'Aldeia', label: 'Aldeia' },
+                            { value: 'Social Seller', label: 'Social Seller' }
+                        ]}
+                    />
+                </div>
 
                 <div className="space-y-4">
                     <h4 className="text-sm font-medium text-foreground">Horários e Pausas</h4>

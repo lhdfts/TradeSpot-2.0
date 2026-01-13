@@ -26,7 +26,7 @@ export interface Attendant {
     id: string;
     name: string;
     email: string;
-    role: 'Suporte' | 'Qualidade' | 'Co-Líder' | 'Líder' | 'Admin' | 'Dev';
+    role: 'Suporte' | 'Qualidade' | 'Co-Líder' | 'Líder' | 'Admin' | 'Dev' | 'Colaborador';
     sector: string; // Relaxed to string to match data like "Closer", "TEI"
     schedule: {
         [key: string]: { start: string; end: string } | null; // key is day of week (mon, tue, etc.)

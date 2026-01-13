@@ -86,7 +86,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         ];
 
         if (!user) return [];
-        if (user.sector === 'TEI' || user.role === 'Dev') return allTypes;
+        if (user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin') return allTypes;
 
         if (user.sector === 'SDR') {
             return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
@@ -96,6 +96,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         }
         if (user.sector === 'Tribo') {
             return allTypes.filter(t => ['Agendamento Pessoal'].includes(t.value));
+        }
+        if (user.sector === 'Social Seller') {
+            return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer'].includes(t.value));
         }
 
         return allTypes;
@@ -695,7 +698,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             label="Evento"
                             value={formData.eventId}
                             onChange={(e: any) => setFormData({ ...formData, eventId: e.target.value })}
-                            options={[...events.filter(e => e.status === true && (!e.sector || (user && user.sector === e.sector))).map(e => ({ value: e.id, label: e.event_name }))]}
+                            options={[...events.filter(e => e.status === true && (!e.sector || (user && (user.role === 'Dev' || user.role === 'Admin' || user.sector === e.sector)))).map(e => ({ value: e.id, label: e.event_name }))]}
                             disabled={isEditing}
                         />
                         <FloatingSelect
