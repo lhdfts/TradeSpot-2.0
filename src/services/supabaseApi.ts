@@ -233,7 +233,8 @@ export class SupabaseApiService implements ApiService {
                     event_name: data.event_name,
                     start_date: data.start_date,
                     end_date: data.end_date,
-                    status: data.status
+                    status: data.status,
+                    sector: data.sector
                 })
                 .select()
                 .single();
@@ -245,7 +246,8 @@ export class SupabaseApiService implements ApiService {
                 event_name: eventData.event_name,
                 start_date: eventData.start_date,
                 end_date: eventData.end_date,
-                status: eventData.status
+                status: eventData.status,
+                sector: eventData.sector
             };
         },
         update: async (id: string, data: Partial<Event>): Promise<Event> => {
@@ -255,7 +257,8 @@ export class SupabaseApiService implements ApiService {
                     event_name: data.event_name,
                     start_date: data.start_date,
                     end_date: data.end_date,
-                    status: data.status
+                    status: data.status,
+                    sector: data.sector
                 })
                 .eq('id', id)
                 .select()
@@ -268,7 +271,8 @@ export class SupabaseApiService implements ApiService {
                 event_name: eventData.event_name,
                 start_date: eventData.start_date,
                 end_date: eventData.end_date,
-                status: eventData.status
+                status: eventData.status,
+                sector: eventData.sector
             };
         },
         delete: async (id: string): Promise<void> => {
