@@ -159,7 +159,7 @@ const MainContent: React.FC = () => {
                 <Route path="/attendants" element={<Attendants />} />
               </Route>
 
-              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-Líder', 'Qualidade']} />}>
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-Líder', 'Co-líder', 'Qualidade']} />}>
                 <Route path="/events" element={<Events />} />
               </Route>
             </Routes>
