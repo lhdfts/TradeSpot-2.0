@@ -165,8 +165,8 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             return allRoles.filter(r => ['Colaborador', 'Qualidade', 'Co-Líder', 'Líder'].includes(r.value));
         }
 
-        if (userRole === 'Co-Líder' || userRole === 'Qualidade') {
-            return allRoles.filter(r => ['Colaborador', 'Qualidade', 'Co-Líder'].includes(r.value));
+        if (userRole === 'Co-Líder' || userRole === 'Co-líder' || userRole === 'Qualidade') {
+            return allRoles.filter(r => ['Colaborador', 'Qualidade', 'Co-Líder', 'Co-líder'].includes(r.value));
         }
 
         return [];

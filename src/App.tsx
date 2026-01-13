@@ -150,12 +150,12 @@ const MainContent: React.FC = () => {
               </Route>
 
               {/* Metrics - Admin, Líder, Co-Líder */}
-              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-Líder', 'Dev', 'Qualidade']} />}>
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Dev', 'Qualidade']} />}>
                 <Route path="/metrics" element={<Metrics />} />
               </Route>
 
               {/* Admin/Líder Only Management */}
-              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-Líder', 'Qualidade']} />}>
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-Líder', 'Co-líder', 'Qualidade']} />}>
                 <Route path="/attendants" element={<Attendants />} />
               </Route>
 

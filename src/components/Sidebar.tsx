@@ -140,7 +140,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 </NavLink>
 
                 {/* Metrics - usually for managers */}
-                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Co-Líder' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
+                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Co-Líder' || user?.role === 'Co-líder' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
                     <NavItem
                         icon={<PieChart size={20} />}
                         label={isCollapsed ? "" : "Métricas"}
@@ -151,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
 
                 {/* Attendants & Events - Admin/Líder only */}
                 {/* Attendants - Admin/Líder/Dev only (Co-Lider and Qualidade EXCLUDED) */}
-                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.role === 'Co-Líder') && (
+                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.role === 'Co-Líder' || user?.role === 'Co-líder') && (
                     <NavItem
                         icon={<Users size={20} />}
                         label={isCollapsed ? "" : "Atendentes"}
@@ -161,7 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 )}
 
                 {/* Events - Admin/Líder/Dev/Co-Líder/Qualidade */}
-                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.role === 'Co-Líder' || user?.role === 'Qualidade') && (
+                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.role === 'Co-Líder' || user?.role === 'Co-líder' || user?.role === 'Qualidade') && (
                     <NavItem
                         icon={<Ticket size={20} />}
                         label={isCollapsed ? "" : "Eventos"}
