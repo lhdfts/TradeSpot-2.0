@@ -37,6 +37,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     const [isExistingClient, setIsExistingClient] = useState(false);
     const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,JPY-BRL,USD-AOA')
@@ -579,9 +580,19 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         <FloatingInput
                             label="Telefone"
                             value={formData.phone}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, phone: sanitizeInput.digits(e.target.value) })}
-                            onBlur={handlePhoneBlur}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                setFormData({ ...formData, phone: sanitizeInput.digits(e.target.value) });
+                                if (errors.phone) setErrors(prev => ({ ...prev, phone: '' }));
+                            }}
+                            onBlur={() => {
+                                if (!formData.phone) {
+                                    setErrors(prev => ({ ...prev, phone: 'Telefone é obrigatório' }));
+                                } else {
+                                    handlePhoneBlur();
+                                }
+                            }}
                             required
+                            error={errors.phone}
                             disabled={isEditing || isExistingClient}
                             maxLength={20}
                         />
@@ -590,9 +601,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             value={formData.lead}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 setFormData({ ...formData, lead: sanitizeInput.name(e.target.value) });
+                                if (errors.lead) setErrors(prev => ({ ...prev, lead: '' }));
                             }}
-                            onBlur={() => setFormData(prev => ({ ...prev, lead: prev.lead.trim() }))}
+                            onBlur={() => {
+                                setFormData(prev => ({ ...prev, lead: prev.lead.trim() }));
+                                if (!formData.lead.trim()) {
+                                    setErrors(prev => ({ ...prev, lead: 'Nome é obrigatório' }));
+                                }
+                            }}
                             required
+                            error={errors.lead}
                             disabled={isEditing || isExistingClient}
                             maxLength={100}
                         />
@@ -605,16 +623,27 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 const val = sanitizeInput.email(e.target.value);
                                 setFormData({ ...formData, email: val });
+                                if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
                                 if (isExistingClient && val !== formData.email) {
                                     setIsExistingClient(false);
                                 }
                             }}
                             onBlur={() => {
-                                if (formData.email) {
+                                let hasError = false;
+                                if (!formData.email) {
+                                    setErrors(prev => ({ ...prev, email: 'Email é obrigatório' }));
+                                    hasError = true;
+                                } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+                                    setErrors(prev => ({ ...prev, email: 'O campo de email precisa terminar com .com, .br, .net, .jp, etc' }));
+                                    hasError = true;
+                                }
+
+                                if (!hasError) {
                                     fetchPurchaseHistory(formData.email);
                                 }
                             }}
                             required // Keep required on main fields but handled manually too
+                            error={errors.email}
                             disabled={isEditing}
                         />
 
@@ -662,9 +691,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                                     ...prev.studentProfile,
                                                     financial: { ...prev.studentProfile.financial, amount: formatted }
                                                 }
-                                            }))
+                                            }));
+                                            if (errors.amount) setErrors(prev => ({ ...prev, amount: '' }));
+                                        }}
+                                        onBlur={() => {
+                                            if (!formData.studentProfile.financial.amount) {
+                                                setErrors(prev => ({ ...prev, amount: 'Valor do Perfil Financeiro é obrigatório' }));
+                                            }
                                         }}
                                         disabled={isEditing}
+                                        error={errors.amount}
                                     // required - Validation handled manually for better UX
                                     />
                                     {getConvertedValue() && (
