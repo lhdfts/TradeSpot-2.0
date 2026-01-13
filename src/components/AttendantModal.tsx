@@ -47,7 +47,11 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
 
     useEffect(() => {
         if (attendant) {
-            setFormData(attendant);
+            setFormData({
+                ...attendant,
+                role: attendant.role || 'Colaborador',
+                sector: attendant.sector || 'SDR'
+            });
         } else {
             setFormData({
                 name: '',
