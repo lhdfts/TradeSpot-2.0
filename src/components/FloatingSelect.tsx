@@ -136,7 +136,7 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
         </div>
     );
 
-    const handleBlur = (e: React.FocusEvent) => {
+    const handleBlur = () => {
         // Delay minimal time to allow click event on option to fire first
         setTimeout(() => {
             if (!isOpen) {
