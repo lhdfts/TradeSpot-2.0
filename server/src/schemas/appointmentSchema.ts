@@ -56,7 +56,7 @@ export const createAppointmentSchema = z.object({
     // Controlled free text
     additionalInfo: z.string()
         .max(300)
-        .regex(/^[a-zA-Z\u00C0-\u00FF0-9@.()\s"'-]*$/, "Special characters not allowed")
+        .regex(/^[a-zA-Z\u00C0-\u00FF0-9@.()\s"'\-,:;!?]*$/, "Special characters not allowed")
         .optional(),
 
     // Description/Notes (only for editing usually, but if allowed on creation)

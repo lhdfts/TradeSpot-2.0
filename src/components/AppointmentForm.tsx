@@ -379,7 +379,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
 
             // 2. Check Conflicts (Overlapping appointments)
-            if (hasConflictingAppointment(attendantId, formData.date, formData.time, formData.type, appointments)) {
+            if (hasConflictingAppointment(attendantId, formData.date, formData.time, formData.type, appointments, initialData?.id)) {
                 toastManager.add({
                     title: "Conflito de Agenda",
                     description: `${selectedAttendant.name} já possui um agendamento conflitante neste horário.`,

@@ -74,12 +74,16 @@ export const hasConflictingAppointment = (
     dateStr: string,
     timeStr: string,
     newAppointmentType: string,
-    allAppointments: Appointment[]
+    allAppointments: Appointment[],
+    excludeAppointmentId?: string
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
     const newEnd = newStart + getDuration(newAppointmentType);
 
     return allAppointments.some(appt => {
+        // Exclude self if updating
+        if (excludeAppointmentId && appt.id === excludeAppointmentId) return false;
+
         // Filter by attendant
         if (appt.attendantId !== attendantId) return false;
 

@@ -16,7 +16,7 @@ export const SECURITY_PATTERNS = {
     SEARCH_SAFE: /[^a-zA-Z0-9\u00C0-\u00FF\s-]/g,
 
     // Strict text (No numbers, specific punctuation only) per user request for Additional Info
-    STRICT_TEXT: /[^a-zA-Z0-9\u00C0-\u00FF\s,()."']/g
+    STRICT_TEXT: /[^a-zA-Z0-9\u00C0-\u00FF\s,()."'\-:;!?]/g
 };
 
 export const sanitizeInput = {
