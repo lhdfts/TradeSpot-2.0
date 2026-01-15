@@ -70,7 +70,8 @@ export class SupabaseApiService implements ApiService {
             if (!response.ok) {
                 const errorData = await response.json();
                 console.error("Backend Error:", errorData);
-                throw new Error(errorData.error || 'Failed to create appointment via backend');
+                // Throw object with response structure for local handling
+                throw { response: { status: response.status, data: errorData } };
             }
 
             const createdAppointment = await response.json();
@@ -114,7 +115,7 @@ export class SupabaseApiService implements ApiService {
             if (!response.ok) {
                 const errorData = await response.json();
                 console.error("Backend Update Error:", errorData);
-                throw new Error(errorData.error || 'Failed to update appointment via backend');
+                throw { response: { status: response.status, data: errorData } };
             }
 
             const updatedAppointment = await response.json();

@@ -483,16 +483,23 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     // Flattening the errors for display
                     const errorMessages: string[] = [];
 
-                    if (data.details._errors) {
-                        errorMessages.push(...data.details._errors);
-                    }
-
-                    // Iterate over keys to find field-specific errors
-                    Object.keys(data.details).forEach(key => {
-                        if (key !== '_errors' && data.details[key]._errors) {
-                            errorMessages.push(...data.details[key]._errors);
+                    // Recursive helper to extract errors from Zod format
+                    const extractErrors = (obj: any): string[] => {
+                        const messages: string[] = [];
+                        if (obj._errors && Array.isArray(obj._errors)) {
+                            messages.push(...obj._errors);
                         }
-                    });
+                        Object.keys(obj).forEach(key => {
+                            if (typeof obj[key] === 'object' && obj[key] !== null && key !== '_errors') {
+                                messages.push(...extractErrors(obj[key]));
+                            }
+                        });
+                        return messages;
+                    };
+
+                    if (data.details) {
+                        errorMessages.push(...extractErrors(data.details));
+                    }
 
                     // If no structured details found, fallback to generic message
                     if (errorMessages.length === 0 && data.error) {
