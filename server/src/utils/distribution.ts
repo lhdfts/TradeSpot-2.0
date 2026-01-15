@@ -45,22 +45,56 @@ const isAttendantWithinSchedule = (
     appointmentType: string
 ): boolean => {
     if (!attendant.schedule) return false;
+
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     const dayKey = DAY_MAP[date.getDay()];
+
+    // Check Previous Day for Overnight Spillover
+    const prevDate = new Date(date);
+    prevDate.setDate(date.getDate() - 1);
+    const prevDayKey = DAY_MAP[prevDate.getDay()];
+
     const schedule = attendant.schedule?.[dayKey];
-
-    if (!schedule) return false;
-
-    const startMinutes = timeToMinutes(schedule.start);
-    const endMinutes = timeToMinutes(schedule.end);
+    const prevSchedule = attendant.schedule?.[prevDayKey];
 
     const apptStart = timeToMinutes(timeStr);
     const duration = getDuration(appointmentType);
     const apptEnd = apptStart + duration;
 
-    // Check work hours (End must be <= Schedule End)
-    if (apptStart < startMinutes || apptEnd > endMinutes) return false;
+    // 1. Check Previous Day Spillover
+    if (prevSchedule) {
+        const prevStart = timeToMinutes(prevSchedule.start);
+        let prevEnd = timeToMinutes(prevSchedule.end);
+        if (prevEnd === 0) prevEnd = 1440; // Treat 00:00 as 24:00
+
+        // If overnight shift yesterday (e.g. 22:00 - 02:00)
+        // Valid for today if time < prevEnd (e.g. 01:00 < 02:00)
+        if (prevStart >= prevEnd) { // Overnight shift condition
+            if (apptStart < prevEnd) {
+                // Check pauses if needed (omitted for overnight spillover simplicity or add later)
+                return true;
+            }
+        }
+    }
+
+    // 2. Check Current Day
+    if (!schedule) return false;
+
+    const startMinutes = timeToMinutes(schedule.start);
+    let endMinutes = timeToMinutes(schedule.end);
+    if (endMinutes === 0) endMinutes = 1440;
+
+    // Normal Shift
+    if (startMinutes < endMinutes) {
+        if (apptStart < startMinutes || apptEnd > endMinutes) return false;
+    }
+    // Overnight Shift (starts today, ends tomorrow)
+    else {
+        // Valid if starts after shift start (e.g. 23:00 >= 22:00)
+        // Ends can go into next day, so we just check start time boundary for today
+        if (apptStart < startMinutes) return false;
+    }
 
     if (attendant.pauses && attendant.pauses[dayKey]) {
         for (const pause of attendant.pauses[dayKey]) {

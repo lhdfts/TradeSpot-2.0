@@ -37,19 +37,51 @@ export const isAttendantWithinSchedule = (
     const date = new Date(year, month - 1, day);
     const dayKey = DAY_MAP[date.getDay()];
 
-    const schedule = attendant.schedule?.[dayKey];
-    if (!schedule) return false;
-
-    const startMinutes = timeToMinutes(schedule.start);
-    const endMinutes = timeToMinutes(schedule.end);
+    // Check Previous Day for Overnight Spillover
+    const prevDate = new Date(date);
+    prevDate.setDate(date.getDate() - 1);
+    const prevDayKey = DAY_MAP[prevDate.getDay()];
 
     const apptStart = timeToMinutes(timeStr);
     const duration = getDuration(appointmentType);
     const apptEnd = apptStart + duration;
 
-    // Check work hours (End time must be <= Schedule End)
-    if (apptStart < startMinutes || apptEnd > endMinutes) {
-        return false;
+    // 1. Check Previous Day Spillover
+    const prevSchedule = attendant.schedule?.[prevDayKey];
+    if (prevSchedule) {
+        const prevStart = timeToMinutes(prevSchedule.start);
+        let prevEnd = timeToMinutes(prevSchedule.end);
+        if (prevEnd === 0) prevEnd = 1440; // Treat 00:00 as 24:00
+
+        // If overnight shift yesterday (e.g. 22:00 - 02:00)
+        // Valid for today if time < prevEnd (e.g. 01:00 < 02:00)
+        if (prevStart >= prevEnd) {
+            if (apptStart < prevEnd) {
+                return true;
+            }
+        }
+    }
+
+    // 2. Check Current Day
+    const schedule = attendant.schedule?.[dayKey];
+    if (!schedule) return false;
+
+    const startMinutes = timeToMinutes(schedule.start);
+    let endMinutes = timeToMinutes(schedule.end);
+    if (endMinutes === 0) endMinutes = 1440;
+
+    // Normal Shift
+    if (startMinutes < endMinutes) {
+        if (apptStart < startMinutes || apptEnd > endMinutes) {
+            return false;
+        }
+    }
+    // Overnight Shift (starts today, ends tomorrow)
+    else {
+        // Valid if starts after shift start (e.g. 23:00 >= 22:00)
+        if (apptStart < startMinutes) {
+            return false;
+        }
     }
 
     // Check pauses
