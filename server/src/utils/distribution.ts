@@ -38,7 +38,7 @@ const getDuration = (type: string): number => {
 };
 
 // Check if attendant is working at this time
-const isAttendantWithinSchedule = (
+export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string,
     timeStr: string,
@@ -109,7 +109,7 @@ const isAttendantWithinSchedule = (
 };
 
 // Check for overlapping appointments
-const hasConflictingAppointment = (
+export const hasConflictingAppointment = (
     attendantId: string,
     dateStr: string,
     timeStr: string,
