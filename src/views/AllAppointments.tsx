@@ -43,6 +43,10 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
+    const filteredAttendants = user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev'
+        ? attendants
+        : attendants.filter(att => att.sector === user?.sector);
+
     // Update filter if URL param changes or attendants/events load
     useEffect(() => {
         const attendantName = searchParams.get('attendant');
@@ -186,7 +190,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         onChange={(e: any) => setAttendantFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos' },
-                            ...attendants.map(att => ({ value: att.id, label: att.name }))
+                            ...filteredAttendants.map(att => ({ value: att.id, label: att.name }))
                         ]}
                     />
 
