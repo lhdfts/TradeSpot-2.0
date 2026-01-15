@@ -22,7 +22,10 @@ export class SupabaseApiService implements ApiService {
                         name,
                         sector
                     )
-                `);
+                `)
+                .order('date', { ascending: false })
+                .order('time', { ascending: false })
+                .limit(2000); // Increase limit just in case, but ordering ensures recent first
 
             if (error) throw new Error(error.message);
 

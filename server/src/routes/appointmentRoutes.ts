@@ -235,9 +235,12 @@ router.post('/', async (req: Request, res: Response) => {
 
         const webhookUrl = getAppointmentWebhooks()[data.type];
         if (webhookUrl) {
-            try {
-                axios.post(webhookUrl, webhookResponse);
-            } catch (e) { }
+            console.log(`Sending webhook for ${data.type} to ${webhookUrl}`);
+            axios.post(webhookUrl, webhookResponse)
+                .then(() => console.log('Webhook sent successfully'))
+                .catch(err => console.error(`Webhook Failed for ${data.type}:`, err.message, err.response?.data));
+        } else {
+            console.log(`No webhook configured for type: ${data.type}`);
         }
 
         res.status(201).json(responseData);
@@ -348,11 +351,14 @@ router.put('/:id', async (req: Request, res: Response) => {
         }
 
         // Webhook
+        // Webhook
         const updateWebhookUrl = getUpdateWebhook();
         if (updateWebhookUrl) {
-            // ... (Webhook payload logic)
-            // Simplified for restoration
-            axios.post(updateWebhookUrl, { ...updated, type: updated.type }).catch(() => { });
+            console.log(`Sending Update Webhook to ${updateWebhookUrl}`);
+            const webhookPayload = { ...updated, type: updated.type };
+            axios.post(updateWebhookUrl, webhookPayload)
+                .then(() => console.log('Update Webhook sent'))
+                .catch(err => console.error("Update Webhook Failed:", err.message));
         }
 
         res.json(updated);
