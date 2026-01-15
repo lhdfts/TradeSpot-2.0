@@ -10,7 +10,7 @@ import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
 import { APPOINTMENT_STATUSES } from '../types';
 import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, AppointmentStatus } from '../types';
-import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment } from '../utils/distribution';
+import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment, generateAllTimes } from '../utils/distribution';
 import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
 import { useAuth } from '../context/AuthContext';
@@ -38,6 +38,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
 
     useEffect(() => {
         fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,JPY-BRL,USD-AOA')
@@ -73,6 +74,33 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             financial: { currency: 'BRL', amount: '' }
         }
     });
+
+    const [availableTimes, setAvailableTimes] = useState<string[] | undefined>(undefined);
+
+    useEffect(() => {
+        if (!formData.date || !formData.type) {
+            setAvailableTimes(undefined);
+            return;
+        }
+
+        const allTimes = generateAllTimes();
+        const filtered = allTimes.filter(time => {
+            // 1. Manually Selected Attendant
+            if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
+                const attendant = attendants.find(a => a.id === formData.attendantId);
+                if (!attendant) return false;
+                return isAttendantWithinSchedule(attendant, formData.date, time, formData.type) &&
+                    !hasConflictingAppointment(attendant.id, formData.date, time, formData.type, appointments, initialData?.id);
+            }
+
+            // 2. Automatic Distribution (or nothing selected yet)
+            // Returns true if ANY closer is available (findAvailableCloser encapsulates schedule & conflict checks)
+            const available = findAvailableCloser(formData.date, time, formData.type, attendants, appointments);
+            return !!available;
+        });
+
+        setAvailableTimes(filtered);
+    }, [formData.date, formData.type, formData.attendantId, attendants, appointments, initialData]);
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
@@ -789,6 +817,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 onChange={(time) => setFormData({ ...formData, time })}
                                 minTime={formData.date === todayStr ? nowTimeStr : undefined}
                                 disabled={isEditing || !formData.date}
+                                availableTimes={availableTimes}
                             />
                             <FloatingInput
                                 label="Horário Final"

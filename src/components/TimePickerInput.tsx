@@ -19,7 +19,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     onChange,
     disabled = false,
     readOnly = false,
-    availableTimes: availableTimesParam = [],
+    availableTimes,
     minTime,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -40,7 +40,8 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     };
 
     const allTimes = generateAllTimes();
-    const availableTimesSet = new Set(availableTimesParam.length > 0 ? availableTimesParam : allTimes);
+    // If availableTimes is provided, use it (even if empty). If not (undefined), show all times.
+    const availableTimesSet = new Set(availableTimes !== undefined ? availableTimes : allTimes);
 
     const updatePosition = () => {
         if (buttonRef.current) {

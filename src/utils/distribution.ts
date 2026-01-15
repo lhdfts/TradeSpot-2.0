@@ -24,6 +24,17 @@ const getDuration = (type: string): number => {
     return 30;
 };
 
+export const generateAllTimes = () => {
+    const times: string[] = [];
+    for (let hour = 0; hour < 24; hour++) {
+        for (let minute of [0, 15, 30, 45]) {
+            const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+            times.push(timeStr);
+        }
+    }
+    return times;
+};
+
 export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string, // YYYY-MM-DD
