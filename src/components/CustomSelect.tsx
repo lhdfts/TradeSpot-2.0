@@ -120,7 +120,7 @@ export const CustomSelect: React.FC<SelectProps> = ({ label, options, className,
                             width: 'max-content'
                         }}
                     >
-                        <ul className="max-h-60 overflow-auto py-1">
+                        <ul className="max-h-[250px] overflow-auto py-1">
                             {options.map(opt => (
                                 <li
                                     key={opt.value}

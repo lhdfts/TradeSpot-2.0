@@ -116,7 +116,7 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
         <div
             ref={dropdownRef}
             style={dropdownStyle}
-            className="bg-surface border border-border rounded-lg shadow-lg overflow-auto animate-in fade-in zoom-in-95 duration-200"
+            className="bg-surface border border-border rounded-lg shadow-lg overflow-auto animate-in fade-in zoom-in-95 duration-200 max-h-[250px]"
         >
             <ul className="py-1">
                 {options.map(opt => (

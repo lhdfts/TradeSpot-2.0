@@ -27,7 +27,12 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
         const matchesUser = user && (a.attendantId === user.id || a.createdBy === user.id);
         if (!matchesUser) return false;
 
-        const matchesSearch = a.lead.toLowerCase().includes(search.toLowerCase()) || a.phone.toString().includes(search) || a.email?.toLowerCase().includes(search.toLowerCase());
+        const cleanSearch = search.replace(/\D/g, '');
+        const matchesSearch =
+            a.lead.toLowerCase().includes(search.toLowerCase()) ||
+            (cleanSearch ? a.phone.toString().replace(/\D/g, '').includes(cleanSearch) : false) ||
+            a.phone.toString().includes(search) ||
+            a.email?.toLowerCase().includes(search.toLowerCase());
         const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
 
         // Default: Show Only Today and Future

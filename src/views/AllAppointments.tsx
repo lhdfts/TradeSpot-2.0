@@ -43,7 +43,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    const filteredAttendants = user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Líder' || user?.role === 'Co-Líder'
+    const filteredAttendants = user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev'
         ? attendants
         : attendants.filter(att => att.sector === user?.sector);
 

@@ -75,7 +75,7 @@ export const isAttendantWithinSchedule = (
 
     // 2. Check Current Day
     const schedule = attendant.schedule?.[dayKey];
-    if (!schedule) return false;
+    if (!schedule || !schedule.start || !schedule.end) return false;
 
     const startMinutes = timeToMinutes(schedule.start);
     let endMinutes = timeToMinutes(schedule.end);
