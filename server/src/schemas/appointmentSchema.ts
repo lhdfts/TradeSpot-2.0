@@ -23,44 +23,49 @@ export const createAppointmentSchema = z.object({
 
     // Secure email validation
     email: z.string()
-        .email("Invalid email")
-        .regex(/^[\w\-\.@]+$/, "Invalid characters in email"),
+        .email("Email inválido")
+        .regex(/^[\w\-\.@]+$/, "Caracteres inválidos no email"),
 
-    // IDs (Validate UUID format or similar) - Assuming UUIDs for Supabase IDs
-    // If your system uses int IDs for some tables, adjust accordingly. 
-    // Based on context: Attendant is UUID, Event is UUID/int? Let's assume UUID for new entries, but current system might have legacy.
-    // We'll use string() generally if ensuring UUID is blocked by unknown schema.
-    eventId: z.string().min(1, "Event is required"),
+    // IDs (Validate UUID format or similar)
+    eventId: z.string().min(1, "Evento é obrigatório"),
 
     // Strict Enums
     studentProfile: z.object({
         financial: z.object({
-            currency: z.enum(VALID_CURRENCIES),
+            currency: z.enum(VALID_CURRENCIES, {
+                message: 'Selecione uma moeda válida'
+            }),
             amount: z.string().or(z.number()) // Can come as formatted string or number, we'll sanitize
         }),
-        interest: z.enum(VALID_INTEREST_LEVELS),
-        knowledge: z.enum(VALID_KNOWLEDGE_LEVELS)
+        interest: z.enum(VALID_INTEREST_LEVELS, {
+            message: 'Nível de interesse inválido'
+        }),
+        knowledge: z.enum(VALID_KNOWLEDGE_LEVELS, {
+            message: 'Nível de conhecimento inválido'
+        })
     }),
 
-    type: z.enum(VALID_TYPES),
+    type: z.enum(VALID_TYPES, {
+        message: 'Tipo de agendamento inválido'
+    }),
 
     // Date DD/MM/YYYY
     // We refine to ensure strict format.
-    date: z.string().refine((val) => /^\d{4}-\d{2}-\d{2}$/.test(val) || /^\d{2}\/\d{2}\/\d{4}$/.test(val), "Invalid date format (Expect YYYY-MM-DD or DD/MM/YYYY)"),
+    date: z.string().refine((val) => /^\d{4}-\d{2}-\d{2}$/.test(val) || /^\d{2}\/\d{2}\/\d{4}$/.test(val), "Formato de data inválido (Use YYYY-MM-DD ou DD/MM/YYYY)"),
 
     // Time (00, 15, 30, 45) - Using strict regex from spec
-    time: z.string().regex(/^(?:[01]\d|2[0-3]):(?:00|15|30|45)$/, "Invalid time (must end in 00, 15, 30, 45)"),
+    time: z.string().regex(/^(?:[01]\d|2[0-3]):(?:00|15|30|45)$/, "Horário inválido (minutos devem ser 00, 15, 30, 45)"),
 
     // NOTE: 'end_time' is NOT included here so it gets stripped/ignored.
 
     // Controlled free text
     additionalInfo: z.string()
-        .max(300)
-        .regex(/^[a-zA-Z\u00C0-\u00FF0-9@.()\s"'\-,:;!?]*$/, "Special characters not allowed")
+        .max(300, "Máximo de 300 caracteres")
+        .regex(/^[a-zA-Z\u00C0-\u00FF0-9@.()\s"'\-,:;!?]*$/, "Caracteres especiais não permitidos")
         .optional(),
 
     // Description/Notes (only for editing usually, but if allowed on creation)
-    notes: z.string().max(500).optional(),
+    notes: z.string().max(500, "Máximo de 500 caracteres").optional(),
 
     // Meet Link (Only for editing usually, but valid to have)
     meetLink: z.string().optional(),
