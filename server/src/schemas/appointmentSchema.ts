@@ -35,7 +35,14 @@ export const createAppointmentSchema = z.object({
             currency: z.enum(VALID_CURRENCIES, {
                 message: 'Selecione uma moeda válida'
             }),
-            amount: z.string().or(z.number()) // Can come as formatted string or number, we'll sanitize
+            amount: z.union([z.string(), z.number()]).refine((val) => {
+                if (typeof val === 'number') return val <= 1000000;
+                if (!val) return true; // Empty string might be allowed or caught by min? Assuming required handled elsewhere or here.
+                // Brazil format: 1.000.000,00 -> 1000000.00
+                const clean = val.replace(/\./g, '').replace(',', '.');
+                const num = parseFloat(clean);
+                return !isNaN(num) && num <= 1000000;
+            }, { message: "O valor máximo permitido é 1.000.000,00" })
         }),
         interest: z.enum(VALID_INTEREST_LEVELS, {
             message: 'Nível de interesse inválido'

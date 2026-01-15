@@ -720,6 +720,12 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         value={formData.studentProfile.financial.amount}
                                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                             const formatted = sanitizeInput.currency(e.target.value);
+                                            // Check limits
+                                            const clean = formatted.replace(/\./g, '').replace(',', '.');
+                                            const num = parseFloat(clean);
+                                            if (!isNaN(num) && num > 1000000) {
+                                                return; // Prevent exceeding 1M
+                                            }
                                             setFormData(prev => ({
                                                 ...prev,
                                                 studentProfile: {
