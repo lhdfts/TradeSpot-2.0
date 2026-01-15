@@ -43,7 +43,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    const filteredAttendants = user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev'
+    const filteredAttendants = user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Líder' || user?.role === 'Co-Líder'
         ? attendants
         : attendants.filter(att => att.sector === user?.sector);
 
@@ -69,6 +69,11 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             }
         }
     }, [searchParams, attendants, events]);
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, statusFilter, attendantFilter, eventFilter, dateRange]);
 
     // Filter Logic
     const filtered = appointments.filter(a => {

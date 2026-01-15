@@ -835,7 +835,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         {/* Row 8: Atendente and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={!initialData ? "col-span-2" : ""}>
-                                {formData.type === 'Agendamento Pessoal' && user ? (
+                                {formData.type === 'Agendamento Pessoal' && !initialData && user ? (
                                     <FloatingInput
                                         label="Atendente"
                                         value={user.name}

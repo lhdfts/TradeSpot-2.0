@@ -154,7 +154,10 @@ export class SupabaseApiService implements ApiService {
                 .from('user')
                 .select('*');
 
-            if (error) throw new Error(error.message);
+            if (error) {
+                console.error("Error fetching attendants:", error);
+                return [];
+            }
 
             return data.map((user: any) => ({
                 id: user.id,
@@ -214,7 +217,10 @@ export class SupabaseApiService implements ApiService {
                 .from('events')
                 .select('*, sector');
 
-            if (error) throw new Error(error.message);
+            if (error) {
+                console.error("Error fetching events:", error);
+                return [];
+            }
 
             return data.map((event: any) => ({
                 id: event.id,

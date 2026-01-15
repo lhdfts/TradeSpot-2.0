@@ -122,7 +122,10 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
                 {options.map(opt => (
                     <li
                         key={opt.value}
-                        onClick={() => handleSelect(opt.value)}
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelect(opt.value);
+                        }}
                         className={cn(
                             "px-3 py-2 cursor-pointer flex items-center justify-between hover:bg-accent transition-colors whitespace-nowrap",
                             value === opt.value ? "text-[#070707] dark:text-white font-bold bg-[#070707]/5 dark:bg-white/10" : "text-foreground"
