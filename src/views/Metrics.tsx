@@ -2,11 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
-import { BarChart2, Filter } from 'lucide-react';
+import { Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Select, Input } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend } from 'recharts';
 import { type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 
@@ -124,6 +124,8 @@ export const Metrics: React.FC = () => {
             'Pendente': number;
             'Realizado': number;
             'Reagendado': number;
+            // Moving Average
+            movingAverage?: number;
         };
 
         const dateMap = new Map<string, ChartItem>();
@@ -201,7 +203,26 @@ export const Metrics: React.FC = () => {
             }
         }
 
-        const chartData = Array.from(dateMap.values()).sort((a, b) => a.rawDate - b.rawDate);
+        const sortedData = Array.from(dateMap.values()).sort((a, b) => a.rawDate - b.rawDate);
+
+        // Calculate Moving Average (e.g., 3-period SMA)
+        const chartData = sortedData.map((item, index, array) => {
+            // Window size
+            const windowSize = 3;
+            let sum = 0;
+            let count = 0;
+
+            for (let i = 0; i < windowSize; i++) {
+                if (index - i >= 0) {
+                    sum += array[index - i].total;
+                    count++;
+                }
+            }
+
+            // Round to 1 decimal place for cleaner display
+            const rawAvg = count > 0 ? sum / count : 0;
+            return { ...item, movingAverage: parseFloat(rawAvg.toFixed(1)) };
+        });
 
         return { sdrRanking, closerRanking, chartData, currentRef };
     }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
@@ -406,15 +427,13 @@ export const Metrics: React.FC = () => {
             {(sectorFilter === 'all' || sectorFilter === 'Closer') && (
                 <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
                     <div className="flex items-center gap-2 mb-6">
-                        <BarChart2 className="text-primary" size={20} />
                         <h3 className="text-lg font-semibold text-primary">Agendamentos por Dia (Closer)</h3>
                     </div>
 
                     <div className="h-96 w-full relative">
-                        {/* Recharts Implementation */}
                         {chartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.4} />
                                     <XAxis
                                         dataKey="displayDate"
@@ -424,35 +443,32 @@ export const Metrics: React.FC = () => {
                                         axisLine={false}
                                         dy={10}
                                     />
-                                    <YAxis
-                                        stroke="hsl(var(--muted-foreground))"
-                                        fontSize={12}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        dx={-10}
-                                    />
+                                    <YAxis hide />
                                     <Tooltip
                                         contentStyle={{
-                                            backgroundColor: 'hsl(var(--surface))',
+                                            backgroundColor: 'hsl(var(--card))',
                                             borderColor: 'hsl(var(--border))',
                                             borderRadius: '0.5rem',
-                                            color: 'hsl(var(--foreground))'
+                                            color: 'hsl(var(--card-foreground))'
                                         }}
-                                        itemStyle={{ color: 'hsl(var(--foreground))' }}
-                                        cursor={{ fill: 'hsl(var(--muted)/0.2)' }}
+                                        itemStyle={{ color: 'hsl(var(--card-foreground))' }}
+                                        cursor={{ fill: 'rgba(200, 200, 200, 0.2)' }}
                                     />
                                     <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
 
                                     {/* Stacked Bars for each status */}
-                                    <Bar dataKey="Realizado" name="Realizado" stackId="a" fill="#22c55e" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Pendente" name="Pendente" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Cancelado" name="Cancelado" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Realizado" name="Realizado" stackId="a" fill="#00df52ff" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Pendente" name="Pendente" stackId="a" fill="#f5de0bff" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Cancelado" name="Cancelado" stackId="a" fill="#d70000ff" radius={[0, 0, 0, 0]} />
                                     <Bar dataKey="Reagendado" name="Reagendado" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Esquecimento" name="Esquecimento" stackId="a" fill="#a855f7" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Não compareceu" name="Não compareceu" stackId="a" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="Esquecimento" name="Esquecimento" stackId="a" fill="#8127d6ff" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Não compareceu" name="Não compareceu" stackId="a" fill="#c389a3ff" radius={[4, 4, 0, 0]} />
+
+                                    {/* Moving Average Line */}
+                                    <Line type="monotone" dataKey="movingAverage" name="Média Móvel" stroke="#ff7300" strokeWidth={2} dot={false} />
 
                                     <ReferenceLine x={currentRef} stroke="hsl(var(--primary))" strokeDasharray="3 3" />
-                                </BarChart>
+                                </ComposedChart>
                             </ResponsiveContainer>
                         ) : (
                             <div className="flex items-center justify-center h-full text-secondary">
