@@ -41,7 +41,7 @@ export const Metrics: React.FC = () => {
     });
 
     // --- DATA CALCULATION ---
-    const { sdrRanking, closerRanking, chartData, currentRef } = useMemo(() => {
+    const { sdrRanking, closerRanking, chartData, currentRef, totals } = useMemo(() => {
         // 1. Filter Appointments by Date & Sector (if applicable)
         const filtered = appointments.filter(a => {
             if (!a.date) return false;
@@ -231,8 +231,30 @@ export const Metrics: React.FC = () => {
             return { ...item, movingAverage: parseFloat(rawAvg.toFixed(1)) };
         });
 
-        return { sdrRanking, closerRanking, chartData, currentRef };
+
+
+        // Calculate Totals for the List
+        const totals: Record<string, number> = {};
+        APPOINTMENT_STATUSES.forEach(status => totals[status] = 0);
+        chartData.forEach(item => {
+            APPOINTMENT_STATUSES.forEach(status => {
+                if (status in item) {
+                    totals[status] += (item as any)[status];
+                }
+            });
+        });
+
+        return { sdrRanking, closerRanking, chartData, currentRef, totals };
     }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter, maBasis]);
+
+    const statusColors: Record<string, string> = {
+        'Realizado': '#00df52ff',
+        'Pendente': '#f5de0bff',
+        'Cancelado': '#d70000ff',
+        'Reagendado': '#3b82f6',
+        'Esquecimento': '#8127d6ff',
+        'Não compareceu': '#ff2788ff'
+    };
 
     return (
         <div className="space-y-6">
@@ -475,15 +497,14 @@ export const Metrics: React.FC = () => {
                                         itemStyle={{ color: 'hsl(var(--card-foreground))' }}
                                         cursor={{ fill: 'rgba(200, 200, 200, 0.2)' }}
                                     />
-                                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
 
                                     {/* Stacked Bars for each status */}
-                                    <Bar dataKey="Realizado" name="Realizado" stackId="a" fill="#00df52ff" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Pendente" name="Pendente" stackId="a" fill="#f5de0bff" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Cancelado" name="Cancelado" stackId="a" fill="#d70000ff" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Reagendado" name="Reagendado" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Esquecimento" name="Esquecimento" stackId="a" fill="#8127d6ff" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Não compareceu" name="Não compareceu" stackId="a" fill="#ff2788ff" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="Realizado" name="Realizado" stackId="a" fill={statusColors['Realizado']} radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Pendente" name="Pendente" stackId="a" fill={statusColors['Pendente']} radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Cancelado" name="Cancelado" stackId="a" fill={statusColors['Cancelado']} radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Reagendado" name="Reagendado" stackId="a" fill={statusColors['Reagendado']} radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Esquecimento" name="Esquecimento" stackId="a" fill={statusColors['Esquecimento']} radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Não compareceu" name="Não compareceu" stackId="a" fill={statusColors['Não compareceu']} radius={[4, 4, 0, 0]} />
 
                                     {/* Moving Average Line */}
                                     <Line type="monotone" dataKey="movingAverage" name="Média Móvel" stroke="#767676ff" strokeWidth={2} dot={false} />
@@ -496,6 +517,27 @@ export const Metrics: React.FC = () => {
                                 Sem dados para exibir no gráfico
                             </div>
                         )}
+                    </div>
+
+                    {/* Tremor-like Details List */}
+                    <div className="mt-8 border-t border-border pt-4">
+                        <ul className="divide-y divide-border">
+                            {APPOINTMENT_STATUSES.map((status) => (
+                                <li key={status} className="flex items-center justify-between py-2">
+                                    <div className="flex items-center space-x-2">
+                                        <span
+                                            className="h-2.5 w-2.5 rounded-sm"
+                                            style={{ backgroundColor: statusColors[status] }}
+                                            aria-hidden="true"
+                                        />
+                                        <span className="text-sm font-medium text-primary">{status}</span>
+                                    </div>
+                                    <span className="font-semibold text-primary">
+                                        {totals[status] || 0}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 </div>
             )}
