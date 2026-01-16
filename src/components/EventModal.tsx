@@ -33,6 +33,8 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
     });
 
     const isSuperUser = user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.sector === 'TEI';
+    const isSuporte = user?.sector === 'Suporte';
+    const canEditSector = isSuperUser || isSuporte;
 
     useEffect(() => {
         if (event) {
@@ -41,10 +43,10 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
             setFormData({
                 event_name: '',
                 status: true,
-                sector: isSuperUser ? '' : (user?.sector || '')
+                sector: canEditSector ? '' : (user?.sector || '')
             });
         }
-    }, [event, isOpen, user, isSuperUser]);
+    }, [event, isOpen, user, isSuperUser, isSuporte, canEditSector]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -52,7 +54,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
             const dataToSubmit = {
                 ...formData,
                 // Ensure restricted users can't override sector
-                sector: isSuperUser ? formData.sector : user?.sector
+                sector: canEditSector ? formData.sector : user?.sector
             };
 
             if (event) {
@@ -98,7 +100,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                         { value: 'Tribo', label: 'Tribo' },
                         { value: 'Social Seller', label: 'Social Seller' }
                     ]}
-                    disabled={!isSuperUser}
+                    disabled={!canEditSector}
                 />
 
                 <Select

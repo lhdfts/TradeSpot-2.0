@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Select, Input } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { RankingModal } from '../components/RankingModal';
 
 export const Metrics: React.FC = () => {
     const { appointments } = useAppointments();
@@ -22,8 +23,17 @@ export const Metrics: React.FC = () => {
     // --- UI STATE ---
     const { user } = useAuth();
     const [sectorFilter, setSectorFilter] = useState('all');
-    const [isSdrExpanded, setIsSdrExpanded] = useState(false);
-    const [isCloserExpanded, setIsCloserExpanded] = useState(false);
+    const [rankingModal, setRankingModal] = useState<{
+        isOpen: boolean;
+        type: 'sdr' | 'closer';
+        title: string;
+        data: any[];
+    }>({
+        isOpen: false,
+        type: 'sdr',
+        title: '',
+        data: []
+    });
 
     // --- DATA CALCULATION ---
     const { sdrRanking, closerRanking, chartData } = useMemo(() => {
@@ -100,7 +110,7 @@ export const Metrics: React.FC = () => {
         const closerRanking = Array.from(closerMap.values()).sort((a, b) => b.realized - a.realized);
 
         // 4. Chart Data (Closer Daily Performance)
-        // Group by Date
+        // Group by Date or Hour
         const dateMap = new Map<string, { displayDate: string; total: number; realized: number, rawDate: number }>();
 
         filtered.forEach(a => {
@@ -111,17 +121,39 @@ export const Metrics: React.FC = () => {
                 if (att?.sector !== sectorFilter) return;
             }
 
-            const dateKey = a.date; // YYYY-MM-DD
-            if (!dateMap.has(dateKey)) {
-                const d = new Date(dateKey + 'T12:00:00');
-                dateMap.set(dateKey, {
-                    displayDate: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+            let key = '';
+            let display = '';
+            let sortValue = 0;
+
+            if (periodFilter === 'today') {
+                // Hourly Grouping for Today
+                // a.time is "HH:MM". We want "HH:00".
+                if (a.time) {
+                    const hour = a.time.split(':')[0];
+                    key = `${hour}:00`;
+                    display = `${hour}:00`;
+                    // Sort value: simpler as hour number
+                    sortValue = parseInt(hour, 10);
+                } else {
+                    return; // No time, skip
+                }
+            } else {
+                // Daily Grouping
+                key = a.date; // YYYY-MM-DD
+                const d = new Date(key + 'T12:00:00');
+                display = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                sortValue = d.getTime();
+            }
+
+            if (!dateMap.has(key)) {
+                dateMap.set(key, {
+                    displayDate: display,
                     total: 0,
                     realized: 0,
-                    rawDate: d.getTime()
+                    rawDate: sortValue
                 });
             }
-            const stats = dateMap.get(dateKey)!;
+            const stats = dateMap.get(key)!;
             stats.total++;
             if (a.status === 'Realizado') stats.realized++;
         });
@@ -203,7 +235,7 @@ export const Metrics: React.FC = () => {
                         className="w-48"
                     />
 
-                    <div className="cursor-pointer">
+                    <div className="cursor-pointer ml-auto">
                         <ExportIcon />
                     </div>
 
@@ -215,7 +247,6 @@ export const Metrics: React.FC = () => {
                         {/* SDR Ranking */}
                         {(sectorFilter === 'all' || sectorFilter === 'SDR') && (
                             <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                                {/* ... SDR Content ... */}
                                 <div className="flex justify-between items-start mb-6">
                                     <div>
                                         <h3 className="text-lg font-semibold text-primary">Agendamentos por SDR</h3>
@@ -224,9 +255,14 @@ export const Metrics: React.FC = () => {
                                     <Button
                                         size="sm"
                                         variant="secondary"
-                                        onClick={() => setIsSdrExpanded(!isSdrExpanded)}
+                                        onClick={() => setRankingModal({
+                                            isOpen: true,
+                                            type: 'sdr',
+                                            title: 'Ranking SDR Completo',
+                                            data: sdrRanking
+                                        })}
                                     >
-                                        {isSdrExpanded ? 'Recolher' : 'Expandir'}
+                                        Expandir
                                     </Button>
                                 </div>
 
@@ -237,8 +273,8 @@ export const Metrics: React.FC = () => {
                                     <div className="col-span-2 text-center">Reagendamento</div>
                                 </div>
 
-                                <div className={`space-y-2 ${isSdrExpanded ? 'max-h-96 overflow-y-auto custom-scrollbar' : ''}`}>
-                                    {(isSdrExpanded ? sdrRanking : sdrRanking.slice(0, 5)).map((sdr, idx) => {
+                                <div className="space-y-2">
+                                    {sdrRanking.slice(0, 5).map((sdr, idx) => {
                                         let rowStyle = 'bg-background border-l-4 border-transparent';
                                         if (idx === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
                                         else if (idx === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
@@ -269,7 +305,6 @@ export const Metrics: React.FC = () => {
                         {/* Closer Ranking */}
                         {(sectorFilter === 'all' || sectorFilter === 'Closer') && (
                             <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                                {/* ... Closer Content ... */}
                                 <div className="flex justify-between items-start mb-6">
                                     <div>
                                         <h3 className="text-lg font-semibold text-primary">Agendamentos por Closer</h3>
@@ -278,9 +313,14 @@ export const Metrics: React.FC = () => {
                                     <Button
                                         size="sm"
                                         variant="secondary"
-                                        onClick={() => setIsCloserExpanded(!isCloserExpanded)}
+                                        onClick={() => setRankingModal({
+                                            isOpen: true,
+                                            type: 'closer',
+                                            title: 'Ranking Closer Completo',
+                                            data: closerRanking
+                                        })}
                                     >
-                                        {isCloserExpanded ? 'Recolher' : 'Expandir'}
+                                        Expandir
                                     </Button>
                                 </div>
 
@@ -290,8 +330,8 @@ export const Metrics: React.FC = () => {
                                     <div className="col-span-3 text-center">Total Recebido</div>
                                 </div>
 
-                                <div className={`space-y-2 ${isCloserExpanded ? 'max-h-96 overflow-y-auto custom-scrollbar' : ''}`}>
-                                    {(isCloserExpanded ? closerRanking : closerRanking.slice(0, 5)).map((closer, idx) => {
+                                <div className="space-y-2">
+                                    {closerRanking.slice(0, 5).map((closer, idx) => {
                                         let rowStyle = 'bg-background border-l-4 border-transparent';
                                         if (idx === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
                                         else if (idx === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
@@ -399,6 +439,14 @@ export const Metrics: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            <RankingModal
+                isOpen={rankingModal.isOpen}
+                onClose={() => setRankingModal(prev => ({ ...prev, isOpen: false }))}
+                title={rankingModal.title}
+                data={rankingModal.data}
+                type={rankingModal.type}
+            />
         </div>
     );
 };

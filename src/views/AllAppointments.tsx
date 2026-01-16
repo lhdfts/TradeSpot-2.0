@@ -46,7 +46,9 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const filteredAttendants = (user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade'
         ? attendants
-        : attendants.filter(att => att.sector === user?.sector))
+        : user?.sector === 'Suporte'
+            ? attendants.filter(att => ['Tribo', 'Aldeia', 'SDR', 'Closer'].includes(att.sector))
+            : attendants.filter(att => att.sector === user?.sector))
         .sort((a, b) => a.name.localeCompare(b.name));
 
     // Update filter if URL param changes or attendants/events load
@@ -183,7 +185,6 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                             placeholder=""
                             className="bg-background"
                         />
-                        {search && <span className="absolute right-0 -bottom-5 text-[10px] text-muted-foreground">*Pesquisando em todo o histórico</span>}
                     </div>
                 </div>
 
