@@ -6,7 +6,8 @@ import { BarChart2, Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Select, Input } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend } from 'recharts';
+import { type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 
 export const Metrics: React.FC = () => {
@@ -111,11 +112,36 @@ export const Metrics: React.FC = () => {
 
         // 4. Chart Data (Closer Daily Performance)
         // Group by Date or Hour
-        const dateMap = new Map<string, { displayDate: string; total: number; realized: number, rawDate: number }>();
+        // Initialize map with correct typing for dynamic status keys + metadata
+        type ChartItem = {
+            displayDate: string;
+            rawDate: number;
+            total: number;
+            // Statuses
+            'Cancelado': number;
+            'Esquecimento': number;
+            'Não compareceu': number;
+            'Pendente': number;
+            'Realizado': number;
+            'Reagendado': number;
+        };
+
+        const dateMap = new Map<string, ChartItem>();
+
+        // Helper to create initial object
+        const createInitItem = (display: string, raw: number): ChartItem => ({
+            displayDate: display,
+            rawDate: raw,
+            total: 0,
+            'Cancelado': 0,
+            'Esquecimento': 0,
+            'Não compareceu': 0,
+            'Pendente': 0,
+            'Realizado': 0,
+            'Reagendado': 0
+        });
 
         filtered.forEach(a => {
-            // Only include if attendant is a Closer (for the chart context usually)
-            // or just global if 'all'. Let's stick to the filtered set.
             if (sectorFilter !== 'all') {
                 const att = attendants.find(at => at.id === a.attendantId);
                 if (att?.sector !== sectorFilter) return;
@@ -126,39 +152,35 @@ export const Metrics: React.FC = () => {
             let sortValue = 0;
 
             if (periodFilter === 'today') {
-                // Hourly Grouping for Today
-                // a.time is "HH:MM". We want "HH:00".
                 if (a.time) {
                     const hour = a.time.split(':')[0];
                     key = `${hour}:00`;
                     display = `${hour}:00`;
-                    // Sort value: simpler as hour number
                     sortValue = parseInt(hour, 10);
                 } else {
-                    return; // No time, skip
+                    return;
                 }
             } else {
-                // Daily Grouping
-                key = a.date; // YYYY-MM-DD
+                key = a.date;
                 const d = new Date(key + 'T12:00:00');
                 display = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
                 sortValue = d.getTime();
             }
 
             if (!dateMap.has(key)) {
-                dateMap.set(key, {
-                    displayDate: display,
-                    total: 0,
-                    realized: 0,
-                    rawDate: sortValue
-                });
+                dateMap.set(key, createInitItem(display, sortValue));
             }
             const stats = dateMap.get(key)!;
             stats.total++;
-            if (a.status === 'Realizado') stats.realized++;
+
+            // Increment specific status
+            // Ensure status is valid, otherwise ignore or log (types ensure it usually is)
+            if (a.status as string in stats) {
+                stats[a.status as AppointmentStatus]++;
+            }
         });
 
-        // 5. Ensure Current Time is in Data (for ReferenceLine)
+        // 5. Ensure Current Time is in Data
         const now = new Date();
         let currentRef = '';
         let currentSortValue = 0;
@@ -175,12 +197,7 @@ export const Metrics: React.FC = () => {
 
         if (sectorFilter === 'all' || sectorFilter === 'Closer') {
             if (!dateMap.has(currentRef)) {
-                dateMap.set(currentRef, {
-                    displayDate: currentRef,
-                    total: 0,
-                    realized: 0,
-                    rawDate: currentSortValue
-                });
+                dateMap.set(currentRef, createInitItem(currentRef, currentSortValue));
             }
         }
 
@@ -397,18 +414,7 @@ export const Metrics: React.FC = () => {
                         {/* Recharts Implementation */}
                         {chartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                    {/* ... Chart Content ... */}
-                                    <defs>
-                                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="colorRealized" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
+                                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.4} />
                                     <XAxis
                                         dataKey="displayDate"
@@ -433,31 +439,20 @@ export const Metrics: React.FC = () => {
                                             color: 'hsl(var(--foreground))'
                                         }}
                                         itemStyle={{ color: 'hsl(var(--foreground))' }}
-                                        cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
+                                        cursor={{ fill: 'hsl(var(--muted)/0.2)' }}
                                     />
+                                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
 
-                                    <Area
-                                        type="monotone"
-                                        dataKey="total"
-                                        name="Total Recebido"
-                                        stroke="#3b82f6"
-                                        strokeWidth={3}
-                                        fillOpacity={1}
-                                        fill="url(#colorTotal)"
-                                        activeDot={{ r: 6, strokeWidth: 0 }}
-                                    />
-                                    <Area
-                                        type="monotone"
-                                        dataKey="realized"
-                                        name="Realizados"
-                                        stroke="#22c55e"
-                                        strokeWidth={3}
-                                        fillOpacity={1}
-                                        fill="url(#colorRealized)"
-                                        activeDot={{ r: 6, strokeWidth: 0 }}
-                                    />
+                                    {/* Stacked Bars for each status */}
+                                    <Bar dataKey="Realizado" name="Realizado" stackId="a" fill="#22c55e" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Pendente" name="Pendente" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Cancelado" name="Cancelado" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Reagendado" name="Reagendado" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Esquecimento" name="Esquecimento" stackId="a" fill="#a855f7" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="Não compareceu" name="Não compareceu" stackId="a" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+
                                     <ReferenceLine x={currentRef} stroke="hsl(var(--primary))" strokeDasharray="3 3" />
-                                </AreaChart>
+                                </BarChart>
                             </ResponsiveContainer>
                         ) : (
                             <div className="flex items-center justify-center h-full text-secondary">
