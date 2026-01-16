@@ -46,7 +46,7 @@ export const Metrics: React.FC = () => {
     });
 
     // --- DATA CALCULATION ---
-    const { sdrRanking, closerRanking, chartData, currentRef, totals } = useMemo(() => {
+    const { sdrRanking, closerRanking, chartData, totals } = useMemo(() => {
         // 1. Filter Appointments by Date & Sector (if applicable)
         const filtered = appointments.filter(a => {
             if (!a.date) return false;
@@ -191,26 +191,7 @@ export const Metrics: React.FC = () => {
             }
         });
 
-        // 5. Ensure Current Time is in Data
-        const now = new Date();
-        let currentRef = '';
-        let currentSortValue = 0;
 
-        if (periodFilter === 'today') {
-            const hour = now.getHours().toString().padStart(2, '0');
-            currentRef = `${hour}:00`;
-            currentSortValue = parseInt(hour, 10);
-        } else {
-            currentRef = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
-            currentSortValue = d.getTime();
-        }
-
-        if (sectorFilter === 'all' || sectorFilter === 'Closer') {
-            if (!dateMap.has(currentRef)) {
-                dateMap.set(currentRef, createInitItem(currentRef, currentSortValue));
-            }
-        }
 
         const sortedData = Array.from(dateMap.values()).sort((a, b) => a.rawDate - b.rawDate);
 
@@ -229,7 +210,7 @@ export const Metrics: React.FC = () => {
             });
         });
 
-        return { sdrRanking, closerRanking, chartData, currentRef, totals };
+        return { sdrRanking, closerRanking, chartData, totals };
     }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
 
     const statusColors: Record<string, string> = {
