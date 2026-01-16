@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
-import { Users, CheckCircle, TrendingUp, BarChart2, Filter, Calendar } from 'lucide-react';
+import { BarChart2, Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Select, Input } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
@@ -25,7 +25,111 @@ export const Metrics: React.FC = () => {
     const [isSdrExpanded, setIsSdrExpanded] = useState(false);
     const [isCloserExpanded, setIsCloserExpanded] = useState(false);
 
-    // ... (existing code) ...
+    // --- DATA CALCULATION ---
+    const { sdrRanking, closerRanking, chartData } = useMemo(() => {
+        // 1. Filter Appointments by Date & Sector (if applicable)
+        const filtered = appointments.filter(a => {
+            if (!a.date) return false;
+
+            // Period Filter
+            let matchesPeriod = true;
+            const apptDate = new Date(a.date + 'T12:00:00');
+            const today = new Date();
+
+            if (periodFilter === 'today') {
+                matchesPeriod = apptDate.toDateString() === today.toDateString();
+            } else if (periodFilter === 'week') {
+                const startOfWeek = new Date(today);
+                startOfWeek.setDate(today.getDate() - today.getDay());
+                matchesPeriod = apptDate >= startOfWeek;
+            } else if (periodFilter === 'month') {
+                matchesPeriod = apptDate.getMonth() === today.getMonth() && apptDate.getFullYear() === today.getFullYear();
+            } else if (periodFilter === 'custom' && customStart && customEnd) {
+                const start = new Date(customStart + 'T00:00:00');
+                const end = new Date(customEnd + 'T23:59:59');
+                matchesPeriod = apptDate >= start && apptDate <= end;
+            }
+
+            // Attendant/Event Filters
+            const matchesAttendant = !attendantFilter || a.attendantId === attendantFilter;
+            const matchesEvent = !eventFilter || a.eventId === eventFilter;
+
+            return matchesPeriod && matchesAttendant && matchesEvent;
+        });
+
+        // 2. SDR Ranking
+        const sdrMap = new Map<string, { name: string; total: number; ligacao: number; reagendamento: number }>();
+
+        filtered.forEach(a => {
+            // Check if created by an SDR (User with role 'Líder', 'Co-Líder', 'SDR' in SDR sector?)
+            // Simplify: If createdBy exists, attribute to them.
+            if (a.createdBy) {
+                // Find creator details
+                const creator = attendants.find(att => att.id === a.createdBy);
+                if (creator && (sectorFilter === 'all' || creator.sector === 'SDR' || creator.sector === 'Leads')) {
+                    if (!sdrMap.has(a.createdBy)) {
+                        sdrMap.set(a.createdBy, { name: creator.name, total: 0, ligacao: 0, reagendamento: 0 });
+                    }
+                    const stats = sdrMap.get(a.createdBy)!;
+                    stats.total++;
+                    if (a.type === 'Ligação Closer') stats.ligacao++;
+                    if (a.type === 'Reagendamento Closer') stats.reagendamento++;
+                }
+            }
+        });
+        const sdrRanking = Array.from(sdrMap.values()).sort((a, b) => b.total - a.total);
+
+
+        // 3. Closer Ranking
+        const closerMap = new Map<string, { name: string; realized: number; total: number }>();
+
+        filtered.forEach(a => {
+            if (a.attendantId) {
+                const attendant = attendants.find(att => att.id === a.attendantId);
+                // Filter by Closer Sector
+                if (attendant && (sectorFilter === 'all' || attendant.sector === 'Closer')) {
+                    if (!closerMap.has(a.attendantId)) {
+                        closerMap.set(a.attendantId, { name: attendant.name, realized: 0, total: 0 });
+                    }
+                    const stats = closerMap.get(a.attendantId)!;
+                    stats.total++;
+                    if (a.status === 'Realizado') stats.realized++;
+                }
+            }
+        });
+        const closerRanking = Array.from(closerMap.values()).sort((a, b) => b.realized - a.realized);
+
+        // 4. Chart Data (Closer Daily Performance)
+        // Group by Date
+        const dateMap = new Map<string, { displayDate: string; total: number; realized: number, rawDate: number }>();
+
+        filtered.forEach(a => {
+            // Only include if attendant is a Closer (for the chart context usually)
+            // or just global if 'all'. Let's stick to the filtered set.
+            if (sectorFilter !== 'all') {
+                const att = attendants.find(at => at.id === a.attendantId);
+                if (att?.sector !== sectorFilter) return;
+            }
+
+            const dateKey = a.date; // YYYY-MM-DD
+            if (!dateMap.has(dateKey)) {
+                const d = new Date(dateKey + 'T12:00:00');
+                dateMap.set(dateKey, {
+                    displayDate: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+                    total: 0,
+                    realized: 0,
+                    rawDate: d.getTime()
+                });
+            }
+            const stats = dateMap.get(dateKey)!;
+            stats.total++;
+            if (a.status === 'Realizado') stats.realized++;
+        });
+
+        const chartData = Array.from(dateMap.values()).sort((a, b) => a.rawDate - b.rawDate);
+
+        return { sdrRanking, closerRanking, chartData };
+    }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
 
     return (
         <div className="space-y-6">
@@ -49,9 +153,58 @@ export const Metrics: React.FC = () => {
                         </div>
                     )}
 
-                    <div className="flex items-center gap-2">
-                        {/* Removed duplicate Filter icon, kept Select */}
-    // ... (existing controls) ...
+                    <Select
+                        value={periodFilter}
+                        onChange={(e: any) => setPeriodFilter(e.target.value)}
+                        options={[
+                            { value: 'today', label: 'Hoje' },
+                            { value: 'week', label: 'Esta Semana' },
+                            { value: 'month', label: 'Este Mês' },
+                            { value: 'custom', label: 'Personalizado' }
+                        ]}
+                        className="w-40"
+                    />
+
+                    {periodFilter === 'custom' && (
+                        <div className="flex items-center gap-2">
+                            <Input
+                                type="date"
+                                value={customStart}
+                                onChange={(e: any) => setCustomStart(e.target.value)}
+                                className="w-auto"
+                            />
+                            <span className="text-secondary">-</span>
+                            <Input
+                                type="date"
+                                value={customEnd}
+                                onChange={(e: any) => setCustomEnd(e.target.value)}
+                                className="w-auto"
+                            />
+                        </div>
+                    )}
+
+                    <Select
+                        value={attendantFilter}
+                        onChange={(e: any) => setAttendantFilter(e.target.value)}
+                        options={[
+                            { value: '', label: 'Todos Atendentes' },
+                            ...attendants.map(a => ({ value: a.id, label: a.name }))
+                        ]}
+                        className="w-48"
+                    />
+
+                    <Select
+                        value={eventFilter}
+                        onChange={(e: any) => setEventFilter(e.target.value)}
+                        options={[
+                            { value: '', label: 'Todos Eventos' },
+                            ...events.map(e => ({ value: e.id, label: e.event_name }))
+                        ]}
+                        className="w-48"
+                    />
+
+                    <div className="cursor-pointer">
+                        <ExportIcon />
                     </div>
 
                     {/* KPI Cards (Merged) */}
@@ -245,5 +398,7 @@ export const Metrics: React.FC = () => {
                         </div>
                     )}
                 </div>
-                );
+            </div>
+        </div>
+    );
 };
