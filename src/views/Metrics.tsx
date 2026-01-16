@@ -6,7 +6,13 @@ import { Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Select, Input } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
-import { ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import {
+    BarChart,
+    Card,
+    List,
+    ListItem,
+} from '@tremor/react';
+import { cn } from '../lib/utils';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 
@@ -227,13 +233,16 @@ export const Metrics: React.FC = () => {
     }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
 
     const statusColors: Record<string, string> = {
-        'Realizado': '#10b981',      // Emerald 500
-        'Pendente': '#f59e0b',       // Amber 500
-        'Cancelado': '#ef4444',      // Red 500
-        'Reagendado': '#3b82f6',     // Blue 500
-        'Esquecimento': '#8b5cf6',   // Violet 500
-        'Não compareceu': '#f43f5e'  // Rose 500
+        'Realizado': 'emerald',
+        'Pendente': 'amber',
+        'Cancelado': 'red',
+        'Reagendado': 'blue',
+        'Esquecimento': 'violet',
+        'Não compareceu': 'rose'
     };
+
+    const valueFormatter = (number: number) =>
+        Intl.NumberFormat('pt-BR').format(number).toString();
 
     return (
         <div className="space-y-6">
@@ -433,78 +442,67 @@ export const Metrics: React.FC = () => {
 
             {/* Chart */}
             {(sectorFilter === 'all' || sectorFilter === 'Closer') && (
-                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+                <Card>
                     <div className="flex items-center gap-2 mb-6">
-                        <h3 className="text-lg font-semibold text-primary">Agendamentos por Dia (Closer)</h3>
+                        <h3 className="text-lg font-semibold text-tremor-content-strong dark:text-dark-tremor-content-strong">
+                            Agendamentos por Dia (Closer)
+                        </h3>
                     </div>
 
-                    <div className="h-96 w-full relative">
-                        {chartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.4} />
-                                    <XAxis
-                                        dataKey="displayDate"
-                                        stroke="hsl(var(--muted-foreground))"
-                                        fontSize={12}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        dy={10}
+                    <BarChart
+                        data={chartData}
+                        index="displayDate"
+                        categories={[
+                            'Realizado',
+                            'Pendente',
+                            'Cancelado',
+                            'Reagendado',
+                            'Esquecimento',
+                            'Não compareceu'
+                        ]}
+                        colors={[
+                            statusColors['Realizado'],
+                            statusColors['Pendente'],
+                            statusColors['Cancelado'],
+                            statusColors['Reagendado'],
+                            statusColors['Esquecimento'],
+                            statusColors['Não compareceu']
+                        ]}
+                        valueFormatter={valueFormatter}
+                        stack={true}
+                        showLegend={false}
+                        showYAxis={false}
+                        startEndOnly={false}
+                        className="mt-8 h-96"
+                    />
+
+                    <List className="mt-8">
+                        {APPOINTMENT_STATUSES.map((status) => (
+                            <ListItem key={status}>
+                                <div className="flex items-center space-x-2">
+                                    <span
+                                        className={cn(
+                                            {
+                                                'bg-emerald-500': statusColors[status] === 'emerald',
+                                                'bg-amber-500': statusColors[status] === 'amber',
+                                                'bg-red-500': statusColors[status] === 'red',
+                                                'bg-blue-500': statusColors[status] === 'blue',
+                                                'bg-violet-500': statusColors[status] === 'violet',
+                                                'bg-rose-500': statusColors[status] === 'rose',
+                                            },
+                                            'h-2.5 w-2.5 rounded-sm'
+                                        )}
+                                        aria-hidden="true"
                                     />
-                                    <YAxis hide />
-                                    <Tooltip
-                                        contentStyle={{
-                                            backgroundColor: 'hsl(var(--card))',
-                                            borderColor: 'hsl(var(--border))',
-                                            borderRadius: '0.5rem',
-                                            color: 'hsl(var(--card-foreground))'
-                                        }}
-                                        itemStyle={{ color: 'hsl(var(--card-foreground))' }}
-                                        cursor={{ fill: 'rgba(200, 200, 200, 0.2)' }}
-                                    />
-
-                                    {/* Stacked Bars for each status */}
-                                    <Bar dataKey="Realizado" name="Realizado" stackId="a" fill={statusColors['Realizado']} radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Pendente" name="Pendente" stackId="a" fill={statusColors['Pendente']} radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Cancelado" name="Cancelado" stackId="a" fill={statusColors['Cancelado']} radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Reagendado" name="Reagendado" stackId="a" fill={statusColors['Reagendado']} radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Esquecimento" name="Esquecimento" stackId="a" fill={statusColors['Esquecimento']} radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="Não compareceu" name="Não compareceu" stackId="a" fill={statusColors['Não compareceu']} radius={[4, 4, 0, 0]} />
-
-                                    {/* Moving Average Line */}
-
-
-                                    <ReferenceLine x={currentRef} stroke="hsl(var(--primary))" strokeDasharray="3 3" />
-                                </ComposedChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-secondary">
-                                Sem dados para exibir no gráfico
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Tremor-like Details List */}
-                    <div className="mt-8 border-t border-border pt-4">
-                        <ul className="divide-y divide-border">
-                            {APPOINTMENT_STATUSES.map((status) => (
-                                <li key={status} className="flex items-center justify-between py-2">
-                                    <div className="flex items-center space-x-2">
-                                        <span
-                                            className="h-2.5 w-2.5 rounded-sm"
-                                            style={{ backgroundColor: statusColors[status] }}
-                                            aria-hidden="true"
-                                        />
-                                        <span className="text-sm font-medium text-primary">{status}</span>
-                                    </div>
-                                    <span className="font-semibold text-primary">
-                                        {totals[status] || 0}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
+                                    <span>{status}</span>
+                                </div>
+                                <span className="font-medium text-tremor-content-strong dark:text-dark-tremor-content-strong">
+                                    {valueFormatter(totals[status] || 0)}
+                                </span>
+                            </ListItem>
+                        ))}
+                    </List>
+                </Card>
             )}
 
             <RankingModal
