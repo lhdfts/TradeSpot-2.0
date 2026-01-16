@@ -477,48 +477,49 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 const status = error.response.status;
                 const data = error.response.data;
 
-                // Handle Validation Errors (400)
-                if (status === 400 && data.details) {
-                    // Zod formatted error structure usually has _errors array or field specific errors
-                    // Flattening the errors for display
-                    const errorMessages: string[] = [];
-
-                    // Recursive helper to extract errors from Zod format
-                    const extractErrors = (obj: any): string[] => {
-                        const messages: string[] = [];
-                        if (obj._errors && Array.isArray(obj._errors)) {
-                            messages.push(...obj._errors);
-                        }
-                        Object.keys(obj).forEach(key => {
-                            if (typeof obj[key] === 'object' && obj[key] !== null && key !== '_errors') {
-                                messages.push(...extractErrors(obj[key]));
-                            }
-                        });
-                        return messages;
-                    };
-
+                // Handle Details (Validation Errors) or Specific Error Messages
+                if (data.details || data.error) {
+                    // 1. Details Object (Zod/Backend Validation)
                     if (data.details) {
+                        const errorMessages: string[] = [];
+                        // Recursive helper to extract errors from Zod format
+                        const extractErrors = (obj: any): string[] => {
+                            const messages: string[] = [];
+                            if (obj._errors && Array.isArray(obj._errors)) {
+                                messages.push(...obj._errors);
+                            }
+                            Object.keys(obj).forEach(key => {
+                                if (typeof obj[key] === 'object' && obj[key] !== null && key !== '_errors') {
+                                    messages.push(...extractErrors(obj[key]));
+                                }
+                            });
+                            return messages;
+                        };
                         errorMessages.push(...extractErrors(data.details));
+
+                        [...new Set(errorMessages)].forEach(msg => {
+                            toastManager.add({
+                                title: "Erro de Validação",
+                                description: msg,
+                                type: 'error'
+                            });
+                        });
                     }
 
-                    // If no structured details found, fallback to generic message
-                    if (errorMessages.length === 0 && data.error) {
-                        errorMessages.push(data.error);
-                    }
-
-                    // Display unique messages
-                    [...new Set(errorMessages)].forEach(msg => {
+                    // 2. Single Error Message (e.g., 409 Conflict, 400 Bad Request)
+                    if (data.error) {
                         toastManager.add({
-                            title: "Erro de Validação",
-                            description: msg,
+                            title: status === 409 ? "Conflito / Indisponibilidade" : "Erro",
+                            description: data.error,
                             type: 'error'
                         });
-                    });
+                    }
+
                 } else {
-                    // Generic Server Errors (4xx, 5xx)
+                    // Generic Fallback
                     toastManager.add({
                         title: "Erro",
-                        description: `Erro ${status}`,
+                        description: `Erro ${status}: Ocorreu um erro no servidor.`,
                         type: 'error'
                     });
                 }

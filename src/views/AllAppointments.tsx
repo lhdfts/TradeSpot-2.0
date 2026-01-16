@@ -43,7 +43,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    const filteredAttendants = user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev'
+    const filteredAttendants = user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade'
         ? attendants
         : attendants.filter(att => att.sector === user?.sector);
 
@@ -84,32 +84,40 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             a.email?.toLowerCase().includes(search.toLowerCase());
 
         const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
-        // Check exact match for attendant ID
-        const matchesAttendant = attendantFilter === 'all' || a.attendantId === attendantFilter;
+
+        // Updated: Check Attendant OR Creator (for Leaders tracking their team)
+        const matchesAttendant = attendantFilter === 'all' ||
+            a.attendantId === attendantFilter ||
+            (a.createdBy && a.createdBy === attendantFilter);
+
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
 
-        // Default: Show Only Today and Future
+        // Updated: If searching, IGNORE date filter (Global Search)
         let matchesDate = true;
 
-        if (!dateRange.start && !dateRange.end) {
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0');
-            const dd = String(today.getDate()).padStart(2, '0');
-            const safeTodayStr = `${yyyy}-${mm}-${dd}`;
-
-            matchesDate = a.date >= safeTodayStr;
+        if (search) {
+            matchesDate = true;
         } else {
-            matchesDate =
-                (!dateRange.start || a.date >= dateRange.start) &&
-                (!dateRange.end || a.date <= dateRange.end);
+            if (!dateRange.start && !dateRange.end) {
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const dd = String(today.getDate()).padStart(2, '0');
+                const safeTodayStr = `${yyyy}-${mm}-${dd}`;
+
+                matchesDate = a.date >= safeTodayStr;
+            } else {
+                matchesDate =
+                    (!dateRange.start || a.date >= dateRange.start) &&
+                    (!dateRange.end || a.date <= dateRange.end);
+            }
         }
 
         return matchesSearch && matchesStatus && matchesAttendant && matchesEvent && matchesDate;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
-        return dateA.getTime() - dateB.getTime();
+        return dateB.getTime() - dateA.getTime(); // Descending for better recent visibility
     });
 
     // Pagination Logic
@@ -152,6 +160,13 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         }
     };
 
+    // Helper to get Creator Name
+    const getCreatorName = (id?: string) => {
+        if (!id) return '-';
+        const creator = attendants.find(a => a.id === id);
+        return creator ? creator.name : 'Unknown';
+    };
+
     return (
         <div className="space-y-6">
             {/* Controls Bar */}
@@ -160,13 +175,14 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                 <div className="flex-1 min-w-[250px]">
                     <div className="relative">
                         <FloatingInput
-                            label="Pesquisa"
+                            label="Pesquisa (Nome, Tel, ID)"
                             startIcon={<Search size={18} />}
                             value={search}
                             onChange={e => setSearch(sanitizeInput.search(e.target.value))}
                             placeholder=""
                             className="bg-background"
                         />
+                        {search && <span className="absolute right-0 -bottom-5 text-[10px] text-muted-foreground">*Pesquisando em todo o histórico</span>}
                     </div>
                 </div>
 
@@ -190,7 +206,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                     )}
 
                     <FloatingSelect
-                        label="Atendente"
+                        label="Atendente / Criador"
                         value={attendantFilter}
                         onChange={(e: any) => setAttendantFilter(e.target.value)}
                         options={[
@@ -254,6 +270,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                     <th className="px-6 py-4">Aluno(a)</th>
                                     <th className="px-6 py-4">Tipo</th>
                                     <th className="px-6 py-4">Status</th>
+                                    <th className="px-6 py-4">Criado Por</th>
                                     <th className="px-6 py-4">Atendente</th>
                                     <th className="px-6 py-4 text-center">Ações</th>
                                 </tr>
@@ -286,6 +303,9 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(appt.status)}`}>
                                                 {appt.status}
                                             </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-foreground">
+                                            {getCreatorName(appt.createdBy)}
                                         </td>
                                         <td className="px-6 py-4 text-sm text-foreground">
                                             {appt.attendantName || appt.attendantId}

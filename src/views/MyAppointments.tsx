@@ -40,23 +40,23 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
         // If filters are present, we respect them.
         let matchesDate = true;
 
-        if (!dateRange.start && !dateRange.end) {
+        // Updated: If searching, IGNORE date filter
+        if (search) {
+            matchesDate = true;
+        } else if (dateRange.start || dateRange.end) {
+            matchesDate =
+                (!dateRange.start || a.date >= dateRange.start) &&
+                (!dateRange.end || a.date <= dateRange.end);
+        } else {
+            // Default: Show Only Today and Future
             const today = new Date();
-            // YYYY-MM-DD
-            // Fallback for environments where sv-SE might not work as expected (though universal in modern browsers/node)
-            // simplified manual string construction if needed, but sv-SE is standard for ISO format.
-            // Actually, let's be safer with manual YYYY-MM-DD construction to avoid locale issues.
             const yyyy = today.getFullYear();
             const mm = String(today.getMonth() + 1).padStart(2, '0');
             const dd = String(today.getDate()).padStart(2, '0');
             const safeTodayStr = `${yyyy}-${mm}-${dd}`;
-
             matchesDate = a.date >= safeTodayStr;
-        } else {
-            matchesDate =
-                (!dateRange.start || a.date >= dateRange.start) &&
-                (!dateRange.end || a.date <= dateRange.end);
         }
+
         return matchesSearch && matchesStatus && matchesDate;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
