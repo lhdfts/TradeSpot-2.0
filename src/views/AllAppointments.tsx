@@ -36,6 +36,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const [statusFilter, setStatusFilter] = useState('all');
     // Initialize attendant filter from URL param if present
     const [attendantFilter, setAttendantFilter] = useState('all');
+    const [creatorFilter, setCreatorFilter] = useState('all');
     const [eventFilter, setEventFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [currentPage, setCurrentPage] = useState(1);
@@ -43,9 +44,10 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    const filteredAttendants = user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade'
+    const filteredAttendants = (user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade'
         ? attendants
-        : attendants.filter(att => att.sector === user?.sector);
+        : attendants.filter(att => att.sector === user?.sector))
+        .sort((a, b) => a.name.localeCompare(b.name));
 
     // Update filter if URL param changes or attendants/events load
     useEffect(() => {
@@ -73,7 +75,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     // Reset pagination when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, statusFilter, attendantFilter, eventFilter, dateRange]);
+    }, [search, statusFilter, attendantFilter, creatorFilter, eventFilter, dateRange]);
 
     // Filter Logic
     const filtered = appointments.filter(a => {
@@ -85,10 +87,9 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
         const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
 
-        // Updated: Check Attendant OR Creator (for Leaders tracking their team)
-        const matchesAttendant = attendantFilter === 'all' ||
-            a.attendantId === attendantFilter ||
-            (a.createdBy && a.createdBy === attendantFilter);
+        const matchesAttendant = attendantFilter === 'all' || a.attendantId === attendantFilter;
+
+        const matchesCreator = creatorFilter === 'all' || (a.createdBy && a.createdBy === creatorFilter);
 
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
 
@@ -113,7 +114,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             }
         }
 
-        return matchesSearch && matchesStatus && matchesAttendant && matchesEvent && matchesDate;
+        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesDate;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
@@ -175,7 +176,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                 <div className="flex-1 min-w-[250px]">
                     <div className="relative">
                         <FloatingInput
-                            label="Pesquisa (Nome, Tel, ID)"
+                            label="Pesquisa"
                             startIcon={<Search size={18} />}
                             value={search}
                             onChange={e => setSearch(sanitizeInput.search(e.target.value))}
@@ -206,7 +207,17 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                     )}
 
                     <FloatingSelect
-                        label="Atendente / Criador"
+                        label="Criador"
+                        value={creatorFilter}
+                        onChange={(e: any) => setCreatorFilter(e.target.value)}
+                        options={[
+                            { value: 'all', label: 'Todos' },
+                            ...filteredAttendants.map(att => ({ value: att.id, label: att.name }))
+                        ]}
+                    />
+
+                    <FloatingSelect
+                        label="Atendente"
                         value={attendantFilter}
                         onChange={(e: any) => setAttendantFilter(e.target.value)}
                         options={[
