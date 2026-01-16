@@ -6,6 +6,8 @@ import { Button } from './ui/button';
 import type { Event } from '../types';
 import { api } from '../services/api';
 
+import { useAuth } from '../context/AuthContext';
+
 const Input: React.FC<any> = ({ label, ...props }) => (
     <div className="space-y-1">
         {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
@@ -23,11 +25,14 @@ interface EventModalProps {
 }
 
 export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSuccess, event }) => {
+    const { user } = useAuth();
     const [formData, setFormData] = useState<Partial<Event>>({
         event_name: '',
         status: true,
         sector: ''
     });
+
+    const isSuperUser = user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.sector === 'TEI';
 
     useEffect(() => {
         if (event) {
@@ -36,25 +41,31 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
             setFormData({
                 event_name: '',
                 status: true,
-                sector: ''
+                sector: isSuperUser ? '' : (user?.sector || '')
             });
         }
-    }, [event, isOpen]);
+    }, [event, isOpen, user, isSuperUser]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const dataToSubmit = {
+                ...formData,
+                // Ensure restricted users can't override sector
+                sector: isSuperUser ? formData.sector : user?.sector
+            };
+
             if (event) {
-                await api.events.update(event.id, formData);
+                await api.events.update(event.id, dataToSubmit);
             } else {
                 const now = new Date();
                 const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
                 await api.events.create({
-                    ...formData,
-                    event_name: formData.event_name || '',
+                    ...dataToSubmit,
+                    event_name: dataToSubmit.event_name || '',
                     start_date: now.toISOString(),
                     end_date: oneHourLater.toISOString(),
-                    status: formData.status ?? true
+                    status: dataToSubmit.status ?? true
                 } as Omit<Event, 'id'>);
             }
             onSuccess();
@@ -87,6 +98,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                         { value: 'Tribo', label: 'Tribo' },
                         { value: 'Social Seller', label: 'Social Seller' }
                     ]}
+                    disabled={!isSuperUser}
                 />
 
                 <Select

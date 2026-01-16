@@ -8,8 +8,11 @@ import { Plus, Edit } from 'lucide-react';
 import { EventModal } from '../components/EventModal';
 import { ExportIcon } from '../components/ExportIcon';
 
+import { useAuth } from '../context/AuthContext';
+
 export const Events: React.FC = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [events, setEvents] = useState<Event[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -20,11 +23,26 @@ export const Events: React.FC = () => {
         setPortalContainer(document.getElementById('header-actions'));
     }, []);
 
+    // Redirect Colaborador away
+    useEffect(() => {
+        if (user && user.role === 'Colaborador') {
+            navigate('/');
+        }
+    }, [user, navigate]);
+
     const fetchEvents = async () => {
         setLoading(true);
         try {
             const data = await api.events.list();
-            setEvents(data);
+
+            // Filter events based on role/sector
+            const isSuperUser = user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.sector === 'TEI';
+
+            const filteredData = isSuperUser
+                ? data
+                : data.filter(event => event.sector === user?.sector);
+
+            setEvents(filteredData);
         } catch (error) {
             console.error('Failed to fetch events', error);
         } finally {
@@ -33,8 +51,10 @@ export const Events: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchEvents();
-    }, []);
+        if (user) {
+            fetchEvents();
+        }
+    }, [user]);
 
     const handleEdit = (event: Event) => {
         setSelectedEvent(event);
