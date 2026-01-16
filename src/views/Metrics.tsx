@@ -36,7 +36,7 @@ export const Metrics: React.FC = () => {
     });
 
     // --- DATA CALCULATION ---
-    const { sdrRanking, closerRanking, chartData } = useMemo(() => {
+    const { sdrRanking, closerRanking, chartData, currentRef } = useMemo(() => {
         // 1. Filter Appointments by Date & Sector (if applicable)
         const filtered = appointments.filter(a => {
             if (!a.date) return false;
@@ -158,21 +158,36 @@ export const Metrics: React.FC = () => {
             if (a.status === 'Realizado') stats.realized++;
         });
 
-        const chartData = Array.from(dateMap.values()).sort((a, b) => a.rawDate - b.rawDate);
-
-        return { sdrRanking, closerRanking, chartData };
-    }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
-
-    const currentRef = useMemo(() => {
+        // 5. Ensure Current Time is in Data (for ReferenceLine)
         const now = new Date();
+        let currentRef = '';
+        let currentSortValue = 0;
+
         if (periodFilter === 'today') {
             const hour = now.getHours().toString().padStart(2, '0');
-            return `${hour}:00`;
+            currentRef = `${hour}:00`;
+            currentSortValue = parseInt(hour, 10);
         } else {
-            // Match the format used in dateMap: DD/MM
-            return now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            currentRef = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+            currentSortValue = d.getTime();
         }
-    }, [periodFilter]);
+
+        if (sectorFilter === 'all' || sectorFilter === 'Closer') {
+            if (!dateMap.has(currentRef)) {
+                dateMap.set(currentRef, {
+                    displayDate: currentRef,
+                    total: 0,
+                    realized: 0,
+                    rawDate: currentSortValue
+                });
+            }
+        }
+
+        const chartData = Array.from(dateMap.values()).sort((a, b) => a.rawDate - b.rawDate);
+
+        return { sdrRanking, closerRanking, chartData, currentRef };
+    }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
 
     return (
         <div className="space-y-6">
