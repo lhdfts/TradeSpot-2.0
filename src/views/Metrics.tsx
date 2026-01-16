@@ -227,12 +227,12 @@ export const Metrics: React.FC = () => {
     }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
 
     const statusColors: Record<string, string> = {
-        'Realizado': '#00df52ff',
-        'Pendente': '#f5de0bff',
-        'Cancelado': '#d70000ff',
-        'Reagendado': '#3b82f6',
-        'Esquecimento': '#8127d6ff',
-        'Não compareceu': '#ff2788ff'
+        'Realizado': '#10b981',      // Emerald 500
+        'Pendente': '#f59e0b',       // Amber 500
+        'Cancelado': '#ef4444',      // Red 500
+        'Reagendado': '#3b82f6',     // Blue 500
+        'Esquecimento': '#8b5cf6',   // Violet 500
+        'Não compareceu': '#f43f5e'  // Rose 500
     };
 
     return (
