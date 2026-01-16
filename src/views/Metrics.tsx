@@ -6,7 +6,7 @@ import { Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Select, Input } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
-import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 
