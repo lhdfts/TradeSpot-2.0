@@ -6,7 +6,7 @@ import { Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Select, Input } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
-import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 
@@ -26,7 +26,6 @@ export const Metrics: React.FC = () => {
     const [sectorFilter, setSectorFilter] = useState('all');
 
     // Chart State
-    const [maBasis, setMaBasis] = useState<string>('Total');
 
     const [rankingModal, setRankingModal] = useState<{
         isOpen: boolean;
@@ -209,27 +208,7 @@ export const Metrics: React.FC = () => {
 
         const sortedData = Array.from(dateMap.values()).sort((a, b) => a.rawDate - b.rawDate);
 
-        // Calculate Moving Average (e.g., 3-period SMA)
-        const chartData = sortedData.map((item, index, array) => {
-            // Window size
-            const windowSize = 3;
-            let sum = 0;
-            let count = 0;
-
-            for (let i = 0; i < windowSize; i++) {
-                if (index - i >= 0) {
-                    const val = maBasis === 'Total'
-                        ? array[index - i].total
-                        : (array[index - i] as any)[maBasis] || 0;
-                    sum += val;
-                    count++;
-                }
-            }
-
-            // Round to 1 decimal place for cleaner display
-            const rawAvg = count > 0 ? sum / count : 0;
-            return { ...item, movingAverage: parseFloat(rawAvg.toFixed(1)) };
-        });
+        const chartData = sortedData;
 
 
 
@@ -245,7 +224,7 @@ export const Metrics: React.FC = () => {
         });
 
         return { sdrRanking, closerRanking, chartData, currentRef, totals };
-    }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter, maBasis]);
+    }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
 
     const statusColors: Record<string, string> = {
         'Realizado': '#00df52ff',
@@ -455,22 +434,8 @@ export const Metrics: React.FC = () => {
             {/* Chart */}
             {(sectorFilter === 'all' || sectorFilter === 'Closer') && (
                 <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                    <div className="flex items-center justify-between gap-4 mb-6">
-                        <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold text-primary">Agendamentos por Dia (Closer)</h3>
-                        </div>
-                        <div className="flex items-center gap-2 bg-background p-1 pr-3 rounded-lg border border-border">
-                            <span className="text-xs text-secondary pl-2">Média Móvel:</span>
-                            <Select
-                                value={maBasis}
-                                onChange={(e: any) => setMaBasis(e.target.value)}
-                                options={[
-                                    { value: 'Total', label: 'Total' },
-                                    ...APPOINTMENT_STATUSES.map(s => ({ value: s, label: s }))
-                                ]}
-                                className="w-32 h-8 text-xs border-none bg-transparent focus:ring-0 shadow-none"
-                            />
-                        </div>
+                    <div className="flex items-center gap-2 mb-6">
+                        <h3 className="text-lg font-semibold text-primary">Agendamentos por Dia (Closer)</h3>
                     </div>
 
                     <div className="h-96 w-full relative">
@@ -507,7 +472,7 @@ export const Metrics: React.FC = () => {
                                     <Bar dataKey="Não compareceu" name="Não compareceu" stackId="a" fill={statusColors['Não compareceu']} radius={[4, 4, 0, 0]} />
 
                                     {/* Moving Average Line */}
-                                    <Line type="monotone" dataKey="movingAverage" name="Média Móvel" stroke="#767676ff" strokeWidth={2} dot={false} />
+
 
                                     <ReferenceLine x={currentRef} stroke="hsl(var(--primary))" strokeDasharray="3 3" />
                                 </ComposedChart>
