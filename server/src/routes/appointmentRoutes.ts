@@ -236,9 +236,12 @@ router.post('/', async (req: Request, res: Response) => {
         const webhookUrl = getAppointmentWebhooks()[data.type];
         if (webhookUrl) {
             console.log(`Sending webhook for ${data.type} to ${webhookUrl}`);
-            axios.post(webhookUrl, webhookResponse)
-                .then(() => console.log('Webhook sent successfully'))
-                .catch(err => console.error(`Webhook Failed for ${data.type}:`, err.message, err.response?.data));
+            try {
+                await axios.post(webhookUrl, webhookResponse);
+                console.log('Webhook sent successfully');
+            } catch (err: any) {
+                console.error(`Webhook Failed for ${data.type}:`, err.message, err.response?.data);
+            }
         } else {
             console.log(`No webhook configured for type: ${data.type}`);
         }
@@ -356,9 +359,12 @@ router.put('/:id', async (req: Request, res: Response) => {
         if (updateWebhookUrl) {
             console.log(`Sending Update Webhook to ${updateWebhookUrl}`);
             const webhookPayload = { ...updated, type: updated.type };
-            axios.post(updateWebhookUrl, webhookPayload)
-                .then(() => console.log('Update Webhook sent'))
-                .catch(err => console.error("Update Webhook Failed:", err.message));
+            try {
+                await axios.post(updateWebhookUrl, webhookPayload);
+                console.log('Update Webhook sent');
+            } catch (err: any) {
+                console.error("Update Webhook Failed:", err.message);
+            }
         }
 
         res.json(updated);
