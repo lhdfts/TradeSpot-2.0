@@ -421,8 +421,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         // Validate 'Upgrade' and 'Reagendamento Closer' manual selections
         if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer') {
             if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
-                if (!checkAvailability(formData.attendantId)) {
-                    return;
+                // Skip validation if we are editing and the schedule-relevant fields haven't changed
+                const isScheduleChanged = !initialData ||
+                    initialData.date !== formData.date ||
+                    initialData.time !== formData.time ||
+                    initialData.attendantId !== formData.attendantId;
+
+                if (isScheduleChanged) {
+                    if (!checkAvailability(formData.attendantId)) {
+                        return;
+                    }
                 }
             }
         }
