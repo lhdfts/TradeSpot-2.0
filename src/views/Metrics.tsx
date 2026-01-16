@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
 import { Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Select, Input } from '../components/ui/input';
+import { Select } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
 import {
     BarChart,
@@ -27,9 +27,7 @@ export const Metrics: React.FC = () => {
     const [selectedYear, setSelectedYear] = useState(currentYear.toString());
     const [selectedMonth, setSelectedMonth] = useState(currentMonth.toString());
 
-    // const [periodFilter, setPeriodFilter] = useState('month'); // Replacing with explicit month/year
-    const [customStart, setCustomStart] = useState('');
-    const [customEnd, setCustomEnd] = useState('');
+
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
 
