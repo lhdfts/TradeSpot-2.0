@@ -435,7 +435,7 @@ export const Metrics: React.FC = () => {
                                         itemStyle={{ color: 'hsl(var(--foreground))' }}
                                         cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
                                     />
-                                    <ReferenceLine x={currentRef} stroke="hsl(var(--primary))" strokeDasharray="3 3" />
+
                                     <Area
                                         type="monotone"
                                         dataKey="total"
@@ -456,6 +456,7 @@ export const Metrics: React.FC = () => {
                                         fill="url(#colorRealized)"
                                         activeDot={{ r: 6, strokeWidth: 0 }}
                                     />
+                                    <ReferenceLine x={currentRef} stroke="hsl(var(--primary))" strokeDasharray="3 3" />
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (
