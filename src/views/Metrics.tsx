@@ -21,7 +21,13 @@ export const Metrics: React.FC = () => {
     const { attendants, events } = useFormData();
 
     // Filters State
-    const [periodFilter, setPeriodFilter] = useState('month');
+    // Filters State
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+    const [selectedYear, setSelectedYear] = useState(currentYear.toString());
+    const [selectedMonth, setSelectedMonth] = useState(currentMonth.toString());
+
+    // const [periodFilter, setPeriodFilter] = useState('month'); // Replacing with explicit month/year
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
     const [attendantFilter, setAttendantFilter] = useState('');
@@ -51,23 +57,13 @@ export const Metrics: React.FC = () => {
         const filtered = appointments.filter(a => {
             if (!a.date) return false;
 
-            // Period Filter
+            // Period Filter (Month/Year)
             let matchesPeriod = true;
             const apptDate = new Date(a.date + 'T12:00:00');
-            const today = new Date();
 
-            if (periodFilter === 'today') {
-                matchesPeriod = apptDate.toDateString() === today.toDateString();
-            } else if (periodFilter === 'week') {
-                const startOfWeek = new Date(today);
-                startOfWeek.setDate(today.getDate() - today.getDay());
-                matchesPeriod = apptDate >= startOfWeek;
-            } else if (periodFilter === 'month') {
-                matchesPeriod = apptDate.getMonth() === today.getMonth() && apptDate.getFullYear() === today.getFullYear();
-            } else if (periodFilter === 'custom' && customStart && customEnd) {
-                const start = new Date(customStart + 'T00:00:00');
-                const end = new Date(customEnd + 'T23:59:59');
-                matchesPeriod = apptDate >= start && apptDate <= end;
+            // Check against selected Month/Year
+            if (apptDate.getMonth() !== parseInt(selectedMonth) || apptDate.getFullYear() !== parseInt(selectedYear)) {
+                matchesPeriod = false;
             }
 
             // Attendant/Event Filters
@@ -152,42 +148,34 @@ export const Metrics: React.FC = () => {
             'Reagendado': 0
         });
 
+        // Initialize map with ALL days of the selected month
+        const year = parseInt(selectedYear);
+        const month = parseInt(selectedMonth);
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateObj = new Date(year, month, d);
+            const dateStr = dateObj.toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'); // YYYY-MM-DD
+            const display = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            // For sorting, rawDate is timestamp
+            dateMap.set(dateStr, createInitItem(display, dateObj.getTime()));
+        }
+
         filtered.forEach(a => {
             if (sectorFilter !== 'all') {
                 const att = attendants.find(at => at.id === a.attendantId);
                 if (att?.sector !== sectorFilter) return;
             }
 
-            let key = '';
-            let display = '';
-            let sortValue = 0;
+            const key = a.date;
 
-            if (periodFilter === 'today') {
-                if (a.time) {
-                    const hour = a.time.split(':')[0];
-                    key = `${hour}:00`;
-                    display = `${hour}:00`;
-                    sortValue = parseInt(hour, 10);
-                } else {
-                    return;
+            if (dateMap.has(key)) {
+                const stats = dateMap.get(key)!;
+                stats.total++;
+
+                if (a.status as string in stats) {
+                    stats[a.status as AppointmentStatus]++;
                 }
-            } else {
-                key = a.date;
-                const d = new Date(key + 'T12:00:00');
-                display = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-                sortValue = d.getTime();
-            }
-
-            if (!dateMap.has(key)) {
-                dateMap.set(key, createInitItem(display, sortValue));
-            }
-            const stats = dateMap.get(key)!;
-            stats.total++;
-
-            // Increment specific status
-            // Ensure status is valid, otherwise ignore or log (types ensure it usually is)
-            if (a.status as string in stats) {
-                stats[a.status as AppointmentStatus]++;
             }
         });
 
@@ -211,7 +199,7 @@ export const Metrics: React.FC = () => {
         });
 
         return { sdrRanking, closerRanking, chartData, totals };
-    }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
+    }, [appointments, selectedMonth, selectedYear, attendantFilter, eventFilter, attendants, sectorFilter]);
 
     const statusColors: Record<string, string> = {
         'Realizado': 'emerald',
@@ -247,35 +235,36 @@ export const Metrics: React.FC = () => {
                         </div>
                     )}
 
-                    <Select
-                        value={periodFilter}
-                        onChange={(e: any) => setPeriodFilter(e.target.value)}
-                        options={[
-                            { value: 'today', label: 'Hoje' },
-                            { value: 'week', label: 'Esta Semana' },
-                            { value: 'month', label: 'Este Mês' },
-                            { value: 'custom', label: 'Personalizado' }
-                        ]}
-                        className="w-40"
-                    />
-
-                    {periodFilter === 'custom' && (
-                        <div className="flex items-center gap-2">
-                            <Input
-                                type="date"
-                                value={customStart}
-                                onChange={(e: any) => setCustomStart(e.target.value)}
-                                className="w-auto"
-                            />
-                            <span className="text-secondary">-</span>
-                            <Input
-                                type="date"
-                                value={customEnd}
-                                onChange={(e: any) => setCustomEnd(e.target.value)}
-                                className="w-auto"
-                            />
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                        <Select
+                            value={selectedMonth}
+                            onChange={(e: any) => setSelectedMonth(e.target.value)}
+                            options={[
+                                { value: '0', label: 'Janeiro' },
+                                { value: '1', label: 'Fevereiro' },
+                                { value: '2', label: 'Março' },
+                                { value: '3', label: 'Abril' },
+                                { value: '4', label: 'Maio' },
+                                { value: '5', label: 'Junho' },
+                                { value: '6', label: 'Julho' },
+                                { value: '7', label: 'Agosto' },
+                                { value: '8', label: 'Setembro' },
+                                { value: '9', label: 'Outubro' },
+                                { value: '10', label: 'Novembro' },
+                                { value: '11', label: 'Dezembro' },
+                            ]}
+                            className="w-40"
+                        />
+                        <Select
+                            value={selectedYear}
+                            onChange={(e: any) => setSelectedYear(e.target.value)}
+                            options={Array.from({ length: 5 }, (_, i) => {
+                                const y = currentYear - 2 + i;
+                                return { value: y.toString(), label: y.toString() };
+                            })}
+                            className="w-28"
+                        />
+                    </div>
 
                     <Select
                         value={attendantFilter}
@@ -453,6 +442,7 @@ export const Metrics: React.FC = () => {
                         stack={true}
                         showLegend={false}
                         showYAxis={false}
+                        showGridLines={false}
                         startEndOnly={false}
                         className="mt-8 h-96"
                     />
