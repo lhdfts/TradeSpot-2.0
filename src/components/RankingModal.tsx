@@ -51,13 +51,13 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                                     {type === 'sdr' ? (
                                         <>
                                             <div className="col-span-2 text-center font-bold text-blue-400 text-sm">
-                                                {item.marked}
+                                                {item.total}
                                             </div>
                                             <div className="col-span-2 text-center text-sm text-secondary">
-                                                {item.scheduled}
+                                                {item.ligacao}
                                             </div>
                                             <div className="col-span-2 text-center text-sm text-secondary">
-                                                {item.rescheduled}
+                                                {item.reagendamento}
                                             </div>
                                         </>
                                     ) : (

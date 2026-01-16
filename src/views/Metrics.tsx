@@ -6,7 +6,7 @@ import { BarChart2, Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Select, Input } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { RankingModal } from '../components/RankingModal';
 
 export const Metrics: React.FC = () => {
@@ -162,6 +162,17 @@ export const Metrics: React.FC = () => {
 
         return { sdrRanking, closerRanking, chartData };
     }, [appointments, periodFilter, customStart, customEnd, attendantFilter, eventFilter, attendants, sectorFilter]);
+
+    const currentRef = useMemo(() => {
+        const now = new Date();
+        if (periodFilter === 'today') {
+            const hour = now.getHours().toString().padStart(2, '0');
+            return `${hour}:00`;
+        } else {
+            // Match the format used in dateMap: DD/MM
+            return now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        }
+    }, [periodFilter]);
 
     return (
         <div className="space-y-6">
@@ -409,6 +420,7 @@ export const Metrics: React.FC = () => {
                                         itemStyle={{ color: 'hsl(var(--foreground))' }}
                                         cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
                                     />
+                                    <ReferenceLine x={currentRef} stroke="hsl(var(--primary))" strokeDasharray="3 3" />
                                     <Area
                                         type="monotone"
                                         dataKey="total"
