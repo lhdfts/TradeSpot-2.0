@@ -136,7 +136,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     const attendantOptions = [
         { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
         ...attendants
-            .filter(a => formData.type === 'Upgrade' ? a.sector === 'Closer' : true)
+            .filter(a => {
+                if (formData.type === 'Upgrade') return a.sector === 'Closer';
+                if (user?.sector === 'TEI') return true;
+                return user?.sector ? a.sector === user.sector : true;
+            })
             .map(a => ({ value: a.id, label: a.name }))
     ];
 
