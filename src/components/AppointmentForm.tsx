@@ -213,7 +213,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     return appPhone === targetPhone &&
                         (app.type === 'Ligação Closer' ||
                             app.type === 'Reagendamento Closer' ||
-                            app.type === 'Agendamento Pessoal');
+                            app.type === 'Agendamento Pessoal' ||
+                            app.type === 'Upgrade');
                 });
 
                 if (relevantAppointments.length > 0) {
