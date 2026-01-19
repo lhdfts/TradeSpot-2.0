@@ -281,9 +281,20 @@ router.put('/:id', async (req: Request, res: Response) => {
         // Logic Check
         if ((updates.attendantId || updates.date || updates.time) && merged.status === 'Pendente') {
             const { data: attendant } = await supabase.from('user').select('*').eq('id', merged.attendant_id).single();
+
             if (attendant) {
+                console.log(`[DEBUG] Checking Schedule for ${attendant.name} (${attendant.id})`);
+                console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
+
                 const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type);
-                if (!isWithin) return res.status(409).json({ error: 'Attendant is not available (Schedule/Pause).' });
+                console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
+
+                if (!isWithin) {
+                    console.error(`[DEBUG] Schedule Mismatch Details: Attendant Schedule: ${JSON.stringify(attendant.schedule)}, Pauses: ${JSON.stringify(attendant.pauses)}`);
+                    return res.status(409).json({ error: 'Attendant is not available (Schedule/Pause).' });
+                }
+            } else {
+                console.warn(`[DEBUG] Attendant not found for ID: ${merged.attendant_id}`);
             }
 
             if (merged.attendant_id && merged.attendant_id !== 'distribuicao_automatica') {
@@ -297,7 +308,10 @@ router.put('/:id', async (req: Request, res: Response) => {
                 if (existingAppts) {
                     // @ts-ignore
                     const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id);
+                    console.log(`[DEBUG] hasConflict result: ${hasConflict}`);
+
                     if (hasConflict) {
+                        console.error(`[DEBUG] Conflict Found for ${merged.attendant_id} at ${merged.time}`);
                         return res.status(409).json({ error: 'Conflict: Attendant is busy.' });
                     }
                 }
