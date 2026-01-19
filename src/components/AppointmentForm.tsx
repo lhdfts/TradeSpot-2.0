@@ -137,7 +137,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
         ...attendants
             .filter(a => {
-                if (formData.type === 'Upgrade') return a.sector === 'Closer';
+                if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer') return a.sector === 'Closer';
                 if (user?.sector === 'TEI') return true;
                 return user?.sector ? a.sector === user.sector : true;
             })
@@ -919,8 +919,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                             // 2. Editing existing appointment AND user has specific role permissions
                                             isEditing
                                                 ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
-                                                : (formData.type !== 'Upgrade' && formData.type !== 'Reagendamento Closer')
+                                                : (formData.type !== 'Upgrade')
                                         }
+                                        error={errors.attendantId}
                                     />
                                 )}
                             </div>
