@@ -96,25 +96,25 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
                 "data-[position*=top]:transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)+(var(--toast-index)*var(--toast-peek))+(var(--toast-shrink)*var(--toast-calc-height))))_scale(var(--toast-scale))]",
                 "data-[position*=bottom]:transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--toast-peek))-(var(--toast-shrink)*var(--toast-calc-height))))_scale(var(--toast-scale))]",
                 // Limited state
-                "data-limited:opacity-0",
+                "data-[limited]:opacity-0",
                 // Expanded state
-                "data-expanded:h-(--toast-height)",
-                "data-position:data-expanded:transform-[translateX(var(--toast-swipe-movement-x))_translateY(var(--toast-calc-offset-y))]",
+                "data-[expanded]:h-(--toast-height)",
+                "data-[position]:data-[expanded]:transform-[translateX(var(--toast-swipe-movement-x))_translateY(var(--toast-calc-offset-y))]",
                 // Starting and ending animations
-                "data-[position*=top]:data-starting-style:transform-[translateX(calc(-100%-var(--toast-inset)))]",
-                "data-[position*=bottom]:data-starting-style:transform-[translateX(calc(-100%-var(--toast-inset)))]",
-                "data-ending-style:opacity-0",
+                "data-[position*=top]:data-[starting-style]:transform-[translateX(calc(-100%-var(--toast-inset)))]",
+                "data-[position*=bottom]:data-[starting-style]:transform-[translateX(calc(-100%-var(--toast-inset)))]",
+                "data-[ending-style]:opacity-0",
                 // Ending animations (direction-aware)
-                "data-ending-style:not-data-limited:not-data-swipe-direction:transform-[translateX(calc(100%+var(--toast-inset)))]",
-                "data-ending-style:data-[swipe-direction=left]:transform-[translateX(calc(var(--toast-swipe-movement-x)-100%-var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
-                "data-ending-style:data-[swipe-direction=right]:transform-[translateX(calc(var(--toast-swipe-movement-x)+100%+var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
-                "data-ending-style:data-[swipe-direction=up]:transform-[translateY(calc(var(--toast-swipe-movement-y)-100%-var(--toast-inset)))]",
-                "data-ending-style:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]",
+                "data-[ending-style]:not-data-[limited]:not-data-[swipe-direction]:transform-[translateX(calc(100%+var(--toast-inset)))]",
+                "data-[ending-style]:data-[swipe-direction=left]:transform-[translateX(calc(var(--toast-swipe-movement-x)-100%-var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
+                "data-[ending-style]:data-[swipe-direction=right]:transform-[translateX(calc(var(--toast-swipe-movement-x)+100%+var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
+                "data-[ending-style]:data-[swipe-direction=up]:transform-[translateY(calc(var(--toast-swipe-movement-y)-100%-var(--toast-inset)))]",
+                "data-[ending-style]:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]",
                 // Ending animations (expanded)
-                "data-expanded:data-ending-style:data-[swipe-direction=left]:transform-[translateX(calc(var(--toast-swipe-movement-x)-100%-var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
-                "data-expanded:data-ending-style:data-[swipe-direction=right]:transform-[translateX(calc(var(--toast-swipe-movement-x)+100%+var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
-                "data-expanded:data-ending-style:data-[swipe-direction=up]:transform-[translateY(calc(var(--toast-swipe-movement-y)-100%-var(--toast-inset)))]",
-                "data-expanded:data-ending-style:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]",
+                "data-[expanded]:data-[ending-style]:data-[swipe-direction=left]:transform-[translateX(calc(var(--toast-swipe-movement-x)-100%-var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
+                "data-[expanded]:data-[ending-style]:data-[swipe-direction=right]:transform-[translateX(calc(var(--toast-swipe-movement-x)+100%+var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
+                "data-[expanded]:data-[ending-style]:data-[swipe-direction=up]:transform-[translateY(calc(var(--toast-swipe-movement-y)-100%-var(--toast-inset)))]",
+                "data-[expanded]:data-[ending-style]:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]",
               )}
               data-position={position}
               key={toast.id}
@@ -127,7 +127,7 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
               }
               toast={toast}
             >
-              <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 data-behind:pointer-events-none data-behind:opacity-0 data-expanded:opacity-100">
+              <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 data-[behind]:pointer-events-none data-[behind]:opacity-0 data-[expanded]:opacity-100">
                 <div className="flex gap-2">
                   {Icon && (
                     <div
@@ -203,7 +203,7 @@ function AnchoredToasts() {
             >
               <Toast.Root
                 className={cn(
-                  "relative text-balance border bg-popover bg-clip-padding text-popover-foreground text-xs transition-[scale,opacity] before:pointer-events-none before:absolute before:inset-0 before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 dark:bg-clip-border dark:before:shadow-[0_-1px_--theme(--color-white/8%)]",
+                  "relative text-balance border bg-popover bg-clip-padding text-popover-foreground text-xs transition-[scale,opacity] before:pointer-events-none before:absolute before:inset-0 before:shadow-[0_1px_--theme(--color-black/4%)] data-[ending-style]:scale-98 data-[starting-style]:scale-98 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 dark:bg-clip-border dark:before:shadow-[0_-1px_--theme(--color-white/8%)]",
                   tooltipStyle
                     ? "rounded-md shadow-black/5 shadow-md before:rounded-[calc(var(--radius-md)-1px)]"
                     : "rounded-lg shadow-lg before:rounded-[calc(var(--radius-lg)-1px)]",

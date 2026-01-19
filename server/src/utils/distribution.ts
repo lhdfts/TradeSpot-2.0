@@ -26,13 +26,13 @@ const DAY_MAP: Record<number, string> = {
     1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat', 0: 'sun'
 };
 
-const timeToMinutes = (time: string): number => {
+export const timeToMinutes = (time: string): number => {
     if (!time) return 0;
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
 };
 
-const getDuration = (type: string): number => {
+export const getDuration = (type: string): number => {
     if (['Ligação Closer', 'Reschedule', 'Reagendamento Closer'].includes(type)) return 45;
     return 30;
 };
@@ -114,7 +114,8 @@ export const hasConflictingAppointment = (
     dateStr: string,
     timeStr: string,
     newType: string,
-    appointments: Appointment[]
+    appointments: Appointment[],
+    excludeId?: string
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
     const newEnd = newStart + getDuration(newType);
@@ -122,6 +123,7 @@ export const hasConflictingAppointment = (
     return appointments.some(appt => {
         if (appt.attendant_id !== attendantId) return false;
         if (appt.status !== 'Pendente') return false; // Only Pendente blocks
+        if (excludeId && appt.id === excludeId) return false; // Exclude self if updating
 
         const existingStart = timeToMinutes(appt.time);
         const existingEnd = existingStart + getDuration(appt.type);

@@ -3,8 +3,10 @@ import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js';
 import { createClient } from '@supabase/supabase-js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment } from '../utils/distribution.js';
+import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
+
+
 
 const router = Router();
 
@@ -306,12 +308,30 @@ router.put('/:id', async (req: Request, res: Response) => {
                     .neq('status', 'Cancelado');
 
                 if (existingAppts) {
-                    // @ts-ignore
+                    // Pass 'id' as the 6th argument to exclude current appointment from conflict check
                     const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id);
                     console.log(`[DEBUG] hasConflict result: ${hasConflict}`);
 
                     if (hasConflict) {
-                        console.error(`[DEBUG] Conflict Found for ${merged.attendant_id} at ${merged.time}`);
+                        // Find specific conflicting appointment for logging
+                        const newStart = timeToMinutes(merged.time);
+                        const newEnd = newStart + getDuration(merged.type);
+
+                        const collidingAppt = existingAppts.find(appt => {
+                            if (appt.attendant_id !== merged.attendant_id) return false;
+                            if (appt.status !== 'Pendente') return false;
+                            if (appt.id === id) return false; // Exclude self
+
+                            const existingStart = timeToMinutes(appt.time);
+                            const existingEnd = existingStart + getDuration(appt.type);
+                            return newStart < existingEnd && newEnd > existingStart;
+                        });
+
+                        if (collidingAppt) {
+                            console.error(`[DEBUG] Conflict Found. Colliding Appointment: ID=${collidingAppt.id}, Time=${collidingAppt.time}, Status=${collidingAppt.status}, Type=${collidingAppt.type}`);
+                        } else {
+                            console.error(`[DEBUG] Conflict Found but could not identify specific appointment (Logic Mismatch?).`);
+                        }
                         return res.status(409).json({ error: 'Conflict: Attendant is busy.' });
                     }
                 }
