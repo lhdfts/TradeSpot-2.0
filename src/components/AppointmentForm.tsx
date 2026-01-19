@@ -127,7 +127,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Agendamento Pessoal'].includes(t.value));
         }
         if (user.sector === 'Social Seller') {
-            return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer'].includes(t.value));
+            return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
         }
 
         return allTypes;
