@@ -392,14 +392,56 @@ router.put('/:id', async (req: Request, res: Response) => {
         const updateWebhookUrl = getUpdateWebhook();
         if (updateWebhookUrl) {
             console.log(`Sending Update Webhook to ${updateWebhookUrl}`);
-            const webhookPayload = { ...updated, type: updated.type };
+
+            // Enrich Payload
+            const enrichedPayload: any = { ...updated, type: updated.type };
+
             try {
-                await axios.post(updateWebhookUrl, webhookPayload);
-                console.log('Update Webhook sent');
+                // 1. Fetch Client Details (for phone, name, email)
+                if (updated.client_id) {
+                    const { data: client } = await supabase
+                        .from('clients')
+                        .select('name, phone, email')
+                        .eq('id', updated.client_id)
+                        .single();
+
+                    if (client) {
+                        enrichedPayload.lead = client.name; // Map 'name' to 'lead' for consistency
+                        enrichedPayload.phone = client.phone;
+                        enrichedPayload.email = client.email;
+                    }
+                }
+
+                // 2. Fetch Attendant Name
+                if (updated.attendant_id) {
+                    const { data: att } = await supabase
+                        .from('user')
+                        .select('name')
+                        .eq('id', updated.attendant_id)
+                        .single();
+                    if (att) enrichedPayload.attendant_name = att.name;
+                }
+
+                // 3. Fetch Event Name
+                if (updated.event_id) {
+                    const { data: ev } = await supabase
+                        .from('events')
+                        .select('event_name')
+                        .eq('id', updated.event_id)
+                        .single();
+                    if (ev) enrichedPayload.event_name = ev.event_name;
+                }
+
+                // 4. Send Webhook
+                await axios.post(updateWebhookUrl, enrichedPayload);
+                console.log('Update Webhook sent successfully with enriched data');
+
             } catch (err: any) {
-                console.error("Update Webhook Failed:", err.message);
+                console.error("Update Webhook Enrichment/Send Failed:", err.message);
+                // We don't fail the request if webhook fails, just log it.
             }
         }
+
 
         res.json(updated);
 
