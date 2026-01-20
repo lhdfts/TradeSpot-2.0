@@ -474,7 +474,30 @@ export const Metrics: React.FC = () => {
                         showYAxis={false}
                         showGridLines={false}
                         startEndOnly={false}
-                        className="mt-4 h-80 [&_text]:text-[8px] md:[&_text]:text-[10px] [&_text]:fill-secondary [&_.tremor-tooltip]:!opacity-100 [&_.tremor-tooltip]:!bg-surface [&_.tremor-tooltip]:!border-border [&_.tremor-tooltip]:!shadow-xl"
+                        customTooltip={(props: any) => {
+                            const { active, payload, label } = props;
+                            if (!active || !payload) return null;
+                            return (
+                                <div className="bg-surface border border-border p-3 rounded-lg shadow-xl !opacity-100 min-w-[150px]">
+                                    <p className="text-primary font-bold mb-2 border-b border-border pb-1">{label}</p>
+                                    <div className="space-y-1">
+                                        {payload.map((item: any) => (
+                                            <div key={item.dataKey} className="flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div
+                                                        className="w-2 h-2 rounded-full"
+                                                        style={{ backgroundColor: item.color }}
+                                                    />
+                                                    <span className="text-xs text-secondary">{item.dataKey}</span>
+                                                </div>
+                                                <span className="text-xs font-bold text-primary">{item.value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        }}
+                        className="mt-4 h-80 [&_text]:text-[10px] [&_text]:fill-slate-500 dark:[&_text]:fill-slate-400"
                     />
 
                     <List className="mt-8">
