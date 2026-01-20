@@ -122,7 +122,7 @@ export const Metrics: React.FC = () => {
             // Statuses
             'Cancelado': number;
             'Esquecimento': number;
-            'Não compareceu': number;
+            'No-show': number;
             'Pendente': number;
             'Realizado': number;
             'Reagendado': number;
@@ -139,7 +139,7 @@ export const Metrics: React.FC = () => {
             total: 0,
             'Cancelado': 0,
             'Esquecimento': 0,
-            'Não compareceu': 0,
+            'No-show': 0,
             'Pendente': 0,
             'Realizado': 0,
             'Reagendado': 0
@@ -204,7 +204,7 @@ export const Metrics: React.FC = () => {
         'Cancelado': 'red',
         'Reagendado': 'blue',
         'Esquecimento': 'violet',
-        'Não compareceu': 'rose'
+        'No-show': 'rose'
     };
 
     const valueFormatter = (number: number) =>
@@ -458,7 +458,7 @@ export const Metrics: React.FC = () => {
                             'Cancelado',
                             'Reagendado',
                             'Esquecimento',
-                            'Não compareceu'
+                            'No-show'
                         ]}
                         colors={[
                             'emerald',

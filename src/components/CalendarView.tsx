@@ -133,7 +133,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEdit
             case 'Cancelado': return 'bg-red-500/10 text-red-400 border-red-500/20';
             case 'Reagendado': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
             case 'Esquecimento': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
-            case 'Não compareceu': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+            case 'No-show': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
             default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
         }
     };

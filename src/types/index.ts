@@ -1,4 +1,4 @@
-export type AppointmentStatus = 'Cancelado' | 'Esquecimento' | 'Não compareceu' | 'Pendente' | 'Realizado' | 'Reagendado';
+export type AppointmentStatus = 'Cancelado' | 'Esquecimento' | 'No-show' | 'Pendente' | 'Realizado' | 'Reagendado';
 export type AppointmentType = 'Ligação SDR' | 'Ligação Closer' | 'Agendamento Pessoal' | 'Reagendamento Closer' | 'Upgrade';
 export type ProfileLevel = 'Alto' | 'Mediano' | 'Desconhecido';
 export type KnowledgeLevel = 'Iniciante' | 'Intermediário' | 'Avançado';
@@ -90,5 +90,5 @@ export interface Client {
 }
 
 export const APPOINTMENT_STATUSES: AppointmentStatus[] = [
-    'Cancelado', 'Esquecimento', 'Não compareceu', 'Pendente', 'Realizado', 'Reagendado'
+    'Cancelado', 'Esquecimento', 'No-show', 'Pendente', 'Realizado', 'Reagendado'
 ];

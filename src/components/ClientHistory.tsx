@@ -119,7 +119,7 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                 </svg>
                             );
                             bgColor = 'bg-orange-500';
-                        } else if (status === 'Não compareceu') {
+                        } else if (status === 'No-show') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
                                     <line x1="18" y1="6" x2="6" y2="18"></line>
