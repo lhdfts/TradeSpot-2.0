@@ -474,7 +474,27 @@ export const Metrics: React.FC = () => {
                         showYAxis={false}
                         showGridLines={false}
                         startEndOnly={false}
-                        className="mt-4 h-80 [&_text]:text-[8px] md:[&_text]:text-[10px]"
+                        className="mt-4 h-80 [&_text]:text-[8px] md:[&_text]:text-[10px] [&_text]:fill-secondary"
+                        customTooltip={(props) => {
+                            const { payload, active, label } = props;
+                            if (!active || !payload) return null;
+                            return (
+                                <div className="bg-surface border border-border p-3 shadow-xl rounded-lg min-w-[140px] z-50">
+                                    <p className="text-primary font-bold mb-2 border-b border-border pb-1 text-sm">{label}</p>
+                                    <div className="space-y-1.5">
+                                        {payload.map((category: any, idx: number) => (
+                                            <div key={idx} className="flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={cn("w-2 h-2 rounded-full", `bg-${category.color}-500`)} />
+                                                    <span className="text-[11px] text-secondary">{category.name}</span>
+                                                </div>
+                                                <span className="text-[11px] font-bold text-primary">{category.value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        }}
                     />
 
                     <List className="mt-8">
