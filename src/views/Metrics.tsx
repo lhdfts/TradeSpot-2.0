@@ -8,7 +8,6 @@ import { Select } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
 import {
     BarChart,
-    Card,
     List,
     ListItem,
 } from '@tremor/react';
@@ -50,7 +49,7 @@ export const Metrics: React.FC = () => {
     });
 
     // --- DATA CALCULATION ---
-    const { sdrRanking, closerRanking, chartData, totals } = useMemo(() => {
+    const { sdrRanking, closerRanking, chartData, totals, filteredAppointments } = useMemo(() => {
         // 1. Filter Appointments by Date & Sector (if applicable)
         const filtered = appointments.filter(a => {
             if (!a.date) return false;
@@ -100,8 +99,8 @@ export const Metrics: React.FC = () => {
         filtered.forEach(a => {
             if (a.attendantId) {
                 const attendant = attendants.find(att => att.id === a.attendantId);
-                // Filter by Closer Sector
-                if (attendant && (sectorFilter === 'all' || attendant.sector === 'Closer')) {
+                // Filter by Closer Sector AND Role Colaborador
+                if (attendant && attendant.sector === 'Closer' && (attendant.role === 'Colaborador')) {
                     if (!closerMap.has(a.attendantId)) {
                         closerMap.set(a.attendantId, { name: attendant.name, realized: 0, total: 0 });
                     }
@@ -196,7 +195,7 @@ export const Metrics: React.FC = () => {
             });
         });
 
-        return { sdrRanking, closerRanking, chartData, totals };
+        return { sdrRanking, closerRanking, chartData, totals, filteredAppointments: filtered };
     }, [appointments, selectedMonth, selectedYear, attendantFilter, eventFilter, attendants, sectorFilter]);
 
     const statusColors: Record<string, string> = {
@@ -210,6 +209,35 @@ export const Metrics: React.FC = () => {
 
     const valueFormatter = (number: number) =>
         Intl.NumberFormat('pt-BR').format(number).toString();
+
+    const handleExport = () => {
+        if (!filteredAppointments.length) return;
+
+        const headers = ['Data', 'Horario', 'Lead', 'Telefone', 'Email', 'Tipo', 'Status', 'Atendente', 'Evento'];
+        const csvRows = filteredAppointments.map((appt: any) => {
+            const attendant = attendants.find(att => att.id === appt.attendantId);
+            const event = events.find(e => e.id === appt.eventId);
+            return [
+                appt.date,
+                appt.time,
+                `"${appt.lead?.replace(/"/g, '""')}"`,
+                appt.phone,
+                appt.email || '',
+                appt.type,
+                appt.status,
+                `"${attendant?.name || ''}"`,
+                `"${event?.event_name || ''}"`
+            ].map(v => v || '').join(',');
+        });
+
+        const csvString = [headers.join(','), ...csvRows].join('\n');
+        const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+        const link = document.body.appendChild(document.createElement('a'));
+        link.href = URL.createObjectURL(blob);
+        link.download = `metricas_${parseInt(selectedMonth) + 1}_${selectedYear}.csv`;
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
         <div className="space-y-6">
@@ -284,7 +312,11 @@ export const Metrics: React.FC = () => {
                         className="w-48"
                     />
 
-                    <div className="cursor-pointer ml-auto">
+                    <div
+                        className="cursor-pointer ml-auto hover:text-blue-500 transition-colors p-2"
+                        onClick={handleExport}
+                        title="Exportar CSV"
+                    >
                         <ExportIcon />
                     </div>
                 </div>
@@ -410,9 +442,9 @@ export const Metrics: React.FC = () => {
 
             {/* Chart */}
             {(sectorFilter === 'all' || sectorFilter === 'Closer') && (
-                <Card>
+                <div className="bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
                     <div className="flex items-center gap-2 mb-6">
-                        <h3 className="text-lg font-semibold text-tremor-content-strong dark:text-dark-tremor-content-strong">
+                        <h3 className="text-lg font-semibold text-primary">
                             Agendamentos por Dia (Closer)
                         </h3>
                     </div>
@@ -429,12 +461,12 @@ export const Metrics: React.FC = () => {
                             'Não compareceu'
                         ]}
                         colors={[
-                            statusColors['Realizado'],
-                            statusColors['Pendente'],
-                            statusColors['Cancelado'],
-                            statusColors['Reagendado'],
-                            statusColors['Esquecimento'],
-                            statusColors['Não compareceu']
+                            'emerald',
+                            'amber',
+                            'red',
+                            'blue',
+                            'violet',
+                            'rose'
                         ]}
                         valueFormatter={valueFormatter}
                         stack={true}
@@ -442,7 +474,7 @@ export const Metrics: React.FC = () => {
                         showYAxis={false}
                         showGridLines={false}
                         startEndOnly={false}
-                        className="mt-8 h-96"
+                        className="mt-4 h-80 [&_text]:text-[8px] md:[&_text]:text-[10px]"
                     />
 
                     <List className="mt-8">
@@ -465,13 +497,13 @@ export const Metrics: React.FC = () => {
                                     />
                                     <span>{status}</span>
                                 </div>
-                                <span className="font-medium text-tremor-content-strong dark:text-dark-tremor-content-strong">
+                                <span className="font-medium text-primary">
                                     {valueFormatter(totals[status] || 0)}
                                 </span>
                             </ListItem>
                         ))}
                     </List>
-                </Card>
+                </div>
             )}
 
             <RankingModal
