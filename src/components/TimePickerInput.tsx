@@ -10,7 +10,7 @@ interface TimePickerInputProps {
     disabled?: boolean;
     readOnly?: boolean;
     availableTimes?: string[];
-    minTime?: string;
+    minTime?: string; // Format HH:MM - Should be the earliest allowed time slot
 }
 
 export const TimePickerInput: React.FC<TimePickerInputProps> = ({

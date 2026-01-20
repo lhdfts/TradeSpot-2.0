@@ -85,21 +85,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         const allTimes = generateAllTimes();
         const filtered = allTimes.filter(time => {
-            // Buffer: Prevent appointments within the next 10 minutes
-            const nowPT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-            const [h, m] = time.split(':').map(Number);
-            const apptDateTime = new Date(nowPT);
-            const [y, mon, d] = formData.date.split('-').map(Number);
-            apptDateTime.setFullYear(y, mon - 1, d);
-            apptDateTime.setHours(h, m, 0, 0);
-
-            const diffMinutes = (apptDateTime.getTime() - nowPT.getTime()) / (1000 * 60);
-
-            // If it's today and the time is less than 10 minutes away, filter it out
-            if (diffMinutes < 10) {
-                return false;
-            }
-
             // 1. Manually Selected Attendant
             if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
                 const attendant = attendants.find(a => a.id === formData.attendantId);
@@ -109,6 +94,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
 
             // 2. Automatic Distribution (or nothing selected yet)
+            // Returns true if ANY closer is available (findAvailableCloser encapsulates schedule & conflict checks)
             const available = findAvailableCloser(formData.date, time, formData.type, attendants, appointments);
             return !!available;
         });
@@ -412,25 +398,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         // Helper to check availability
         const checkAvailability = (attendantId: string) => {
-            // 0. Buffer Check (10 minutes)
-            const nowPT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-            const [h, m] = formData.time.split(':').map(Number);
-            const apptDateTime = new Date(nowPT);
-            const [y, mon, d] = formData.date.split('-').map(Number);
-            apptDateTime.setFullYear(y, mon - 1, d);
-            apptDateTime.setHours(h, m, 0, 0);
-
-            const diffMinutes = (apptDateTime.getTime() - nowPT.getTime()) / (1000 * 60);
-
-            if (diffMinutes < 10 && !initialData) {
-                toastManager.add({
-                    title: "Erro de Horário",
-                    description: "Não é possível realizar agendamentos com menos de 10 minutos de antecedência.",
-                    type: 'error'
-                });
-                return false;
-            }
-
             const selectedAttendant = attendants.find(a => a.id === attendantId);
             if (!selectedAttendant) return true; // Can't validate if not found
 
@@ -480,10 +447,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
             // Resolve Automatic Distribution on Submit
             if (formData.attendantId === 'distribuicao_automatica') {
-                if (!checkAvailability('distribuicao_automatica')) {
-                    setIsSaving(false);
-                    return;
-                }
                 const bestCloser = findAvailableCloser(
                     formData.date,
                     formData.time,
@@ -495,12 +458,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     finalAttendantId = bestCloser.id;
                 } else {
                     alert('Não há closers disponíveis para este horário.');
-                    setIsSaving(false);
-                    return;
-                }
-            } else if (!initialData) {
-                // For any other non-edit appointment with a fixed attendant
-                if (!checkAvailability(formData.attendantId)) {
                     setIsSaving(false);
                     return;
                 }
@@ -648,10 +605,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         const minutes = String(brazilDate.getMinutes()).padStart(2, '0');
         const nowTimeStr = `${hours}:${minutes}`;
 
-        return { todayDate, todayStr, nowTimeStr };
+        // Calculate minTime with 10 minute buffer
+        const bufferDate = new Date(brazilDate.getTime() + 10 * 60000);
+        const bufferHours = String(bufferDate.getHours()).padStart(2, '0');
+        const bufferMinutes = String(bufferDate.getMinutes()).padStart(2, '0');
+        const minTimeStr = `${bufferHours}:${bufferMinutes}`;
+
+        return { todayDate, todayStr, nowTimeStr, minTimeStr };
     };
 
-    const { todayDate, todayStr, nowTimeStr } = getBrazilStats();
+    const { todayDate, todayStr, minTimeStr } = getBrazilStats();
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -885,7 +848,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 label="Horário"
                                 value={formData.time}
                                 onChange={(time) => setFormData({ ...formData, time })}
-                                minTime={formData.date === todayStr ? nowTimeStr : undefined}
+                                minTime={formData.date === todayStr ? minTimeStr : undefined}
                                 disabled={isEditing || !formData.date}
                                 availableTimes={availableTimes}
                             />

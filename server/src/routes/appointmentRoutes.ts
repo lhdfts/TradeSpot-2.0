@@ -48,6 +48,17 @@ router.post('/', async (req: Request, res: Response) => {
         }
 
         const data = validation.data;
+        // 0. Buffer Check (10 minutes)
+        const now = new Date();
+        const brazilTimeStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+        const brazilNow = new Date(brazilTimeStr);
+        const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Assuming Brasilia time
+
+        const diffMinutes = (apptDateTime.getTime() - brazilNow.getTime()) / 60000;
+        if (diffMinutes < 10) {
+            return res.status(400).json({ error: 'Appointments must be scheduled at least 10 minutes in advance.' });
+        }
+
         const cleanPhone = data.phone.replace(/\D/g, '');
         let finalAttendantId = data.attendantId;
 
