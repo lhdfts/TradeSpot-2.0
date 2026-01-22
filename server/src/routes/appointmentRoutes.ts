@@ -42,7 +42,7 @@ router.post('/', async (req: Request, res: Response) => {
         if (!validation.success) {
             console.error("Validation Error Details:", JSON.stringify(validation.error.format(), null, 2));
             return res.status(400).json({
-                error: 'Validation Error',
+                error: 'Erro de Validação',
                 details: validation.error.format()
             });
         }
@@ -56,7 +56,7 @@ router.post('/', async (req: Request, res: Response) => {
 
         const diffMinutes = (apptDateTime.getTime() - brazilNow.getTime()) / 60000;
         if (data.type !== 'Fora da Agenda' && diffMinutes < 10) {
-            return res.status(400).json({ error: 'Appointments must be scheduled at least 10 minutes in advance.' });
+            return res.status(400).json({ error: 'Os agendamentos devem ser marcados com pelo menos 10 minutos de antecedência.' });
         }
 
         const cleanPhone = data.phone.replace(/\D/g, '');
@@ -66,7 +66,7 @@ router.post('/', async (req: Request, res: Response) => {
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
             const availableId = await findBestAttendant(data.date, data.time, data.type);
             if (!availableId) {
-                return res.status(409).json({ error: 'No attendants available for this time slot.' });
+                return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
             }
             finalAttendantId = availableId;
         } else {
@@ -78,13 +78,13 @@ router.post('/', async (req: Request, res: Response) => {
                 .single();
 
             if (attError || !attendant) {
-                return res.status(400).json({ error: 'Attendant not found.' });
+                return res.status(400).json({ error: 'Atendente não encontrado.' });
             }
 
             if (data.type !== 'Fora da Agenda') {
                 const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type);
                 if (!isWithinSchedule) {
-                    return res.status(409).json({ error: 'Attendant is not available at this time (Schedule/Pause).' });
+                    return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
                 }
             }
         }
@@ -103,7 +103,7 @@ router.post('/', async (req: Request, res: Response) => {
             // @ts-ignore
             const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts);
             if (hasConflict) {
-                return res.status(409).json({ error: 'Conflict: This attendant is already busy at this time.' });
+                return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
             }
         }
 
@@ -138,7 +138,7 @@ router.post('/', async (req: Request, res: Response) => {
             if (newClient) clientId = newClient.id;
         }
 
-        if (!clientId) throw new Error("Failed to resolve client.");
+        if (!clientId) throw new Error("Falha ao resolver o cliente.");
 
         // 4.5 Google Meet
         let meetLink = data.meetLink;
@@ -203,7 +203,7 @@ router.post('/', async (req: Request, res: Response) => {
 
         if (appError) {
             console.error("Supabase Write Error:", appError);
-            return res.status(500).json({ error: 'Database Error', details: appError.message });
+            return res.status(500).json({ error: 'Erro no Banco de Dados', details: appError.message });
         }
 
         // Response
@@ -269,7 +269,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     } catch (err: any) {
         console.error("Create Appointment Error:", err);
-        res.status(500).json({ error: 'Internal Server Error', details: err.message });
+        res.status(500).json({ error: 'Erro Interno do Servidor', details: err.message });
     }
 });
 
@@ -279,7 +279,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     try {
         const validation = createAppointmentSchema.partial().safeParse(req.body);
         if (!validation.success) {
-            return res.status(400).json({ error: 'Validation Error', details: validation.error.format() });
+            return res.status(400).json({ error: 'Erro de Validação', details: validation.error.format() });
         }
         const updates = validation.data;
 
@@ -289,7 +289,7 @@ router.put('/:id', async (req: Request, res: Response) => {
             .eq('id', id)
             .single();
 
-        if (fetchError || !currentApp) return res.status(404).json({ error: 'Appointment not found' });
+        if (fetchError || !currentApp) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
         const merged = { ...currentApp, ...updates };
 
@@ -311,7 +311,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
                     if (!isWithin) {
                         console.error(`[DEBUG] Schedule Mismatch Details: Attendant Schedule: ${JSON.stringify(attendant.schedule)}, Pauses: ${JSON.stringify(attendant.pauses)}`);
-                        return res.status(409).json({ error: 'Attendant is not available (Schedule/Pause).' });
+                        return res.status(409).json({ error: 'O atendente não está disponível (Escala/Pausa).' });
                     }
                 }
             } else {
@@ -351,7 +351,7 @@ router.put('/:id', async (req: Request, res: Response) => {
                         } else {
                             console.error(`[DEBUG] Conflict Found but could not identify specific appointment (Logic Mismatch?).`);
                         }
-                        return res.status(409).json({ error: 'Conflict: Attendant is busy.' });
+                        return res.status(409).json({ error: 'Conflito: O atendente está ocupado.' });
                     }
                 }
             }
@@ -391,7 +391,7 @@ router.put('/:id', async (req: Request, res: Response) => {
             .select()
             .single();
 
-        if (updateError) return res.status(500).json({ error: 'Update Failed', details: updateError.message });
+        if (updateError) return res.status(500).json({ error: 'Falha na Atualização', details: updateError.message });
 
         // Google Guests Sync
         if (updates.attendantId && currentApp.attendant_id !== updates.attendantId && currentApp.google_event_id && updated.status !== 'Cancelado') {
@@ -479,7 +479,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     } catch (err: any) {
         console.error("Update Error:", err);
-        res.status(500).json({ error: 'Internal Server Error', details: err.message });
+        res.status(500).json({ error: 'Erro Interno do Servidor', details: err.message });
     }
 });
 
