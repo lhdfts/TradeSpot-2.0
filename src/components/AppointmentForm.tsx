@@ -949,11 +949,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         options={attendantOptions}
                                         disabled={
                                             // Enabled if:
-                                            // 1. Creating new 'Upgrade' appointment
+                                            // 1. Creating new 'Upgrade' or 'Fora da agenda' appointment
                                             // 2. Editing existing appointment AND user has specific role permissions
                                             isEditing
                                                 ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
-                                                : (formData.type !== 'Upgrade')
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda')
                                         }
                                         error={errors.attendantId}
                                     />
