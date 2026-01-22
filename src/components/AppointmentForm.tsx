@@ -144,6 +144,26 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             .map(a => ({ value: a.id, label: a.name }))
     ];
 
+    const eventOptions = React.useMemo(() => {
+        // Filter active events by sector (or if user is privileged)
+        const filtered = events.filter(e =>
+            e.status === true && (
+                !e.sector ||
+                (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder'].includes(user.role) || user.sector === e.sector))
+            )
+        );
+
+        // If we are editing and the current event is not in the list, add it
+        if (initialData?.eventId && !filtered.some(e => e.id === initialData.eventId)) {
+            const currentEvent = events.find(e => e.id === initialData.eventId);
+            if (currentEvent) {
+                filtered.push(currentEvent);
+            }
+        }
+
+        return filtered.map(e => ({ value: e.id, label: e.event_name }));
+    }, [events, user, initialData]);
+
     useEffect(() => {
         if (initialData) {
             setFormData({
@@ -803,7 +823,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                     setErrors(prev => ({ ...prev, eventId: 'Evento é obrigatório' }));
                                 }
                             }}
-                            options={[...events.filter(e => e.status === true && (!e.sector || (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder'].includes(user.role) || user.sector === e.sector)))).map(e => ({ value: e.id, label: e.event_name }))]}
+                            options={eventOptions}
                             disabled={isEditing}
                             error={errors.eventId}
                         />
