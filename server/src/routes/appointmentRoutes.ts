@@ -221,15 +221,18 @@ router.post('/', async (req: Request, res: Response) => {
         };
 
         // Webhook
-        const names: any = { attendant_name: null, created_by_name: null, event_name: null };
+        const names: any = { attendant_name: null, created_by_name: null, creator_sector: null, event_name: null };
         const idsToFetch = [finalAttendantId, appointmentPayload.created_by].filter(Boolean) as string[];
         if (idsToFetch.length > 0) {
-            const { data: users } = await supabase.from('user').select('id, name').in('id', idsToFetch);
+            const { data: users } = await supabase.from('user').select('id, name, sector').in('id', idsToFetch);
             if (users) {
                 const att = users.find(u => u.id === finalAttendantId);
                 if (att) names.attendant_name = att.name;
                 const cr = users.find(u => u.id === appointmentPayload.created_by);
-                if (cr) names.created_by_name = cr.name;
+                if (cr) {
+                    names.created_by_name = cr.name;
+                    names.creator_sector = cr.sector;
+                }
             }
         }
         if (data.eventId) {
@@ -242,6 +245,7 @@ router.post('/', async (req: Request, res: Response) => {
             type: data.type,
             attendant_name: names.attendant_name,
             created_by_name: names.created_by_name,
+            creator_sector: names.creator_sector,
             event_name: names.event_name,
             attendant_id: undefined, created_by: undefined, event_id: undefined
         };
@@ -441,6 +445,19 @@ router.put('/:id', async (req: Request, res: Response) => {
                         .eq('id', updated.event_id)
                         .single();
                     if (ev) enrichedPayload.event_name = ev.event_name;
+                }
+
+                // 4. Fetch Creator Details (name and sector)
+                if (updated.created_by) {
+                    const { data: creator } = await supabase
+                        .from('user')
+                        .select('name, sector')
+                        .eq('id', updated.created_by)
+                        .single();
+                    if (creator) {
+                        enrichedPayload.created_by_name = creator.name;
+                        enrichedPayload.creator_sector = creator.sector;
+                    }
                 }
 
                 // 4. Send Webhook
