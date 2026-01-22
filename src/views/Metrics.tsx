@@ -7,11 +7,6 @@ import { Button } from '../components/ui/button';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { ExportIcon } from '../components/ExportIcon';
 import {
-    BarChart as TremorBarChart,
-    List,
-    ListItem,
-} from '@tremor/react';
-import {
     ComposedChart,
     Bar,
     XAxis,
@@ -263,14 +258,6 @@ export const Metrics: React.FC = () => {
         return { sdrRanking, closerRanking, chartData, totals, filteredAppointments: filtered, sdrTotal, closerTotal, chartTotal };
     }, [appointments, selectedMonth, selectedYear, attendantFilter, eventFilter, attendants, sectorFilter, uniqueClients]);
 
-    const statusColors: Record<string, string> = {
-        'Realizado': 'emerald',
-        'Pendente': 'amber',
-        'Cancelado': 'red',
-        'Reagendado': 'blue',
-        'Esquecimento': 'violet',
-        'No-show': 'rose'
-    };
 
     const valueFormatter = (number: number) =>
         Intl.NumberFormat('pt-BR').format(number).toString();
