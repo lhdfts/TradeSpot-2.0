@@ -18,39 +18,41 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
             title={title}
             maxWidthClass="max-w-6xl" // Wider modal as requested
         >
-            <div className="mt-4">
-                <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-4 uppercase tracking-wider">
-                    <div className="col-span-3">Nome</div>
-                    <div className="col-span-1 text-center">T. Rec.</div>
-                    <div className="col-span-1 text-center text-emerald-500">Real.</div>
-                    <div className="col-span-1 text-center text-red-500">Can.</div>
-                    <div className="col-span-1 text-center text-violet-500">Esq.</div>
-                    <div className="col-span-1 text-center text-rose-500">N.S</div>
-                    <div className="col-span-1 text-center text-blue-500">Reag.</div>
+            <div className="mt-4 overflow-x-auto">
+                <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-4 uppercase tracking-wider min-w-[1000px]">
+                    <div className="col-span-2">Nome</div>
+                    <div className="col-span-1 text-center">{type === 'sdr' ? 'Total Agendado' : 'Total Recebido'}</div>
+                    <div className="col-span-1 text-center text-emerald-500">Realizado</div>
+                    <div className="col-span-1 text-center text-red-500">Cancelado</div>
+                    <div className="col-span-1 text-center text-violet-500">Esquecimento</div>
+                    <div className="col-span-1 text-center text-rose-500">No-show</div>
+                    <div className="col-span-1 text-center text-blue-500">Reagendado</div>
                     {type === 'sdr' ? (
                         <>
-                            <div className="col-span-1 text-center text-blue-400">Ligação</div>
-                            <div className="col-span-1 text-center text-orange-400">R. Clo.</div>
+                            <div className="col-span-1 text-center text-blue-400">Ligação Closer</div>
+                            <div className="col-span-2 text-center text-orange-400">Reagendamento Closer</div>
                             <div className="col-span-1 text-center text-purple-400">Upgrade</div>
                         </>
                     ) : (
-                        <div className="col-span-3" />
+                        <div className="col-span-4" />
                     )}
                 </div>
 
-                <div className="space-y-1 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-1 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar min-w-[1000px]">
                     {data.map((item, idx) => {
                         let rowStyle = 'bg-background border-l-4 border-transparent';
-                        if (idx === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
-                        else if (idx === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
-                        else if (idx === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
+                        const rank = item.originalRank !== undefined ? item.originalRank : idx;
+
+                        if (rank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
+                        else if (rank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
+                        else if (rank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
 
                         return (
                             <div key={idx} className={cn(
                                 "grid grid-cols-12 items-center p-3 rounded-r-lg transition-colors border-b border-border/10",
                                 rowStyle
                             )}>
-                                <div className="col-span-3 font-medium text-foreground text-sm truncate" title={item.name}>
+                                <div className="col-span-2 font-medium text-foreground text-sm truncate" title={item.name}>
                                     {item.name}
                                 </div>
                                 <div className="col-span-1 text-center font-bold text-foreground text-xs">
@@ -71,18 +73,20 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                                 <div className="col-span-1 text-center text-blue-400 text-xs">
                                     {item.Reagendado}
                                 </div>
-                                {type === 'sdr' && (
+                                {type === 'sdr' ? (
                                     <>
                                         <div className="col-span-1 text-center text-blue-400 text-xs font-medium">
                                             {item.ligacao}
                                         </div>
-                                        <div className="col-span-1 text-center text-orange-400 text-xs font-medium">
+                                        <div className="col-span-2 text-center text-orange-400 text-xs font-medium">
                                             {item.reagendamento}
                                         </div>
                                         <div className="col-span-1 text-center text-purple-400 text-xs font-medium">
                                             {item.upgrade}
                                         </div>
                                     </>
+                                ) : (
+                                    <div className="col-span-4" />
                                 )}
                             </div>
                         );
