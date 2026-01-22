@@ -398,7 +398,7 @@ export const Metrics: React.FC = () => {
                         <div className="flex justify-between items-start mb-6">
                             <div>
                                 <h3 className="text-lg font-bold text-foreground">Agendamentos por SDR</h3>
-                                <p className="text-xs text-secondary mt-1">Total de agendamentos marcados (Ligação Closer, Reagendamento Closer e Upgrade)</p>
+                                <p className="text-xs text-secondary mt-1">Total de agendamentos marcados</p>
                             </div>
                             <div className="flex items-center gap-4">
                                 <span className="text-lg font-bold text-foreground">Total: {sdrTotal}</span>
@@ -418,9 +418,8 @@ export const Metrics: React.FC = () => {
                         </div>
 
                         <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
-                            <div className="col-span-3">Nome</div>
-                            <div className="col-span-1.5 text-center">T. Marc.</div>
-                            <div className="col-span-1.5 text-center text-emerald-500">Real.</div>
+                            <div className="col-span-4">Nome</div>
+                            <div className="col-span-2 text-center">T. Marc.</div>
                             <div className="col-span-2 text-center text-blue-500">Lig. Clo.</div>
                             <div className="col-span-2 text-center text-orange-500">R. Clo.</div>
                             <div className="col-span-2 text-center text-purple-500">Upgrade</div>
@@ -434,15 +433,12 @@ export const Metrics: React.FC = () => {
                                 else if (idx === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
 
                                 return (
-                                    <div key={idx} className={`grid grid-cols-12 items-center p-2 rounded-r-lg ${rowStyle} transition-colors border-b border-border/50 last:border-0`}>
-                                        <div className="col-span-3 font-medium text-foreground text-[12px] truncate" title={sdr.name}>
+                                    <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors`}>
+                                        <div className="col-span-4 font-medium text-foreground text-[12px] truncate" title={sdr.name}>
                                             {sdr.name}
                                         </div>
-                                        <div className="col-span-1.5 text-center font-bold text-foreground text-[11px]">
+                                        <div className="col-span-2 text-center font-bold text-foreground text-[11px]">
                                             {sdr.total}
-                                        </div>
-                                        <div className="col-span-1.5 text-center font-bold text-emerald-500 text-[11px]">
-                                            {sdr.Realizado}
                                         </div>
                                         <div className="col-span-2 text-center text-blue-400 text-[11px] font-medium">
                                             {sdr.ligacao}
@@ -487,13 +483,9 @@ export const Metrics: React.FC = () => {
                         </div>
 
                         <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
-                            <div className="col-span-4">Nome</div>
-                            <div className="col-span-2 text-center">T. Rec.</div>
-                            <div className="col-span-2 text-center text-emerald-500">Real.</div>
-                            <div className="col-span-1 text-center text-red-500">Can.</div>
-                            <div className="col-span-1 text-center text-violet-500">Esq.</div>
-                            <div className="col-span-1 text-center text-rose-500">N.S</div>
-                            <div className="col-span-1 text-center text-blue-500">Reag.</div>
+                            <div className="col-span-6">Nome</div>
+                            <div className="col-span-3 text-center">T. Rec.</div>
+                            <div className="col-span-3 text-center text-emerald-500">Real.</div>
                         </div>
 
                         <div className="space-y-2">
@@ -505,26 +497,14 @@ export const Metrics: React.FC = () => {
 
                                 return (
                                     <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors`}>
-                                        <div className="col-span-4 font-medium text-foreground text-[13px] truncate" title={closer.name}>
+                                        <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={closer.name}>
                                             {closer.name}
                                         </div>
-                                        <div className="col-span-2 text-center font-bold text-foreground text-xs">
+                                        <div className="col-span-3 text-center font-bold text-foreground text-xs">
                                             {closer.total}
                                         </div>
-                                        <div className="col-span-2 text-center font-bold text-emerald-500 text-xs">
+                                        <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
                                             {closer.Realizado}
-                                        </div>
-                                        <div className="col-span-1 text-center text-red-500 text-xs">
-                                            {closer.Cancelado}
-                                        </div>
-                                        <div className="col-span-1 text-center text-violet-400 text-xs">
-                                            {closer.Esquecimento}
-                                        </div>
-                                        <div className="col-span-1 text-center text-rose-400 text-xs">
-                                            {closer['No-show']}
-                                        </div>
-                                        <div className="col-span-1 text-center text-blue-400 text-xs">
-                                            {closer.Reagendado}
                                         </div>
                                     </div>
                                 );
