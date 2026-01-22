@@ -13,22 +13,25 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={title}>
-            <div className="max-h-[60vh] overflow-y-auto pr-2">
+            <div className="max-h-[75vh] overflow-y-auto pr-2">
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                     {/* Header */}
-                    <div className="grid grid-cols-12 bg-background/50 p-3 text-xs font-bold text-secondary uppercase tracking-wider border-b border-border sticky top-0">
-                        <div className="col-span-6">Nome</div>
+                    <div className="grid grid-cols-12 bg-background/50 p-3 text-[10px] font-bold text-secondary uppercase tracking-wider border-b border-border sticky top-0 bg-surface z-10">
+                        <div className="col-span-2">Nome</div>
+                        <div className="col-span-1 text-center">T. Rec.</div>
+                        <div className="col-span-1 text-center text-emerald-500">Real.</div>
+                        <div className="col-span-1 text-center text-red-500">Can.</div>
+                        <div className="col-span-1 text-center text-violet-500">Esq.</div>
+                        <div className="col-span-1 text-center text-rose-500">N.S</div>
+                        <div className="col-span-1 text-center text-blue-500">Reag.</div>
                         {type === 'sdr' ? (
                             <>
-                                <div className="col-span-2 text-center">Marcados</div>
-                                <div className="col-span-2 text-center" title="Ligação Closer">Lig. Closer</div>
-                                <div className="col-span-2 text-center" title="Reagendamento Closer">Reag.</div>
+                                <div className="col-span-1.5 text-center text-blue-400">Lig.</div>
+                                <div className="col-span-1.5 text-center text-orange-400">R. Clo.</div>
+                                <div className="col-span-1 text-center text-purple-400">Upgr.</div>
                             </>
                         ) : (
-                            <>
-                                <div className="col-span-3 text-center">Realizados</div>
-                                <div className="col-span-3 text-center">Total Recebido</div>
-                            </>
+                            <div className="col-span-4" />
                         )}
                     </div>
 
@@ -44,31 +47,41 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
 
                             return (
                                 <div key={idx} className={`grid grid-cols-12 items-center p-3 transition-colors ${rowStyle}`}>
-                                    <div className="col-span-6 font-medium text-primary text-sm truncate" title={item.name}>
+                                    <div className="col-span-2 font-medium text-foreground text-xs truncate" title={item.name}>
                                         {item.name}
                                     </div>
-
+                                    <div className="col-span-1 text-center font-bold text-foreground text-xs">
+                                        {item.total}
+                                    </div>
+                                    <div className="col-span-1 text-center font-bold text-emerald-500 text-xs">
+                                        {item.Realizado}
+                                    </div>
+                                    <div className="col-span-1 text-center text-red-500 text-xs">
+                                        {item.Cancelado}
+                                    </div>
+                                    <div className="col-span-1 text-center text-violet-400 text-xs">
+                                        {item.Esquecimento}
+                                    </div>
+                                    <div className="col-span-1 text-center text-rose-400 text-xs">
+                                        {item['No-show']}
+                                    </div>
+                                    <div className="col-span-1 text-center text-blue-400 text-xs">
+                                        {item.Reagendado}
+                                    </div>
                                     {type === 'sdr' ? (
                                         <>
-                                            <div className="col-span-2 text-center font-bold text-blue-400 text-sm">
-                                                {item.total}
-                                            </div>
-                                            <div className="col-span-2 text-center text-sm text-secondary">
+                                            <div className="col-span-1.5 text-center text-blue-400 text-xs">
                                                 {item.ligacao}
                                             </div>
-                                            <div className="col-span-2 text-center text-sm text-secondary">
+                                            <div className="col-span-1.5 text-center text-orange-400 text-xs">
                                                 {item.reagendamento}
+                                            </div>
+                                            <div className="col-span-1 text-center text-purple-400 text-xs">
+                                                {item.upgrade}
                                             </div>
                                         </>
                                     ) : (
-                                        <>
-                                            <div className="col-span-3 text-center font-bold text-green-600 text-sm">
-                                                {item.realized}
-                                            </div>
-                                            <div className="col-span-3 text-center font-medium text-green-300 text-sm">
-                                                {item.total}
-                                            </div>
-                                        </>
+                                        <div className="col-span-4" />
                                     )}
                                 </div>
                             );
