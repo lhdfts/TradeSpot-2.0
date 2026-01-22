@@ -172,6 +172,15 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     return (
         <div className="space-y-6">
+            <div className="flex justify-end">
+                <div className="flex flex-col text-right">
+                    <span className="text-[12px] tracking-wider text-secondary font-bold">Quantidade</span>
+                    <span className="text-2xl font-bold text-foreground leading-none">
+                        {filtered.length}
+                    </span>
+                </div>
+            </div>
+
             {/* Controls Bar */}
             <div className="flex flex-col xl:flex-row gap-4 bg-surface p-4 rounded-lg border border-border shadow-sm">
                 {/* Search */}
@@ -248,13 +257,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                 </div>
 
                 {/* View Toggle & Actions */}
-                <div className="flex items-center gap-6 border-l border-border pl-6 ml-auto">
-                    <div className="flex flex-col text-right">
-                        <span className="text-[10px] tracking-wider text-secondary font-bold">Quantidade</span>
-                        <span className="text-xl font-bold text-foreground leading-none">
-                            {filtered.length}
-                        </span>
-                    </div>
+                <div className="flex items-center gap-2 border-l border-border pl-4 ml-auto">
 
                     <div>
                         <div className="flex bg-background rounded-lg p-1 border border-border h-11 items-center">
