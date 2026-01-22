@@ -83,6 +83,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return;
         }
 
+        if (formData.type === 'Fora da agenda') {
+            setAvailableTimes(generateAllTimes());
+            return;
+        }
+
         const allTimes = generateAllTimes();
         const filtered = allTimes.filter(time => {
             // 1. Manually Selected Attendant
@@ -111,7 +116,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             { value: 'Ligação Closer', label: 'Ligação Closer' },
             { value: 'Agendamento Pessoal', label: 'Agendamento Pessoal' },
             { value: 'Reagendamento Closer', label: 'Reagendamento Closer' },
-            { value: 'Upgrade', label: 'Upgrade' }
+            { value: 'Upgrade', label: 'Upgrade' },
+            { value: 'Fora da agenda', label: 'Fora da agenda' }
         ];
 
         if (!user) return [];
@@ -134,10 +140,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     }, [user]);
 
     const attendantOptions = [
-        { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
+        ...(formData.type === 'Fora da agenda' ? [] : [{ value: 'distribuicao_automatica', label: 'Distribuição Automática' }]),
         ...attendants
             .filter(a => {
-                if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer') return a.sector === 'Closer';
+                if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda') return a.sector === 'Closer';
                 if (user?.sector === 'TEI') return true;
                 return user?.sector ? a.sector === user.sector : true;
             })
@@ -418,6 +424,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         // Helper to check availability
         const checkAvailability = (attendantId: string) => {
+            if (formData.type === 'Fora da agenda') return true;
             const selectedAttendant = attendants.find(a => a.id === attendantId);
             if (!selectedAttendant) return true; // Can't validate if not found
 
@@ -860,7 +867,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             label="Data"
                             value={formData.date}
                             onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
-                            minDate={todayDate}
+                            minDate={formData.type === 'Fora da agenda' ? undefined : todayDate}
                             disabled={isEditing || !formData.email || !formData.lead || !formData.phone || !formData.eventId || !formData.type}
                         />
                         <div className="grid grid-cols-2 gap-4">
@@ -868,7 +875,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 label="Horário"
                                 value={formData.time}
                                 onChange={(time) => setFormData({ ...formData, time })}
-                                minTime={formData.date === todayStr ? minTimeStr : undefined}
+                                minTime={(formData.type !== 'Fora da agenda' && formData.date === todayStr) ? minTimeStr : undefined}
                                 disabled={isEditing || !formData.date}
                                 availableTimes={availableTimes}
                             />
