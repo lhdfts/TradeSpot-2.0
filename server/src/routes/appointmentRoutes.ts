@@ -55,7 +55,7 @@ router.post('/', async (req: Request, res: Response) => {
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Assuming Brasilia time
 
         const diffMinutes = (apptDateTime.getTime() - brazilNow.getTime()) / 60000;
-        if (data.type !== 'Fora da agenda' && diffMinutes < 10) {
+        if (data.type !== 'Fora da Agenda' && diffMinutes < 10) {
             return res.status(400).json({ error: 'Appointments must be scheduled at least 10 minutes in advance.' });
         }
 
@@ -81,7 +81,7 @@ router.post('/', async (req: Request, res: Response) => {
                 return res.status(400).json({ error: 'Attendant not found.' });
             }
 
-            if (data.type !== 'Fora da agenda') {
+            if (data.type !== 'Fora da Agenda') {
                 const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type);
                 if (!isWithinSchedule) {
                     return res.status(409).json({ error: 'Attendant is not available at this time (Schedule/Pause).' });
@@ -99,7 +99,7 @@ router.post('/', async (req: Request, res: Response) => {
             .eq('attendant_id', finalAttendantId)
             .neq('status', 'Cancelado');
 
-        if (data.type !== 'Fora da agenda' && existingAppts) {
+        if (data.type !== 'Fora da Agenda' && existingAppts) {
             // @ts-ignore
             const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts);
             if (hasConflict) {
@@ -144,7 +144,7 @@ router.post('/', async (req: Request, res: Response) => {
         let meetLink = data.meetLink;
         let googleEventId = null;
 
-        if (!meetLink) {
+        if (!meetLink && data.type !== 'Fora da Agenda') {
             const startIso = `${data.date}T${data.time}:00`;
             const endIso = `${data.date}T${endTime}:00`;
             const guestIds = [finalAttendantId, data.createdBy].filter((id): id is string => !!id);
@@ -305,7 +305,7 @@ router.put('/:id', async (req: Request, res: Response) => {
                 console.log(`[DEBUG] Checking Schedule for ${attendant.name} (${attendant.id})`);
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
-                if (merged.type !== 'Fora da agenda') {
+                if (merged.type !== 'Fora da Agenda') {
                     const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type);
                     console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
 
@@ -326,7 +326,7 @@ router.put('/:id', async (req: Request, res: Response) => {
                     .eq('attendant_id', merged.attendant_id)
                     .neq('status', 'Cancelado');
 
-                if (merged.type !== 'Fora da agenda' && existingAppts) {
+                if (merged.type !== 'Fora da Agenda' && existingAppts) {
                     // Pass 'id' as the 6th argument to exclude current appointment from conflict check
                     const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id);
                     console.log(`[DEBUG] hasConflict result: ${hasConflict}`);
