@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
@@ -172,14 +173,15 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-end">
-                <div className="flex flex-col text-right">
-                    <span className="text-[12px] tracking-wider text-secondary font-bold">Quantidade</span>
-                    <span className="text-2xl font-bold text-foreground leading-none">
+            {createPortal(
+                <div className="flex flex-col text-right mr-4">
+                    <span className="text-[10px] tracking-wider text-secondary font-bold uppercase">Quantidade</span>
+                    <span className="text-xl font-bold text-foreground leading-none">
                         {filtered.length}
                     </span>
-                </div>
-            </div>
+                </div>,
+                document.getElementById('header-actions') || document.body
+            )}
 
             {/* Controls Bar */}
             <div className="flex flex-col xl:flex-row gap-4 bg-surface p-4 rounded-lg border border-border shadow-sm">

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { Search, Copy, Calendar, Check } from 'lucide-react';
@@ -99,6 +100,15 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
 
     return (
         <div className="space-y-6">
+            {createPortal(
+                <div className="flex flex-col text-right mr-4">
+                    <span className="text-[10px] tracking-wider text-secondary font-bold uppercase">Quantidade</span>
+                    <span className="text-xl font-bold text-foreground leading-none">
+                        {filtered.length}
+                    </span>
+                </div>,
+                document.getElementById('header-actions') || document.body
+            )}
             {/* Filters */}
             <div className="flex flex-col md:flex-row gap-4 bg-surface p-4 rounded-lg border border-border shadow-sm">
                 <div className="flex-1">

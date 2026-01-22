@@ -124,6 +124,7 @@ const MainContent: React.FC = () => {
                 {currentView === '/events' && 'Gerenciar Eventos'}
               </h1>
               <div className="flex items-center gap-4">
+                <div id="header-actions" style={{ display: 'flex', alignItems: 'center' }}></div>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -134,7 +135,6 @@ const MainContent: React.FC = () => {
                 >
                   <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                 </Button>
-                <div id="header-actions" style={{ display: 'contents' }}></div>
               </div>
             </header>
 
