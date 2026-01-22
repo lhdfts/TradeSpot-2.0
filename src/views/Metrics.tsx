@@ -19,6 +19,35 @@ import { cn } from '../lib/utils';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 
+interface SDRRankingItem {
+    id: string;
+    name: string;
+    total: number;
+    'Realizado': number;
+    'Cancelado': number;
+    'Esquecimento': number;
+    'No-show': number;
+    'Reagendado': number;
+    'Pendente': number;
+    ligacao: number;
+    reagendamento: number;
+    upgrade: number;
+    originalRank?: number;
+}
+
+interface CloserRankingItem {
+    id: string;
+    name: string;
+    total: number;
+    'Realizado': number;
+    'Cancelado': number;
+    'Esquecimento': number;
+    'No-show': number;
+    'Reagendado': number;
+    'Pendente': number;
+    originalRank?: number;
+}
+
 export const Metrics: React.FC = () => {
     const { appointments } = useAppointments();
     const { attendants, events } = useFormData();
@@ -123,7 +152,7 @@ export const Metrics: React.FC = () => {
         }
 
         // 2. SDR Ranking
-        const sdrMap = new Map<string, { name: string; total: number;[key: string]: any }>();
+        const sdrMap = new Map<string, SDRRankingItem>();
         filtered.forEach(a => {
             if (a.createdBy && ['Ligação Closer', 'Reagendamento Closer', 'Upgrade'].includes(a.type)) {
                 const creator = attendants.find(att => att.id === a.createdBy);
@@ -139,9 +168,9 @@ export const Metrics: React.FC = () => {
                             'No-show': 0,
                             'Reagendado': 0,
                             'Pendente': 0,
-                            'ligacao': 0,
-                            'reagendamento': 0,
-                            'upgrade': 0
+                            ligacao: 0,
+                            reagendamento: 0,
+                            upgrade: 0
                         });
                     }
                     const stats = sdrMap.get(a.createdBy)!;
@@ -157,9 +186,9 @@ export const Metrics: React.FC = () => {
         });
 
         // Calculate original global ranking position
-        let sdrRanking = Array.from(sdrMap.values())
+        let sdrRanking = (Array.from(sdrMap.values())
             .sort((a, b) => b.total - a.total)
-            .map((item, idx) => ({ ...item, originalRank: idx }));
+            .map((item, idx) => ({ ...item, originalRank: idx })) as SDRRankingItem[]);
 
         // Apply attendant filter IF set
         if (attendantFilter) {
@@ -167,7 +196,7 @@ export const Metrics: React.FC = () => {
         }
 
         // 3. Closer Ranking
-        const closerMap = new Map<string, { name: string; total: number;[key: string]: any }>();
+        const closerMap = new Map<string, CloserRankingItem>();
         filtered.forEach(a => {
             if (a.attendantId) {
                 const attendant = attendants.find(att => att.id === a.attendantId);
@@ -195,9 +224,9 @@ export const Metrics: React.FC = () => {
         });
 
         // Calculate original global ranking position
-        let closerRanking = Array.from(closerMap.values())
+        let closerRanking = (Array.from(closerMap.values())
             .sort((a, b) => b.Realizado - a.Realizado)
-            .map((item, idx) => ({ ...item, originalRank: idx }));
+            .map((item, idx) => ({ ...item, originalRank: idx })) as CloserRankingItem[]);
 
         // Apply attendant filter IF set
         if (attendantFilter) {
