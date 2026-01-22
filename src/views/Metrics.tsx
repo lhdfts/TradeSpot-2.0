@@ -76,34 +76,30 @@ export const Metrics: React.FC = () => {
 
     // --- DATA CALCULATION ---
     const { sdrRanking, closerRanking, chartData, totals, filteredAppointments, sdrTotal, closerTotal, chartTotal } = useMemo(() => {
-        // 1. Filter Appointments by Date & Sector (if applicable)
+        // 1. Filter Appointments by Date & Event
         let filtered = appointments.filter(a => {
             if (!a.date) return false;
 
             // Period Filter (Month/Year)
-            let matchesPeriod = true;
             const apptDate = new Date(a.date + 'T12:00:00');
-
-            // Check against selected Month/Year
             if (apptDate.getMonth() !== parseInt(selectedMonth) || apptDate.getFullYear() !== parseInt(selectedYear)) {
-                matchesPeriod = false;
+                return false;
             }
 
-            // Attendant/Event Filters
-            const matchesAttendant = !attendantFilter || (() => {
-                if (sectorFilter === 'SDR') return a.createdBy === attendantFilter;
-                if (sectorFilter === 'Closer') return a.attendantId === attendantFilter;
+            // Event Filter
+            if (eventFilter && a.eventId !== eventFilter) return false;
 
-                const attObj = attendants.find(at => at.id === attendantFilter);
-                if (attObj && (attObj.sector === 'SDR' || attObj.sector === 'Leads')) {
-                    return a.createdBy === attendantFilter;
-                }
-                return a.attendantId === attendantFilter;
-            })();
+            // Sector Filter (Basic filtering for chart/totals)
+            if (sectorFilter !== 'all') {
+                const att = attendants.find(at => at.id === (sectorFilter === 'SDR' ? a.createdBy : a.attendantId));
+                if (!att) return false;
+                const isMatch = sectorFilter === 'SDR'
+                    ? (att.sector === 'SDR' || att.sector === 'Leads')
+                    : att.sector === sectorFilter;
+                if (!isMatch) return false;
+            }
 
-            const matchesEvent = !eventFilter || a.eventId === eventFilter;
-
-            return matchesPeriod && matchesAttendant && matchesEvent;
+            return true;
         });
 
         // 1.5 Unique Clients Logic
@@ -131,9 +127,10 @@ export const Metrics: React.FC = () => {
         filtered.forEach(a => {
             if (a.createdBy && ['Ligação Closer', 'Reagendamento Closer', 'Upgrade'].includes(a.type)) {
                 const creator = attendants.find(att => att.id === a.createdBy);
-                if (creator && (sectorFilter === 'all' || creator.sector === 'SDR' || creator.sector === 'Leads')) {
+                if (creator && (creator.sector === 'SDR' || creator.sector === 'Leads')) {
                     if (!sdrMap.has(a.createdBy)) {
                         sdrMap.set(a.createdBy, {
+                            id: creator.id,
                             name: creator.name,
                             total: 0,
                             'Realizado': 0,
@@ -158,7 +155,16 @@ export const Metrics: React.FC = () => {
                 }
             }
         });
-        const sdrRanking = Array.from(sdrMap.values()).sort((a, b) => b.total - a.total);
+
+        // Calculate original global ranking position
+        let sdrRanking = Array.from(sdrMap.values())
+            .sort((a, b) => b.total - a.total)
+            .map((item, idx) => ({ ...item, originalRank: idx }));
+
+        // Apply attendant filter IF set
+        if (attendantFilter) {
+            sdrRanking = sdrRanking.filter(item => item.id === attendantFilter);
+        }
 
         // 3. Closer Ranking
         const closerMap = new Map<string, { name: string; total: number;[key: string]: any }>();
@@ -168,6 +174,7 @@ export const Metrics: React.FC = () => {
                 if (attendant && attendant.sector === 'Closer' && attendant.role === 'Colaborador') {
                     if (!closerMap.has(a.attendantId)) {
                         closerMap.set(a.attendantId, {
+                            id: attendant.id,
                             name: attendant.name,
                             total: 0,
                             'Realizado': 0,
@@ -186,7 +193,16 @@ export const Metrics: React.FC = () => {
                 }
             }
         });
-        const closerRanking = Array.from(closerMap.values()).sort((a, b) => b.Realizado - a.Realizado);
+
+        // Calculate original global ranking position
+        let closerRanking = Array.from(closerMap.values())
+            .sort((a, b) => b.Realizado - a.Realizado)
+            .map((item, idx) => ({ ...item, originalRank: idx }));
+
+        // Apply attendant filter IF set
+        if (attendantFilter) {
+            closerRanking = closerRanking.filter(item => item.id === attendantFilter);
+        }
 
         // 4. Chart Data
         type ChartItem = {
@@ -295,6 +311,7 @@ export const Metrics: React.FC = () => {
             <div className="flex flex-col gap-4 bg-surface p-4 rounded-xl border border-border">
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-2">
+                        <Filter size={18} className="text-secondary" />
                         <FloatingSelect
                             label="Mês"
                             value={selectedMonth}
@@ -329,20 +346,17 @@ export const Metrics: React.FC = () => {
 
                     {/* Sector Filter for Admin/Dev/Qualidade */}
                     {(user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
-                        <div className="flex items-center gap-2">
-                            <Filter size={18} className="text-secondary" />
-                            <FloatingSelect
-                                label="Setor"
-                                value={sectorFilter}
-                                onChange={(e: any) => setSectorFilter(e.target.value)}
-                                options={[
-                                    { value: 'all', label: 'Todos os Setores' },
-                                    { value: 'SDR', label: 'SDR' },
-                                    { value: 'Closer', label: 'Closer' }
-                                ]}
-                                className="w-40"
-                            />
-                        </div>
+                        <FloatingSelect
+                            label="Setor"
+                            value={sectorFilter}
+                            onChange={(e: any) => setSectorFilter(e.target.value)}
+                            options={[
+                                { value: 'all', label: 'Todos os Setores' },
+                                { value: 'SDR', label: 'SDR' },
+                                { value: 'Closer', label: 'Closer' }
+                            ]}
+                            className="w-40"
+                        />
                     )}
 
                     <FloatingSelect
@@ -438,25 +452,25 @@ export const Metrics: React.FC = () => {
                         <div className="space-y-2">
                             {sdrRanking.slice(0, 5).map((sdr, idx) => {
                                 let rowStyle = 'bg-background border-l-4 border-transparent';
-                                if (idx === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
-                                else if (idx === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
-                                else if (idx === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
+                                if (sdr.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
+                                else if (sdr.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
+                                else if (sdr.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
 
                                 return (
-                                    <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors`}>
-                                        <div className="col-span-4 font-medium text-foreground text-[12px] truncate" title={sdr.name}>
+                                    <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
+                                        <div className="col-span-4 font-medium text-foreground text-[13px] truncate" title={sdr.name}>
                                             {sdr.name}
                                         </div>
-                                        <div className="col-span-2 text-center font-bold text-foreground text-[11px]">
+                                        <div className="col-span-2 text-center font-bold text-foreground text-xs">
                                             {sdr.total}
                                         </div>
-                                        <div className="col-span-2 text-center text-blue-400 text-[11px] font-medium">
+                                        <div className="col-span-2 text-center text-blue-400 text-xs font-medium">
                                             {sdr.ligacao}
                                         </div>
-                                        <div className="col-span-2 text-center text-orange-400 text-[11px] font-medium">
+                                        <div className="col-span-2 text-center text-orange-400 text-xs font-medium">
                                             {sdr.reagendamento}
                                         </div>
-                                        <div className="col-span-2 text-center text-purple-400 text-[11px] font-medium">
+                                        <div className="col-span-2 text-center text-purple-400 text-xs font-medium">
                                             {sdr.upgrade}
                                         </div>
                                     </div>
@@ -501,12 +515,12 @@ export const Metrics: React.FC = () => {
                         <div className="space-y-2">
                             {closerRanking.slice(0, 5).map((closer, idx) => {
                                 let rowStyle = 'bg-background border-l-4 border-transparent';
-                                if (idx === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
-                                else if (idx === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
-                                else if (idx === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
+                                if (closer.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
+                                else if (closer.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
+                                else if (closer.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
 
                                 return (
-                                    <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors`}>
+                                    <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
                                         <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={closer.name}>
                                             {closer.name}
                                         </div>
