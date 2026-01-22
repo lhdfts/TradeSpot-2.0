@@ -32,7 +32,7 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
     const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
 
     const selectedOption = options.find(opt => opt.value === value);
-    const hasValue = value !== '' && value !== undefined && value !== null;
+    const hasValue = (value !== '' && value !== undefined && value !== null) || !!selectedOption;
 
     useEffect(() => {
         if (isOpen && containerRef.current) {

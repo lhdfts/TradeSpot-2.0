@@ -294,22 +294,6 @@ export const Metrics: React.FC = () => {
             {/* Header & Controls */}
             <div className="flex flex-col gap-4 bg-surface p-4 rounded-xl border border-border">
                 <div className="flex flex-wrap items-center gap-4">
-                    {(user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
-                        <div className="flex items-center gap-2">
-                            <Filter size={18} className="text-secondary" />
-                            <FloatingSelect
-                                label="Setor"
-                                value={sectorFilter}
-                                onChange={(e: any) => setSectorFilter(e.target.value)}
-                                options={[
-                                    { value: 'all', label: 'Todos os Setores' },
-                                    { value: 'SDR', label: 'SDR' },
-                                    { value: 'Closer', label: 'Closer' }
-                                ]}
-                                className="w-40"
-                            />
-                        </div>
-                    )}
                     <div className="flex items-center gap-2">
                         <FloatingSelect
                             label="Mês"
@@ -342,12 +326,31 @@ export const Metrics: React.FC = () => {
                             className="w-28"
                         />
                     </div>
+
+                    {/* Sector Filter for Admin/Dev/Qualidade */}
+                    {(user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
+                        <div className="flex items-center gap-2">
+                            <Filter size={18} className="text-secondary" />
+                            <FloatingSelect
+                                label="Setor"
+                                value={sectorFilter}
+                                onChange={(e: any) => setSectorFilter(e.target.value)}
+                                options={[
+                                    { value: 'all', label: 'Todos os Setores' },
+                                    { value: 'SDR', label: 'SDR' },
+                                    { value: 'Closer', label: 'Closer' }
+                                ]}
+                                className="w-40"
+                            />
+                        </div>
+                    )}
+
                     <FloatingSelect
                         label="Atendente"
                         value={attendantFilter}
                         onChange={(e: any) => setAttendantFilter(e.target.value)}
                         options={[
-                            { value: '', label: 'Todos Atendentes' },
+                            { value: '', label: 'Todos' },
                             ...attendants
                                 .filter(a => {
                                     if (sectorFilter === 'all') return true;
@@ -358,16 +361,23 @@ export const Metrics: React.FC = () => {
                         ]}
                         className="w-48"
                     />
+
                     <FloatingSelect
                         label="Evento"
                         value={eventFilter}
                         onChange={(e: any) => setEventFilter(e.target.value)}
                         options={[
-                            { value: '', label: 'Todos Eventos' },
-                            ...events.map(e => ({ value: e.id, label: e.event_name }))
+                            { value: '', label: 'Todos' },
+                            ...events
+                                .filter(e => {
+                                    if (sectorFilter === 'all') return true;
+                                    return !e.sector || e.sector === sectorFilter;
+                                })
+                                .map(e => ({ value: e.id, label: e.event_name }))
                         ]}
                         className="w-48"
                     />
+
                     {eventFilter && (
                         <FloatingSelect
                             label="Clientes Únicos"
