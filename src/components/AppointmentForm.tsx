@@ -124,10 +124,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin') return allTypes;
 
         if (user.sector === 'SDR') {
-            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
+            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda'].includes(t.value));
         }
         if (user.sector === 'Closer') {
-            return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
+            return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda'].includes(t.value));
         }
         if (user.sector === 'Tribo') {
             return allTypes.filter(t => ['Agendamento Pessoal'].includes(t.value));
@@ -673,7 +673,178 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 <div className="flex-1 p-6 space-y-4 min-w-0">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Row 2: Telefone (First) and Aluno */}
-                        <div className="col-span-1 md:col-span-2 relative mt-0 mb-2">
+                        <div className="col-span-1 md:col-span-2 relative mt-1 mb-2">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-border" />
+                            </div>
+                            <div className="relative flex justify-center text-xs">
+                                <span className="bg-surface px-2 text-muted-foreground font-medium">
+                                    Agendamento
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Row 1: Evento and Tipo */}
+                        <FloatingSelect
+                            label="Evento"
+                            value={formData.eventId}
+                            onChange={(e: any) => {
+                                setFormData({ ...formData, eventId: e.target.value });
+                                if (errors.eventId) setErrors(prev => ({ ...prev, eventId: '' }));
+                            }}
+                            onBlur={() => {
+                                if (!formData.eventId) {
+                                    setErrors(prev => ({ ...prev, eventId: 'Evento é obrigatório' }));
+                                }
+                            }}
+                            options={eventOptions}
+                            disabled={isEditing}
+                            error={errors.eventId}
+                        />
+                        <div className="space-y-1">
+                            <FloatingSelect
+                                label="Tipo"
+                                value={formData.type}
+                                onChange={(e: any) => {
+                                    const newType = e.target.value as AppointmentType;
+                                    if (newType === 'Reagendamento Closer' && formData.phone) {
+                                        if (!checkEligibility(formData.phone)) {
+                                            toastManager.add({
+                                                title: "Permissão Negada",
+                                                description: "Este cliente não possui um histórico para realizar um reagendamento.",
+                                                type: 'error'
+                                            });
+                                            return;
+                                        }
+                                    }
+                                    setFormData({ ...formData, type: newType });
+                                    if (errors.type) setErrors(prev => ({ ...prev, type: '' }));
+                                }}
+                                onBlur={() => {
+                                    if (!formData.type) {
+                                        setErrors(prev => ({ ...prev, type: 'Tipo de agendamento é obrigatório' }));
+                                    }
+                                }}
+                                options={[...allowedTypes]}
+                                disabled={isEditing}
+                                error={errors.type}
+                            />
+                            {['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && !formData.phone && (
+                                <p className="text-xs text-amber-500 font-medium ml-1">
+                                    * Preencha o cliente primeiro para liberar a data
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Row 2: Data and Horário */}
+                        <FloatingDateInput
+                            label="Data"
+                            value={formData.date}
+                            onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
+                            minDate={formData.type === 'Fora da agenda' ? undefined : todayDate}
+                            disabled={
+                                isEditing ||
+                                !formData.eventId ||
+                                !formData.type ||
+                                (['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && (!formData.phone || !formData.lead))
+                            }
+                        />
+                        <div className="grid grid-cols-2 gap-4">
+                            <TimePickerInput
+                                label="Horário"
+                                value={formData.time}
+                                onChange={(time) => setFormData({ ...formData, time })}
+                                minTime={(formData.type !== 'Fora da agenda' && formData.date === todayStr) ? minTimeStr : undefined}
+                                disabled={
+                                    isEditing ||
+                                    !formData.date ||
+                                    (['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && (!formData.phone || !formData.lead))
+                                }
+                                availableTimes={availableTimes}
+                            />
+                            <FloatingInput
+                                label="Horário Final"
+                                type="text"
+                                value={endTime}
+                                disabled
+                                className="opacity-50 cursor-not-allowed"
+                            />
+                        </div>
+
+                        {/* Row 3: Atendente and Status */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className={!initialData ? "col-span-2" : ""}>
+                                {formData.type === 'Agendamento Pessoal' && !initialData && user ? (
+                                    <FloatingInput
+                                        label="Atendente"
+                                        value={user.name}
+                                        disabled
+                                        className="opacity-100 bg-muted/50 text-foreground"
+                                    />
+                                ) : (
+                                    <FloatingSelect
+                                        label="Atendente"
+                                        value={formData.attendantId}
+                                        onChange={(e: any) => {
+                                            setFormData({ ...formData, attendantId: e.target.value });
+                                            if (errors.attendantId) setErrors(prev => ({ ...prev, attendantId: '' }));
+                                        }}
+                                        onBlur={() => {
+                                            if (!formData.attendantId) {
+                                                setErrors(prev => ({ ...prev, attendantId: 'Atendente é obrigatório' }));
+                                            }
+                                        }}
+                                        options={attendantOptions}
+                                        disabled={
+                                            isEditing
+                                                ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
+                                                : (formData.type !== 'Fora da agenda' && formData.type !== 'Upgrade')
+                                        }
+                                        error={errors.attendantId}
+                                    />
+                                )}
+                            </div>
+                            {initialData && (
+                                <FloatingSelect
+                                    label="Status"
+                                    value={formData.status}
+                                    onChange={(e: any) => setFormData({ ...formData, status: e.target.value as AppointmentStatus })}
+                                    options={APPOINTMENT_STATUSES.map(status => ({ value: status, label: status }))}
+                                    disabled={
+                                        !user || (
+                                            user.id !== initialData.createdBy &&
+                                            user.id !== initialData.attendantId &&
+                                            !['Líder', 'Co-Líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
+                                        ) || (
+                                            user.role === 'Colaborador' &&
+                                            initialData.status !== 'Pendente'
+                                        )
+                                    }
+                                />
+                            )}
+                            {initialData && (initialData.updater || initialData.updatedBy) && (
+                                <div className="col-span-1 md:col-span-2 flex justify-end -mt-3">
+                                    <span className="text-xs text-muted-foreground">
+                                        Editado por: {initialData.updater?.name || 'Sistema'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Row 4: Google Meet (if editing) */}
+                        {initialData && (
+                            <FloatingInput
+                                label="Google Meet"
+                                value={formData.meetLink}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, meetLink: e.target.value })}
+                                className="text-blue-500"
+                                disabled={isEditing}
+                            />
+                        )}
+
+
+                        {/* DIVIDER: Client Section */}
+                        <div className="col-span-1 md:col-span-2 relative mt-4 mb-2">
                             <div className="absolute inset-0 flex items-center">
                                 <span className="w-full border-t border-border" />
                             </div>
@@ -683,6 +854,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 </span>
                             </div>
                         </div>
+
+                        {/* Row 5: Telefone and Nome */}
                         <FloatingInput
                             label="Telefone"
                             value={formData.phone}
@@ -831,196 +1004,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             disabled={isEditing}
                         />
 
-                        {/* Row 4: Evento and Tipo */}
-                        <div className="col-span-1 md:col-span-2 relative mt-1 mb-2">
-                            <div className="absolute inset-0 flex items-center">
-                                <span className="w-full border-t border-border" />
-                            </div>
-                            <div className="relative flex justify-center text-xs">
-                                <span className="bg-surface px-2 text-muted-foreground font-medium">
-                                    Agendamento
-                                </span>
-                            </div>
-                        </div>
-                        <FloatingSelect
-                            label="Evento"
-                            value={formData.eventId}
-                            onChange={(e: any) => {
-                                setFormData({ ...formData, eventId: e.target.value });
-                                if (errors.eventId) setErrors(prev => ({ ...prev, eventId: '' }));
-                            }}
-                            onBlur={() => {
-                                if (!formData.eventId) {
-                                    setErrors(prev => ({ ...prev, eventId: 'Evento é obrigatório' }));
-                                }
-                            }}
-                            options={eventOptions}
-                            disabled={isEditing}
-                            error={errors.eventId}
-                        />
-                        <FloatingSelect
-                            label="Tipo"
-                            value={formData.type}
-                            onChange={(e: any) => {
-                                const newType = e.target.value as AppointmentType;
-                                if (newType === 'Reagendamento Closer' && formData.phone) {
-                                    if (!checkEligibility(formData.phone)) {
-                                        toastManager.add({
-                                            title: "Permissão Negada",
-                                            description: "Este cliente não possui um histórico (Ligação Closer ou Upgrade) para realizar um reagendamento.",
-                                            type: 'error'
-                                        });
-                                        return; // Prevent selection
-                                    }
-                                }
-                                setFormData({ ...formData, type: newType });
-                                if (errors.type) setErrors(prev => ({ ...prev, type: '' }));
-                            }}
-                            onBlur={() => {
-                                if (!formData.type) {
-                                    setErrors(prev => ({ ...prev, type: 'Tipo de agendamento é obrigatório' }));
-                                }
-                            }}
-                            options={[...allowedTypes]}
-                            disabled={isEditing}
-                            error={errors.type}
-                        />
 
-                        {/* Row 5: Data and Horário */}
-                        <FloatingDateInput
-                            label="Data"
-                            value={formData.date}
-                            onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
-                            minDate={formData.type === 'Fora da agenda' ? undefined : todayDate}
-                            disabled={isEditing || !formData.email || !formData.lead || !formData.phone || !formData.eventId || !formData.type}
-                        />
-                        <div className="grid grid-cols-2 gap-4">
-                            <TimePickerInput
-                                label="Horário"
-                                value={formData.time}
-                                onChange={(time) => setFormData({ ...formData, time })}
-                                minTime={(formData.type !== 'Fora da agenda' && formData.date === todayStr) ? minTimeStr : undefined}
-                                disabled={isEditing || !formData.date}
-                                availableTimes={availableTimes}
-                            />
-                            <FloatingInput
-                                label="Horário Final"
-                                type="text"
-                                value={endTime}
-                                disabled
-                                className="opacity-50 cursor-not-allowed"
-                            />
-                        </div>
 
-                        {/* Row 7: Informações Adicionais */}
-                        <div className="relative">
-                            <FloatingTextArea
-                                label="Informações Adicionais"
-                                value={formData.additionalInfo}
-                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                                    setFormData({ ...formData, additionalInfo: sanitizeInput.strictText(e.target.value) });
-                                }}
-                                maxLength={300}
-                                disabled={isEditing}
-                                rows={3}
-                                className="pb-6"
-                            />
-                            <div className="absolute bottom-2 right-3 text-xs text-muted-foreground pointer-events-none">
-                                {formData.additionalInfo.length}/300
-                            </div>
-                        </div>
 
-                        {/* Row 7: Descrição do Agendamento (TextArea) - ONLY VISIBLE WHEN EDITING */}
-                        {initialData && (
-                            <div className="space-y-1">
-                                <label className="block text-sm font-bold text-foreground">Descrição do Agendamento:</label>
-                                <textarea
-                                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
-                                    rows={4}
-                                    value={formData.notes}
-                                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                                    maxLength={500}
-                                    placeholder="Digite a descrição do agendamento..."
-                                />
-                            </div>
-                        )}
-
-                        {/* Row 8: Atendente and Status */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className={!initialData ? "col-span-2" : ""}>
-                                {formData.type === 'Agendamento Pessoal' && !initialData && user ? (
-                                    <FloatingInput
-                                        label="Atendente"
-                                        value={user.name}
-                                        disabled
-                                        className="opacity-100 bg-muted/50 text-foreground"
-                                    />
-                                ) : (
-                                    <FloatingSelect
-                                        label="Atendente"
-                                        value={formData.attendantId}
-                                        onChange={(e: any) => {
-                                            setFormData({ ...formData, attendantId: e.target.value });
-                                            if (errors.attendantId) setErrors(prev => ({ ...prev, attendantId: '' }));
-                                        }}
-                                        onBlur={() => {
-                                            // Optional: Validate if required. 
-                                            // Since 'distribuicao_automatica' is a valid value, we just check if empty
-                                            if (!formData.attendantId) {
-                                                setErrors(prev => ({ ...prev, attendantId: 'Atendente é obrigatório' }));
-                                            }
-                                        }}
-                                        options={attendantOptions}
-                                        disabled={
-                                            // Enabled if:
-                                            // 1. Creating new 'Upgrade' or 'Fora da Agenda' appointment
-                                            // 2. Editing existing appointment AND user has specific role permissions
-                                            isEditing
-                                                ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
-                                                : (formData.type !== 'Fora da agenda' && formData.type !== 'Upgrade')
-                                        }
-                                        error={errors.attendantId}
-                                    />
-                                )}
-                            </div>
-                            {initialData && (
-                                <FloatingSelect
-                                    label="Status"
-                                    value={formData.status}
-                                    onChange={(e: any) => setFormData({ ...formData, status: e.target.value as AppointmentStatus })}
-                                    options={APPOINTMENT_STATUSES.map(status => ({ value: status, label: status }))}
-                                    disabled={
-                                        !user || (
-                                            user.id !== initialData.createdBy && // not creator
-                                            user.id !== initialData.attendantId && // not attendant
-                                            !['Líder', 'Co-Líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
-                                        ) || (
-                                            // Lock for ALL Colaboradores if already edited (not Pendente)
-                                            user.role === 'Colaborador' &&
-                                            initialData.status !== 'Pendente'
-                                        )
-                                    }
-                                />
-                            )}
-                            {initialData && (initialData.updater || initialData.updatedBy) && (
-                                <div className="col-span-1 md:col-span-2 flex justify-end -mt-3">
-                                    <span className="text-xs text-muted-foreground">
-                                        Editado por: {initialData.updater?.name || 'Sistema'}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Row 9: Google Meet */}
-                        {initialData && (
-                            <FloatingInput
-                                label="Google Meet"
-                                value={formData.meetLink}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, meetLink: e.target.value })}
-                                className="text-blue-500"
-                                disabled={isEditing}
-                            />
-                        )}
                     </div>
                 </div>
 

@@ -313,7 +313,7 @@ router.put('/:id', async (req: Request, res: Response) => {
                     }
                 }
             } else {
-                console.warn(`[DEBUG] Attendant not found for ID: ${merged.attendant_id}`);
+                console.warn(`[DEBUG] Attendant not found for ID: ${merged.attendant_id} during update check for Appt ID: ${id}`);
             }
 
             if (merged.attendant_id && merged.attendant_id !== 'distribuicao_automatica') {
@@ -345,9 +345,9 @@ router.put('/:id', async (req: Request, res: Response) => {
                         });
 
                         if (collidingAppt) {
-                            console.error(`[DEBUG] Conflict Found. Colliding Appointment: ID=${collidingAppt.id}, Time=${collidingAppt.time}, Status=${collidingAppt.status}, Type=${collidingAppt.type}`);
+                            console.error(`[DEBUG] Conflict Found for Appt ID ${id}. Colliding Appointment: ID=${collidingAppt.id}, Time=${collidingAppt.time}, Status=${collidingAppt.status}, Type=${collidingAppt.type}`);
                         } else {
-                            console.error(`[DEBUG] Conflict Found but could not identify specific appointment (Logic Mismatch?).`);
+                            console.error(`[DEBUG] Conflict Found for Appt ID ${id} but could not identify specific appointment (Logic Mismatch?). Range: ${newStart}-${newEnd}`);
                         }
                         return res.status(409).json({ error: 'Conflito: O atendente está ocupado.' });
                     }
