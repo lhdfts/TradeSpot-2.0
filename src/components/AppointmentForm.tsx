@@ -797,7 +797,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         options={attendantOptions}
                                         disabled={
                                             isEditing
-                                                ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
+                                                ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
                                                 : (formData.type !== 'Fora da agenda' && formData.type !== 'Upgrade')
                                         }
                                         error={errors.attendantId}
