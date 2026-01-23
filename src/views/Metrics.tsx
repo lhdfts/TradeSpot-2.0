@@ -5,6 +5,7 @@ import { useFormData } from '../hooks/useFormData';
 import { Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { FloatingSelect } from '../components/FloatingSelect';
+import { FloatingDateInput } from '../components/FloatingDateInput';
 import { ExportIcon } from '../components/ExportIcon';
 import {
     ComposedChart,
@@ -53,10 +54,13 @@ export const Metrics: React.FC = () => {
     const { attendants, events } = useFormData();
 
     // Filters State
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth();
-    const [selectedYear, setSelectedYear] = useState(currentYear.toString());
-    const [selectedMonth, setSelectedMonth] = useState(currentMonth.toString());
+    // Default to current month
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(lastDay.toISOString().split('T')[0]);
 
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
@@ -109,10 +113,11 @@ export const Metrics: React.FC = () => {
         let filtered = appointments.filter(a => {
             if (!a.date) return false;
 
-            // Period Filter (Month/Year)
-            const apptDate = new Date(a.date + 'T12:00:00');
-            if (apptDate.getMonth() !== parseInt(selectedMonth) || apptDate.getFullYear() !== parseInt(selectedYear)) {
-                return false;
+            // Period Filter (Date Range)
+            if (startDate && endDate) {
+                if (a.date < startDate || a.date > endDate) return false;
+            } else {
+                return false; // Valid range required
             }
 
             // Event Filter
@@ -246,17 +251,25 @@ export const Metrics: React.FC = () => {
             'Reagendado': number;
         };
         const dateMap = new Map<string, ChartItem>();
-        const year = parseInt(selectedYear);
-        const month = parseInt(selectedMonth);
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dateObj = new Date(year, month, d);
-            const dateStr = dateObj.toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-');
-            const display = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        // Generate dates in range
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const loop = new Date(start);
+        // Force loop to noon to avoid timezone shift issues during iteration
+        loop.setHours(12, 0, 0, 0);
+        const endLoop = new Date(end);
+        endLoop.setHours(23, 59, 59, 999);
+
+        // Limit chart range to prevent browser hang if range is too huge (e.g. accidental 10 years)
+        // Hard limit 366 days
+        let count = 0;
+        while (loop <= endLoop && count < 366) {
+            const dateStr = loop.toISOString().split('T')[0];
+            const display = loop.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
             dateMap.set(dateStr, {
                 displayDate: display,
-                rawDate: dateObj.getTime(),
+                rawDate: loop.getTime(),
                 total: 0,
                 'Cancelado': 0,
                 'Esquecimento': 0,
@@ -265,6 +278,8 @@ export const Metrics: React.FC = () => {
                 'Realizado': 0,
                 'Reagendado': 0
             });
+            loop.setDate(loop.getDate() + 1);
+            count++;
         }
 
         filtered.forEach(a => {
@@ -301,7 +316,7 @@ export const Metrics: React.FC = () => {
         const chartTotal = chartData.reduce((acc, curr) => acc + curr.total, 0);
 
         return { sdrRanking, closerRanking, chartData, totals, filteredAppointments: filtered, sdrTotal, closerTotal, chartTotal };
-    }, [appointments, selectedMonth, selectedYear, attendantFilter, eventFilter, attendants, sectorFilter, uniqueClients]);
+    }, [appointments, startDate, endDate, attendantFilter, eventFilter, attendants, sectorFilter, uniqueClients]);
 
 
     const valueFormatter = (number: number) =>
@@ -329,7 +344,7 @@ export const Metrics: React.FC = () => {
         const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
         const link = document.body.appendChild(document.createElement('a'));
         link.href = URL.createObjectURL(blob);
-        link.download = `metricas_${parseInt(selectedMonth) + 1}_${selectedYear}.csv`;
+        link.download = `metricas_${startDate}_ate_${endDate}.csv`;
         link.click();
         document.body.removeChild(link);
     };
@@ -341,35 +356,19 @@ export const Metrics: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-2">
                         <Filter size={18} className="text-secondary" />
-                        <FloatingSelect
-                            label="Mês"
-                            value={selectedMonth}
-                            onChange={(e: any) => setSelectedMonth(e.target.value)}
-                            options={[
-                                { value: '0', label: 'Janeiro' },
-                                { value: '1', label: 'Fevereiro' },
-                                { value: '2', label: 'Março' },
-                                { value: '3', label: 'Abril' },
-                                { value: '4', label: 'Maio' },
-                                { value: '5', label: 'Junho' },
-                                { value: '6', label: 'Julho' },
-                                { value: '7', label: 'Agosto' },
-                                { value: '8', label: 'Setembro' },
-                                { value: '9', label: 'Outubro' },
-                                { value: '10', label: 'Novembro' },
-                                { value: '11', label: 'Dezembro' },
-                            ]}
-                            className="w-40"
+                        <FloatingDateInput
+                            label="Data Inicial"
+                            value={startDate}
+                            onChange={(e: any) => setStartDate(e.target.value)}
+                            maxDate={endDate ? new Date(endDate) : undefined}
+                            className="w-36"
                         />
-                        <FloatingSelect
-                            label="Ano"
-                            value={selectedYear}
-                            onChange={(e: any) => setSelectedYear(e.target.value)}
-                            options={Array.from({ length: 5 }, (_, i) => {
-                                const y = currentYear - 2 + i;
-                                return { value: y.toString(), label: y.toString() };
-                            })}
-                            className="w-28"
+                        <FloatingDateInput
+                            label="Data Final"
+                            value={endDate}
+                            onChange={(e: any) => setEndDate(e.target.value)}
+                            minDate={startDate ? new Date(startDate) : undefined}
+                            className="w-36"
                         />
                     </div>
 
