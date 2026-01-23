@@ -1004,6 +1004,39 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             disabled={isEditing}
                         />
 
+                        {/* Row 6: Informações Adicionais */}
+                        <div className="relative">
+                            <FloatingTextArea
+                                label="Informações Adicionais"
+                                value={formData.additionalInfo}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                                    setFormData({ ...formData, additionalInfo: sanitizeInput.strictText(e.target.value) });
+                                }}
+                                maxLength={300}
+                                disabled={isEditing}
+                                rows={3}
+                                className="pb-6"
+                            />
+                            <div className="absolute bottom-2 right-3 text-xs text-muted-foreground pointer-events-none">
+                                {formData.additionalInfo.length}/300
+                            </div>
+                        </div>
+
+                        {/* Row 7: Descrição do Agendamento (TextArea) - ONLY VISIBLE WHEN EDITING */}
+                        {initialData && (
+                            <div className="space-y-1">
+                                <label className="block text-sm font-bold text-foreground">Descrição do Agendamento:</label>
+                                <textarea
+                                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
+                                    rows={4}
+                                    value={formData.notes}
+                                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                                    maxLength={500}
+                                    placeholder="Digite a descrição do agendamento..."
+                                />
+                            </div>
+                        )}
+
 
 
 
