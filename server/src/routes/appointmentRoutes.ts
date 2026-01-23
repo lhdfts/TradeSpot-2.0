@@ -50,11 +50,9 @@ router.post('/', async (req: Request, res: Response) => {
         const data = validation.data;
         // 0. Buffer Check (10 minutes)
         const now = new Date();
-        const brazilTimeStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
-        const brazilNow = new Date(brazilTimeStr);
-        const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Assuming Brasilia time
+        const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Brasilia time is UTC-3
 
-        const diffMinutes = (apptDateTime.getTime() - brazilNow.getTime()) / 60000;
+        const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
         if (data.type !== 'Fora da Agenda' && diffMinutes < 10) {
             return res.status(400).json({ error: 'Os agendamentos devem ser marcados com pelo menos 10 minutos de antecedência.' });
         }

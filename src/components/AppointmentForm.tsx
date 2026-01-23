@@ -83,7 +83,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return;
         }
 
-        if (formData.type === 'Fora da agenda') {
+        if (formData.type === 'Fora da Agenda') {
             setAvailableTimes(generateAllTimes());
             return;
         }
@@ -117,7 +117,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             { value: 'Agendamento Pessoal', label: 'Agendamento Pessoal' },
             { value: 'Reagendamento Closer', label: 'Reagendamento Closer' },
             { value: 'Upgrade', label: 'Upgrade' },
-            { value: 'Fora da agenda', label: 'Fora da agenda' }
+            { value: 'Fora da Agenda', label: 'Fora da Agenda' }
         ];
 
         if (!user) return [];
@@ -140,10 +140,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     }, [user]);
 
     const attendantOptions = [
-        ...(formData.type === 'Fora da agenda' ? [] : [{ value: 'distribuicao_automatica', label: 'Distribuição Automática' }]),
+        ...(formData.type === 'Fora da Agenda' ? [] : [{ value: 'distribuicao_automatica', label: 'Distribuição Automática' }]),
         ...attendants
             .filter(a => {
-                if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda') return a.sector === 'Closer';
+                if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da Agenda') return a.sector === 'Closer';
                 if (user?.sector === 'TEI') return true;
                 return user?.sector ? a.sector === user.sector : true;
             })
@@ -424,7 +424,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         // Helper to check availability
         const checkAvailability = (attendantId: string) => {
-            if (formData.type === 'Fora da agenda') return true;
+            if (formData.type === 'Fora da Agenda') return true;
             const selectedAttendant = attendants.find(a => a.id === attendantId);
             if (!selectedAttendant) return true; // Can't validate if not found
 
@@ -447,6 +447,23 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 });
                 return false;
             }
+
+            // 3. Check 10-minute buffer (Final check before submission)
+            if (formData.type !== 'Fora da Agenda') {
+                const now = new Date();
+                const apptDateTime = new Date(`${formData.date}T${formData.time}:00-03:00`);
+                const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
+
+                if (diffMinutes < 10) {
+                    toastManager.add({
+                        title: "Horário Inválido",
+                        description: "Os agendamentos devem ser marcados com pelo menos 10 minutos de antecedência.",
+                        type: 'error'
+                    });
+                    return false;
+                }
+            }
+
             return true;
         };
 
@@ -619,24 +636,33 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
     const getBrazilStats = () => {
         const now = new Date();
-        const brazilTimeStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
-        const brazilDate = new Date(brazilTimeStr);
-        const year = brazilDate.getFullYear();
-        const month = brazilDate.getMonth();
-        const day = brazilDate.getDate();
+
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+
+        const parts = formatter.formatToParts(now);
+        const getPart = (type: string) => parts.find(p => p.type === type)?.value || '';
+
+        const year = parseInt(getPart('year'));
+        const month = parseInt(getPart('month')) - 1;
+        const day = parseInt(getPart('day'));
 
         const todayDate = new Date(year, month, day);
-        const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-        const hours = String(brazilDate.getHours()).padStart(2, '0');
-        const minutes = String(brazilDate.getMinutes()).padStart(2, '0');
-        const nowTimeStr = `${hours}:${minutes}`;
+        const todayStr = `${year}-${getPart('month')}-${getPart('day')}`;
+        const nowTimeStr = `${getPart('hour')}:${getPart('minute')}`;
 
         // Calculate minTime with 10 minute buffer
-        const bufferDate = new Date(brazilDate.getTime() + 10 * 60000);
-        const bufferHours = String(bufferDate.getHours()).padStart(2, '0');
-        const bufferMinutes = String(bufferDate.getMinutes()).padStart(2, '0');
-        const minTimeStr = `${bufferHours}:${bufferMinutes}`;
+        const bufferDate = new Date(now.getTime() + 10 * 60000);
+        const bufferParts = formatter.formatToParts(bufferDate);
+        const getBufferPart = (type: string) => bufferParts.find(p => p.type === type)?.value || '';
+        const minTimeStr = `${getBufferPart('hour')}:${getBufferPart('minute')}`;
 
         return { todayDate, todayStr, nowTimeStr, minTimeStr };
     };
@@ -867,7 +893,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             label="Data"
                             value={formData.date}
                             onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
-                            minDate={formData.type === 'Fora da agenda' ? undefined : todayDate}
+                            minDate={formData.type === 'Fora da Agenda' ? undefined : todayDate}
                             disabled={isEditing || !formData.email || !formData.lead || !formData.phone || !formData.eventId || !formData.type}
                         />
                         <div className="grid grid-cols-2 gap-4">
@@ -875,7 +901,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 label="Horário"
                                 value={formData.time}
                                 onChange={(time) => setFormData({ ...formData, time })}
-                                minTime={(formData.type !== 'Fora da agenda' && formData.date === todayStr) ? minTimeStr : undefined}
+                                minTime={(formData.type !== 'Fora da Agenda' && formData.date === todayStr) ? minTimeStr : undefined}
                                 disabled={isEditing || !formData.date}
                                 availableTimes={availableTimes}
                             />
@@ -949,11 +975,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         options={attendantOptions}
                                         disabled={
                                             // Enabled if:
-                                            // 1. Creating new 'Upgrade' or 'Fora da agenda' appointment
+                                            // 1. Creating new 'Upgrade' or 'Fora da Agenda' appointment
                                             // 2. Editing existing appointment AND user has specific role permissions
                                             isEditing
                                                 ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
-                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda')
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da Agenda')
                                         }
                                         error={errors.attendantId}
                                     />
