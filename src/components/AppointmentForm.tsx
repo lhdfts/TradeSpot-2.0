@@ -143,7 +143,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         ...(formData.type === 'Fora da agenda' ? [] : [{ value: 'distribuicao_automatica', label: 'Distribuição Automática' }]),
         ...attendants
             .filter(a => {
+                const selectedEvent = events.find(e => e.id === formData.eventId);
+                const eventSector = selectedEvent?.sector;
+                const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
+
                 if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda') return a.sector === 'Closer';
+
+                if (isAdministrative) {
+                    return eventSector ? a.sector === eventSector : true;
+                }
+
                 if (user?.sector === 'TEI') return true;
                 return user?.sector ? a.sector === user.sector : true;
             })
@@ -155,7 +164,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         const filtered = events.filter(e =>
             e.status === true && (
                 !e.sector ||
-                (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder'].includes(user.role) || user.sector === e.sector))
+                (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role) || user.sector === e.sector))
             )
         );
 
