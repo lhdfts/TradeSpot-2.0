@@ -33,8 +33,8 @@ export const timeToMinutes = (time: string): number => {
 };
 
 export const getDuration = (type: string): number => {
-    if (['Ligação Closer', 'Reschedule', 'Reagendamento Closer'].includes(type)) return 45;
-    return 30;
+    if (type === 'Ligação SDR') return 30;
+    return 60; // Todos os outros (Closer, Upgrade, Pessoal, etc) duram 1 hora
 };
 
 // Check if attendant is working at this time

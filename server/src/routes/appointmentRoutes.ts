@@ -143,8 +143,22 @@ router.post('/', async (req: Request, res: Response) => {
         let googleEventId = null;
 
         if (!meetLink && data.type !== 'Fora da agenda') {
-            const startIso = `${data.date}T${data.time}:00`;
-            const endIso = `${data.date}T${endTime}:00`;
+            const startIso = `${data.date}T${data.time}:00-03:00`;
+
+            // Handle cross-midnight end time
+            let endDate = data.date;
+            if (endTime < data.time) {
+                let dateForObj = data.date;
+                if (data.date.includes('/')) {
+                    const [d, m, y] = data.date.split('/');
+                    dateForObj = `${y}-${m}-${d}`;
+                }
+                const dateObj = new Date(dateForObj + 'T12:00:00');
+                dateObj.setDate(dateObj.getDate() + 1);
+                endDate = dateObj.toISOString().split('T')[0];
+            }
+            const endIso = `${endDate}T${endTime}:00-03:00`;
+
             const guestIds = [finalAttendantId, data.createdBy].filter((id): id is string => !!id);
             const attendees: string[] = [clientPayload.email].filter(Boolean) as string[];
 

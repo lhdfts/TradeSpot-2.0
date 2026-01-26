@@ -1,0 +1,1443 @@
+{
+  "name": "Receber Novo Agendamento",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fef2183b-d765-40f0-9841-eac5e368cedc",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "148af7fa-0ad8-46db-8070-901dfb481e09",
+      "name": "Webhook",
+      "webhookId": "fef2183b-d765-40f0-9841-eac5e368cedc"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a6a72e9e-1dfe-4a77-9228-c2c257790d73",
+              "name": "data_hora",
+              "value": "={{ $json.body.date.toDateTime().format('dd/MM/yyyy') }} às {{ $json.body.time.toDateTime().format('HH:mm') }}",
+              "type": "string"
+            },
+            {
+              "id": "636258ba-decc-48c7-a8d9-ac59022b3176",
+              "name": "nome",
+              "value": "={{ $json.body.lead }}",
+              "type": "string"
+            },
+            {
+              "id": "72196586-17ca-4263-b75d-7b335aa79ef5",
+              "name": "telefone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "b1ceb968-00b5-42ad-8644-ce577987b9d6",
+              "name": "email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "e2b1303a-8f0a-4e8e-877e-fb0f75ce95ed",
+              "name": "atendente",
+              "value": "={{ $json.body.attendant_name }}",
+              "type": "string"
+            },
+            {
+              "id": "ea14cd9c-e644-4a45-beed-e21d77815e02",
+              "name": "created_by",
+              "value": "={{ $json.body.created_by_name }}",
+              "type": "string"
+            },
+            {
+              "id": "0c297f4f-3331-4e6b-9a2e-69edd1a5242b",
+              "name": "evento",
+              "value": "={{ $json.body.event_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a191182a-91e8-44b3-b9e6-b894376d09a4",
+              "name": "meet_link",
+              "value": "={{ $json.body.meet_link }}",
+              "type": "string"
+            },
+            {
+              "id": "f62eb03a-f354-4815-8a1d-c378ccca0836",
+              "name": "tipo",
+              "value": "={{ $json.body.type }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "id": "439109b7-0a90-4ea5-b435-c137c92a1e0d",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "content": "## Ligação Closer",
+        "height": 224,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -64
+      ],
+      "id": "40027fb3-7151-42f9-adfc-76fc6637746c",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a6a72e9e-1dfe-4a77-9228-c2c257790d73",
+              "name": "data_hora",
+              "value": "={{ $json.body.date.toDateTime().format('dd/MM/yyyy') }} às {{ $json.body.time.toDateTime().format('HH:mm') }}",
+              "type": "string"
+            },
+            {
+              "id": "636258ba-decc-48c7-a8d9-ac59022b3176",
+              "name": "nome",
+              "value": "={{ $json.body.lead }}",
+              "type": "string"
+            },
+            {
+              "id": "72196586-17ca-4263-b75d-7b335aa79ef5",
+              "name": "telefone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "b1ceb968-00b5-42ad-8644-ce577987b9d6",
+              "name": "email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "e2b1303a-8f0a-4e8e-877e-fb0f75ce95ed",
+              "name": "atendente",
+              "value": "={{ $json.body.attendant_name }}",
+              "type": "string"
+            },
+            {
+              "id": "ea14cd9c-e644-4a45-beed-e21d77815e02",
+              "name": "created_by",
+              "value": "={{ $json.body.created_by_name }}",
+              "type": "string"
+            },
+            {
+              "id": "0c297f4f-3331-4e6b-9a2e-69edd1a5242b",
+              "name": "evento",
+              "value": "={{ $json.body.event_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a191182a-91e8-44b3-b9e6-b894376d09a4",
+              "name": "meet_link",
+              "value": "={{ $json.body.meet_link }}",
+              "type": "string"
+            },
+            {
+              "id": "f62eb03a-f354-4815-8a1d-c378ccca0836",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        256
+      ],
+      "id": "d0c280a5-37d2-4c89-bdaa-fa29c2574bd0",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "content": "## Ligação SDR",
+        "height": 240,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        176
+      ],
+      "id": "a3bbdd88-f196-4457-aaf5-405ce9a15604",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a6a72e9e-1dfe-4a77-9228-c2c257790d73",
+              "name": "data_hora",
+              "value": "={{ $json.body.date.toDateTime().format('dd/MM/yyyy') }} às {{ $json.body.time.toDateTime().format('HH:mm') }}",
+              "type": "string"
+            },
+            {
+              "id": "636258ba-decc-48c7-a8d9-ac59022b3176",
+              "name": "nome",
+              "value": "={{ $json.body.lead }}",
+              "type": "string"
+            },
+            {
+              "id": "72196586-17ca-4263-b75d-7b335aa79ef5",
+              "name": "telefone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "b1ceb968-00b5-42ad-8644-ce577987b9d6",
+              "name": "email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "e2b1303a-8f0a-4e8e-877e-fb0f75ce95ed",
+              "name": "atendente",
+              "value": "={{ $json.body.attendant_name }}",
+              "type": "string"
+            },
+            {
+              "id": "ea14cd9c-e644-4a45-beed-e21d77815e02",
+              "name": "created_by",
+              "value": "={{ $json.body.created_by_name }}",
+              "type": "string"
+            },
+            {
+              "id": "0c297f4f-3331-4e6b-9a2e-69edd1a5242b",
+              "name": "evento",
+              "value": "={{ $json.body.event_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a191182a-91e8-44b3-b9e6-b894376d09a4",
+              "name": "meet_link",
+              "value": "={{ $json.body.meet_link }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        512
+      ],
+      "id": "10af3705-2891-4f38-8037-ef4d1518c0a9",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "content": "## Upgrade",
+        "height": 240,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        432
+      ],
+      "id": "3ff449f6-b29f-4f02-a379-7004541b86be",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a6a72e9e-1dfe-4a77-9228-c2c257790d73",
+              "name": "data_hora",
+              "value": "={{ $json.body.date.toDateTime().format('dd/MM/yyyy') }} às {{ $json.body.time.toDateTime().format('HH:mm') }}",
+              "type": "string"
+            },
+            {
+              "id": "636258ba-decc-48c7-a8d9-ac59022b3176",
+              "name": "nome",
+              "value": "={{ $json.body.lead }}",
+              "type": "string"
+            },
+            {
+              "id": "72196586-17ca-4263-b75d-7b335aa79ef5",
+              "name": "telefone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "b1ceb968-00b5-42ad-8644-ce577987b9d6",
+              "name": "email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "e2b1303a-8f0a-4e8e-877e-fb0f75ce95ed",
+              "name": "atendente",
+              "value": "={{ $json.body.attendant_name }}",
+              "type": "string"
+            },
+            {
+              "id": "ea14cd9c-e644-4a45-beed-e21d77815e02",
+              "name": "created_by",
+              "value": "={{ $json.body.created_by_name }}",
+              "type": "string"
+            },
+            {
+              "id": "0c297f4f-3331-4e6b-9a2e-69edd1a5242b",
+              "name": "evento",
+              "value": "={{ $json.body.event_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a191182a-91e8-44b3-b9e6-b894376d09a4",
+              "name": "meet_link",
+              "value": "={{ $json.body.meet_link }}",
+              "type": "string"
+            },
+            {
+              "id": "f62eb03a-f354-4815-8a1d-c378ccca0836",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        752
+      ],
+      "id": "9b43eee2-13a2-481a-b643-0f80664cd3db",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "content": "## Reagendamento Closer",
+        "height": 240,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        688
+      ],
+      "id": "00be1592-b96d-4b63-85f8-e8404d98da81",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a6a72e9e-1dfe-4a77-9228-c2c257790d73",
+              "name": "data_hora",
+              "value": "={{ $json.body.date.toDateTime().format('dd/MM/yyyy') }} às {{ $json.body.time.toDateTime().format('HH:mm') }}",
+              "type": "string"
+            },
+            {
+              "id": "636258ba-decc-48c7-a8d9-ac59022b3176",
+              "name": "nome",
+              "value": "={{ $json.body.lead }}",
+              "type": "string"
+            },
+            {
+              "id": "72196586-17ca-4263-b75d-7b335aa79ef5",
+              "name": "telefone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "b1ceb968-00b5-42ad-8644-ce577987b9d6",
+              "name": "email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "e2b1303a-8f0a-4e8e-877e-fb0f75ce95ed",
+              "name": "atendente",
+              "value": "={{ $json.body.attendant_name }}",
+              "type": "string"
+            },
+            {
+              "id": "ea14cd9c-e644-4a45-beed-e21d77815e02",
+              "name": "created_by",
+              "value": "={{ $json.body.created_by_name }}",
+              "type": "string"
+            },
+            {
+              "id": "0c297f4f-3331-4e6b-9a2e-69edd1a5242b",
+              "name": "evento",
+              "value": "={{ $json.body.event_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a191182a-91e8-44b3-b9e6-b894376d09a4",
+              "name": "meet_link",
+              "value": "={{ $json.body.meet_link }}",
+              "type": "string"
+            },
+            {
+              "id": "f62eb03a-f354-4815-8a1d-c378ccca0836",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        1008
+      ],
+      "id": "8dcad3ba-25df-493a-874a-04d5c6ccc21e",
+      "name": "Edit Fields4"
+    },
+    {
+      "parameters": {
+        "content": "## Agendamento Pessoal",
+        "height": 240,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        944
+      ],
+      "id": "cf3c7fd2-cdab-4d55-896c-39a77efdd08e",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "a28b6ded-a788-4ccb-b4e1-7a526340dcba",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        256
+      ],
+      "id": "e046194d-cf23-430e-91ef-aaeb02968db4",
+      "name": "Webhook1",
+      "webhookId": "a28b6ded-a788-4ccb-b4e1-7a526340dcba"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dedb7d8d-9d21-464b-a612-365cbf973927",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        512
+      ],
+      "id": "6dee5a23-5715-4c8a-bba9-7d46dc88396c",
+      "name": "Webhook2",
+      "webhookId": "dedb7d8d-9d21-464b-a612-365cbf973927"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "577bc264-f047-41df-9253-70b1bcc25421",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        752
+      ],
+      "id": "1b4105b9-6a3f-4af9-98a9-5919c2d38145",
+      "name": "Webhook3",
+      "webhookId": "577bc264-f047-41df-9253-70b1bcc25421"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ee6b4b33-b977-4585-a1ca-526ee6e357f1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        1008
+      ],
+      "id": "d7cda977-586c-4912-8986-c2fa11827f09",
+      "name": "Webhook4",
+      "webhookId": "ee6b4b33-b977-4585-a1ca-526ee6e357f1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/api/contact/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $('Edit Fields').item.json.email }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1008,
+        0
+      ],
+      "id": "2841c0fd-2515-4c03-bef8-51813a192a56",
+      "name": "Pesquisar Lead"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://unnichat.com.br/api/contact/{{ $json.data[0].id }}/tags",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tag_id",
+              "value": "=019b9a25-5983-77a3-ab67-7ceae852f831"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1216,
+        0
+      ],
+      "id": "a8a30b03-ccdc-4422-b95e-2db390c58f2f",
+      "name": "Colocar Tag 'confirmação_de_agendamento'"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://unnichat.com.br/api/contact/{{ $('Pesquisar Lead').item.json.data[0].id }}/customFields",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "field_id",
+              "value": "=JuflZgDJZc4R4vSVsRDQ"
+            },
+            {
+              "name": "field_value",
+              "value": "={{ $('Instagram').item.json.atendente }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1424,
+        0
+      ],
+      "id": "8ecca36a-e49d-4e10-8474-0a5121206a8c",
+      "name": "Preencher Negociando"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://unnichat.com.br/api/contact/{{ $('Pesquisar Lead').item.json.data[0].id }}/customFields",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "field_id",
+              "value": "=IIc2eyqN7Ub2tLl4Un17"
+            },
+            {
+              "name": "field_value",
+              "value": "={{ $('Edit Fields').item.json.data_hora }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1632,
+        0
+      ],
+      "id": "b9ec5cb8-50fa-42c1-a0e8-ac21e9b75020",
+      "name": "Preencher data_agendamento"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://unnichat.com.br/api/contact/{{ $('Pesquisar Lead').item.json.data[0].id }}/customFields",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "field_id",
+              "value": "=PHvAUXF2XetVXaeqNMWQ"
+            },
+            {
+              "name": "field_value",
+              "value": "={{ $('Edit Fields').item.json.meet_link }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1840,
+        0
+      ],
+      "id": "429d5068-07a3-43c7-a9c1-b62ac4a50b22",
+      "name": "Preencher link_meet"
+    },
+    {
+      "parameters": {
+        "content": "## 0126 - Social Seller (Instagram)",
+        "height": 224,
+        "width": 1088
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        928,
+        -64
+      ],
+      "id": "1b37383c-d286-4f63-884d-52093952b40c",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/4GcRfvQTuFTc1plOx42Y",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "nome",
+              "value": "={{ $json.nome }}"
+            },
+            {
+              "name": "=telefone",
+              "value": "={{ $json.telefone }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "atendente",
+              "value": "={{ $json.atendente }}"
+            },
+            {
+              "name": "created_by",
+              "value": "={{ $json.created_by }}"
+            },
+            {
+              "name": "=evento",
+              "value": "={{ $json.evento }}"
+            },
+            {
+              "name": "=meet_link",
+              "value": "={{ $json.meet_link }}"
+            },
+            {
+              "name": "data_hora",
+              "value": "={{ $json.data_hora }}"
+            },
+            {
+              "name": "tipo",
+              "value": "={{ $json.tipo }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1008,
+        752
+      ],
+      "id": "24aa5419-b9e8-408e-96cb-3a975b80a429",
+      "name": "Enviar para Conexão \"SDR\""
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/uqsS0xdnLNdWleMeYhv8",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "nome",
+              "value": "={{ $json.nome }}"
+            },
+            {
+              "name": "=telefone",
+              "value": "={{ $json.telefone }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "atendente",
+              "value": "={{ $json.atendente }}"
+            },
+            {
+              "name": "created_by",
+              "value": "={{ $json.created_by }}"
+            },
+            {
+              "name": "=evento",
+              "value": "={{ $json.evento }}"
+            },
+            {
+              "name": "=meet_link",
+              "value": "={{ $json.meet_link }}"
+            },
+            {
+              "name": "data_hora",
+              "value": "={{ $json.data_hora }}"
+            },
+            {
+              "name": "tipo",
+              "value": "={{ $json.tipo }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1008,
+        1008
+      ],
+      "id": "69ffdc27-39b9-421a-91e5-2c356b030415",
+      "name": "Enviar para Conexão \"Closer\""
+    },
+    {
+      "parameters": {
+        "content": "## 0126 - Social Seller (WhatsApp)",
+        "height": 240,
+        "width": 1088
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        928,
+        176
+      ],
+      "id": "01c65e66-c1fe-4be1-8a5e-e690fc8998e5",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/sVtfbOOyLHk5IrXwMrOy",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "nome",
+              "value": "={{ $json.nome }}"
+            },
+            {
+              "name": "=telefone",
+              "value": "={{ $json.telefone }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "atendente",
+              "value": "={{ $json.atendente }}"
+            },
+            {
+              "name": "created_by",
+              "value": "={{ $json.created_by }}"
+            },
+            {
+              "name": "=evento",
+              "value": "={{ $json.evento }}"
+            },
+            {
+              "name": "=meet_link",
+              "value": "={{ $json.meet_link }}"
+            },
+            {
+              "name": "data_hora",
+              "value": "={{ $json.data_hora }}"
+            },
+            {
+              "name": "tipo",
+              "value": "={{ $json.tipo }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1008,
+        240
+      ],
+      "id": "acc3dbb2-7885-48e9-b82f-760892335b11",
+      "name": "Enviar \"Social Seller (WhatsApp)\""
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/u8h2gcbp5gwShJmEUAYW",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "Telefone do Lead",
+              "value": "={{ $('Edit Fields').item.json.telefone }}"
+            },
+            {
+              "name": "Data/Horário (Agendamento)",
+              "value": "={{ $('Edit Fields').item.json.data_hora }}"
+            },
+            {
+              "name": "Atendente",
+              "value": "={{ $('Edit Fields').item.json.atendente }}"
+            },
+            {
+              "name": "Setor"
+            },
+            {
+              "name": "Nome do Lead",
+              "value": "={{ $('Edit Fields').item.json.nome }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1008,
+        496
+      ],
+      "id": "9c1a8842-f4d7-45f9-940b-f4ba4b0a0985",
+      "name": "Enviar para Conexão: \"Aldeia\""
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/4WCBo2j3JI3kms39aYSU",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=Telefone",
+              "value": "={{ $('Edit Fields').item.json.telefone }}"
+            },
+            {
+              "name": "Atendente",
+              "value": "={{ $('Edit Fields').item.json.atendente }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1216,
+        496
+      ],
+      "id": "844a612f-aaf4-44fd-8401-1edc04d477dc",
+      "name": "Enviar para Conexão \"Closer\"1"
+    },
+    {
+      "parameters": {
+        "content": "## 0126 - On The Road 2.0 (Aldeia)",
+        "height": 240,
+        "width": 1088
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        928,
+        432
+      ],
+      "id": "f09258df-3c1c-4b03-8cf3-7e1ee1a87f4d",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## 0126 - Protocolo Anti-sistema (SDR)",
+        "height": 240,
+        "width": 1088
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        928,
+        688
+      ],
+      "id": "fc0e45b9-5eaa-4155-9e33-6cbfdc6ba756",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "## Direcionar para Closer",
+        "height": 240,
+        "width": 1088
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        928,
+        944
+      ],
+      "id": "9b0a8434-b838-47f9-a543-064d879435de",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.evento }}",
+                    "rightValue": "0126 - Social Seller (Instagram)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "49a0f569-b421-458e-a180-1dcf66fbb4ab"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "0126 - Social Seller (Instagram)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "91df2487-6652-42a2-ad23-6805dc000654",
+                    "leftValue": "={{ $json.evento }}",
+                    "rightValue": "0126 - Social Seller (WhatsApp)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "0126 - Social Seller (WhatsApp)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "26ad9d50-12f7-40fc-98bc-f157655f5077",
+                    "leftValue": "={{ $json.evento }}",
+                    "rightValue": "0126 - On The Road 2.0",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "0126 - On The Road 2.0"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7ee5db20-b04c-4c76-a7ca-a33a3d82d58f",
+                    "leftValue": "={{ $json.evento }}",
+                    "rightValue": "0126 - Protocolo Anti-sistema",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "0126 - Protocolo Anti-sistema"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "49274fbb-4d29-48a9-8085-09565035d419",
+                    "leftValue": "={{ $json.evento }}",
+                    "rightValue": "Agendamento Lead Closer",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Agendamento Lead Closer"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "1e8d3fdd-df7e-42cb-8d3d-ce735737cea2",
+                    "leftValue": "={{ $json.evento }}",
+                    "rightValue": "Pausa Extra",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Pausa Extra"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        624,
+        448
+      ],
+      "id": "c7dd3a8a-c5f6-46f9-b17a-13f4131933a6",
+      "name": "Evento"
+    }
+  ],
+  "pinData": {
+    "Webhook4": [
+      {
+        "json": {
+          "headers": {
+            "accept": "application/json, text/plain, */*",
+            "content-type": "application/json",
+            "user-agent": "axios/1.13.2",
+            "content-length": "797",
+            "accept-encoding": "gzip, compress, deflate, br",
+            "x-vercel-id": "gru1::qzm4q-1768222973289-15812031b09f",
+            "host": "n8n.tradestars.com.br",
+            "connection": "keep-alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "id": "5c94d24d-d24c-41e0-880b-28fedb20e567",
+            "client_id": "46f228d5-a01e-4b7c-a35d-7b065a6566f7",
+            "date": "2026-01-12",
+            "time": "18:30:00+00",
+            "type": "Agendamento Pessoal",
+            "status": "Pendente",
+            "meet_link": "https://meet.google.com/svc-tgxb-mnk",
+            "notes": "",
+            "additional_info": "",
+            "created_at": "2026-01-12T13:02:56.145+00:00",
+            "interest_level": "Alto",
+            "knowledge_level": "Iniciante",
+            "financial_currency": "BRL",
+            "financial_amount": 111,
+            "end_time": "19:30:00+00",
+            "oldStatus": null,
+            "google_event_id": "6123hjjjohrv1oelkqqaig0to0",
+            "lead": "Teste Leonardo",
+            "phone": "5541998618483",
+            "email": "teste@tradestars.com.br",
+            "student_profile": {
+              "interest": "Alto",
+              "knowledge": "Iniciante",
+              "financial": {
+                "currency": "BRL",
+                "amount": 111
+              }
+            },
+            "attendant_name": "Leonardo Henrique",
+            "created_by_name": "Leonardo Henrique",
+            "event_name": "Pausa Extra"
+          },
+          "webhookUrl": "https://n8n.tradestars.com.br/webhook/ee6b4b33-b977-4585-a1ca-526ee6e357f1",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields4": {
+      "main": [
+        [
+          {
+            "node": "Evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook3": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook4": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pesquisar Lead": {
+      "main": [
+        [
+          {
+            "node": "Colocar Tag 'confirmação_de_agendamento'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Colocar Tag 'confirmação_de_agendamento'": {
+      "main": [
+        [
+          {
+            "node": "Preencher Negociando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preencher Negociando": {
+      "main": [
+        [
+          {
+            "node": "Preencher data_agendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preencher data_agendamento": {
+      "main": [
+        [
+          {
+            "node": "Preencher link_meet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar para Conexão: \"Aldeia\"": {
+      "main": [
+        [
+          {
+            "node": "Enviar para Conexão \"Closer\"1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evento": {
+      "main": [
+        [
+          {
+            "node": "Pesquisar Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar \"Social Seller (WhatsApp)\"",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar para Conexão: \"Aldeia\"",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar para Conexão \"SDR\"",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar para Conexão \"Closer\"",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar para Conexão \"Closer\"",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8a3a85b1-461c-4806-88f7-afddbdfc4f4b",
+  "meta": {
+    "instanceId": "e4b30a8951da40e02756dbd2bb2ae05298544c5c64e487ce1a840b953177dba8"
+  },
+  "id": "4XpnERxEm9VytY2r",
+  "tags": []
+}
