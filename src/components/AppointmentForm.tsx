@@ -139,25 +139,47 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         return allTypes;
     }, [user]);
 
-    const attendantOptions = [
-        ...(formData.type === 'Fora da agenda' ? [] : [{ value: 'distribuicao_automatica', label: 'Distribuição Automática' }]),
-        ...attendants
-            .filter(a => {
-                const selectedEvent = events.find(e => e.id === formData.eventId);
-                const eventSector = selectedEvent?.sector;
-                const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
+    const attendantOptions = React.useMemo(() => {
+        // When EDITING, filter attendants by appointment type strictly
+        if (isEditing) {
+            const typeToSectorMap: Record<string, string> = {
+                'Ligação Closer': 'Closer',
+                'Reagendamento Closer': 'Closer',
+                'Upgrade': 'Closer',
+                'Ligação SDR': 'SDR'
+            };
 
-                if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda') return a.sector === 'Closer';
+            const requiredSector = typeToSectorMap[formData.type];
 
-                if (isAdministrative) {
-                    return eventSector ? a.sector === eventSector : true;
-                }
+            // Filter attendants by sector if type requires it
+            const filteredAttendants = requiredSector
+                ? attendants.filter(a => a.sector === requiredSector)
+                : attendants; // For other types like 'Agendamento Pessoal', 'Fora da agenda', show all
 
-                if (user?.sector === 'TEI') return true;
-                return user?.sector ? a.sector === user.sector : true;
-            })
-            .map(a => ({ value: a.id, label: a.name }))
-    ];
+            return filteredAttendants.map(a => ({ value: a.id, label: a.name }));
+        }
+
+        // Original logic for CREATING new appointments
+        return [
+            ...(formData.type === 'Fora da agenda' ? [] : [{ value: 'distribuicao_automatica', label: 'Distribuição Automática' }]),
+            ...attendants
+                .filter(a => {
+                    const selectedEvent = events.find(e => e.id === formData.eventId);
+                    const eventSector = selectedEvent?.sector;
+                    const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
+
+                    if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda') return a.sector === 'Closer';
+
+                    if (isAdministrative) {
+                        return eventSector ? a.sector === eventSector : true;
+                    }
+
+                    if (user?.sector === 'TEI') return true;
+                    return user?.sector ? a.sector === user.sector : true;
+                })
+                .map(a => ({ value: a.id, label: a.name }))
+        ];
+    }, [isEditing, formData.type, formData.eventId, attendants, events, user]);
 
     const eventOptions = React.useMemo(() => {
         // Filter active events by sector (or if user is privileged)
