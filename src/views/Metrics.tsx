@@ -622,12 +622,12 @@ export const Metrics: React.FC = () => {
                                             dataKey={status}
                                             stackId="a"
                                             fill={
-                                                status === 'Realizado' ? '#10b981' :
-                                                    status === 'Pendente' ? '#f59e0b' :
-                                                        status === 'Cancelado' ? '#ef4444' :
-                                                            status === 'Reagendado' ? '#3b82f6' :
-                                                                status === 'Esquecimento' ? '#8b5cf6' :
-                                                                    '#f43f5e'
+                                                status === 'Realizado' ? '#00E676' :
+                                                    status === 'Pendente' ? '#B2B2B2' :
+                                                        status === 'Cancelado' ? '#FF1744' :
+                                                            status === 'Reagendado' ? '#2979FF' :
+                                                                status === 'Esquecimento' ? '#D500F9' :
+                                                                    '#FF9100'
                                             }
                                             radius={[0, 0, 0, 0]}
                                             barSize={32}
@@ -646,21 +646,21 @@ export const Metrics: React.FC = () => {
                         {APPOINTMENT_STATUSES.map((status) => {
                             const isSelected = selectedStatuses.includes(status);
                             const colorClass = {
-                                'Realizado': 'border-emerald-500 bg-emerald-500/10',
-                                'Pendente': 'border-amber-500 bg-amber-500/10',
-                                'Cancelado': 'border-red-500 bg-red-500/10',
-                                'Reagendado': 'border-blue-500 bg-blue-500/10',
-                                'Esquecimento': 'border-violet-500 bg-violet-500/10',
-                                'No-show': 'border-rose-500 bg-rose-500/10'
+                                'Realizado': 'border-[#00E676] bg-[#00E676]/10',
+                                'Pendente': 'border-[#B2B2B2] bg-[#B2B2B2]/10',
+                                'Cancelado': 'border-[#FF1744] bg-[#FF1744]/10',
+                                'Reagendado': 'border-[#2979FF] bg-[#2979FF]/10',
+                                'Esquecimento': 'border-[#D500F9] bg-[#D500F9]/10',
+                                'No-show': 'border-[#FF9100] bg-[#FF9100]/10'
                             }[status] || 'border-border';
 
                             const dotColor = {
-                                'Realizado': 'bg-emerald-500',
-                                'Pendente': 'bg-amber-500',
-                                'Cancelado': 'bg-red-500',
-                                'Reagendado': 'bg-blue-500',
-                                'Esquecimento': 'bg-violet-500',
-                                'No-show': 'bg-rose-500'
+                                'Realizado': 'bg-[#00E676]',
+                                'Pendente': 'bg-[#B2B2B2]',
+                                'Cancelado': 'bg-[#FF1744]',
+                                'Reagendado': 'bg-[#2979FF]',
+                                'Esquecimento': 'bg-[#D500F9]',
+                                'No-show': 'bg-[#FF9100]'
                             }[status] || 'bg-border';
 
                             return (

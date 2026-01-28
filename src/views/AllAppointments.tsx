@@ -154,12 +154,12 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Realizado': return 'bg-green-500/10 text-green-400 border-green-500/20';
-            case 'Pendente': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-            case 'Cancelado': return 'bg-red-500/10 text-red-400 border-red-500/20';
-            case 'Reagendado': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-            case 'Esquecimento': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
-            case 'No-show': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+            case 'Realizado': return 'bg-[#00E676]/10 text-[#00E676] border-[#00E676]/20';
+            case 'Pendente': return 'bg-[#B2B2B2]/10 text-[#B2B2B2] border-[#B2B2B2]/20';
+            case 'Cancelado': return 'bg-[#FF1744]/10 text-[#FF1744] border-[#FF1744]/20';
+            case 'Reagendado': return 'bg-[#2979FF]/10 text-[#2979FF] border-[#2979FF]/20';
+            case 'Esquecimento': return 'bg-[#D500F9]/10 text-[#D500F9] border-[#D500F9]/20';
+            case 'No-show': return 'bg-[#FF9100]/10 text-[#FF9100] border-[#FF9100]/20';
             default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
         }
     };

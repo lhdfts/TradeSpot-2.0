@@ -95,7 +95,7 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                     <polyline points="20 6 9 17 4 12" />
                                 </svg>
                             );
-                            bgColor = 'bg-green-500';
+                            bgColor = 'bg-[#00E676]';
                         } else if (status === 'Cancelado') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
@@ -103,14 +103,14 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                     <line x1="6" y1="6" x2="18" y2="18"></line>
                                 </svg>
                             );
-                            bgColor = 'bg-red-500';
+                            bgColor = 'bg-[#FF1744]';
                         } else if (status === 'Reagendado' || (item.type as any) === 'Reschedule') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
                                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                                 </svg>
                             );
-                            bgColor = 'bg-blue-500';
+                            bgColor = 'bg-[#2979FF]';
                         } else if (status === 'Esquecimento') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
@@ -118,7 +118,7 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                     <line x1="6" y1="6" x2="18" y2="18"></line>
                                 </svg>
                             );
-                            bgColor = 'bg-orange-500';
+                            bgColor = 'bg-[#D500F9]';
                         } else if (status === 'No-show') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
@@ -126,14 +126,14 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                     <line x1="6" y1="6" x2="18" y2="18"></line>
                                 </svg>
                             );
-                            bgColor = 'bg-purple-500';
+                            bgColor = 'bg-[#FF9100]';
                         } else if (status === 'Pendente') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
                                     <line x1="5" y1="12" x2="19" y2="12" />
                                 </svg>
                             );
-                            bgColor = 'bg-yellow-500';
+                            bgColor = 'bg-[#B2B2B2]';
                         } else {
                             // Default fallback
                             Icon = (

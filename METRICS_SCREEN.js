@@ -46,17 +46,17 @@ async function showMetricsView() {
     // Renderizar rankings
     renderLeadsRanking();
     renderClosersRanking();
-    
+
     // Renderizar gráfico
     renderAppointmentsChart();
 
     // Setup dos botões de expandir
     setupMetricsExpandButtons();
-    
+
     // Carregar filtros
     populateMetricsAttendantFilter();
     populateMetricsEventFilter();
-    
+
     // Atualizar selects de eventos
     populateEventSelects();
 }
@@ -115,21 +115,21 @@ function exportAppointmentsToCSV() {
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
-        
+
         // Gera o nome do arquivo com a data e hora
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
         const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
         const fileName = `agendamentos_${dateStr}_${timeStr}.csv`;
-        
+
         link.setAttribute('href', url);
         link.setAttribute('download', fileName);
         link.style.visibility = 'hidden';
-        
+
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
+
         showNotification(`Agendamentos exportados com sucesso! (${appointmentsData.length} registros)`, 'success');
         console.log('[EXPORT] Arquivo baixado:', fileName, '- Total de registros:', appointmentsData.length);
     } catch (error) {
@@ -232,7 +232,7 @@ function applyMetricsFilters() {
     }
     if (periodSelect) {
         metricsPeriodFilter = periodSelect.value;
-        
+
         // Mostrar/ocultar campos de período personalizado
         if (customPeriodDiv) {
             if (metricsPeriodFilter === 'custom') {
@@ -277,7 +277,7 @@ function applyMetricsFilters() {
         inicio: metricsPeriodStart,
         fim: metricsPeriodEnd
     });
-    
+
     // Re-renderizar rankings e gráfico
     renderLeadsRanking();
     renderClosersRanking();
@@ -401,11 +401,11 @@ function renderLeadsRanking() {
     // Log detalhado para debug
     console.log('[LEADS RANKING] Total de atendentes em attendantsData:', attendantsData.length);
     console.log('[LEADS RANKING] attendantsData completo:', attendantsData);
-    
+
     // Verificar todos os setores únicos
     const setoresUnicos = [...new Set(attendantsData.map(u => (u.setor || '').toLowerCase().trim()))];
     console.log('[LEADS RANKING] Setores únicos encontrados:', setoresUnicos);
-    
+
     // Verificar usuários com setor Leads (com diferentes variações)
     const leadsUsersInAttendants = attendantsData.filter(user => {
         const setor = (user.setor || '').toLowerCase().trim();
@@ -422,24 +422,24 @@ function renderLeadsRanking() {
     function isLeadsUser(name) {
         if (!name || name.trim() === '') return false;
         const normalizedName = (name || '').toLowerCase().trim();
-        
+
         const match = attendantsData.some(user => {
             const setor = (user.setor || '').toLowerCase().trim();
             const userName = (user.nome || '').toLowerCase().trim();
             const isLeads = setor === 'leads' || setor === 'lead';
             const nameMatch = userName === normalizedName;
-            
+
             if (isLeads && nameMatch) {
                 console.log('[LEADS RANKING] Match encontrado:', { name, userName, setor });
             }
-            
+
             return isLeads && nameMatch;
         });
-        
+
         if (!match) {
             console.log('[LEADS RANKING] Nome não encontrado como Leads:', name);
         }
-        
+
         return match;
     }
 
@@ -467,7 +467,7 @@ function renderLeadsRanking() {
             const leadNameLower = (leadName || '').toLowerCase().trim();
             return createdBy === leadNameLower && app.type === 'Ligação Closer';
         }).length;
-        
+
         const reagendamentoCloser = filteredData.filter(app => {
             const createdBy = (app.createdBy || '').toLowerCase().trim();
             const leadNameLower = (leadName || '').toLowerCase().trim();
@@ -576,7 +576,7 @@ function renderClosersRanking() {
 
     // Filtrar apenas agendamentos de Vendas (Ligação Closer e Reagendamento Closer)
     // Excluir "Agendamento Pessoal" das métricas
-    const vendorsAppointments = filteredData.filter(app => 
+    const vendorsAppointments = filteredData.filter(app =>
         (app.type === 'Ligação Closer' || app.type === 'Reagendamento Closer') &&
         app.type !== 'Agendamento Pessoal'
     );
@@ -591,7 +591,7 @@ function renderClosersRanking() {
     const closersMetrics = {};
     closersNames.forEach(closerName => {
         const total = vendorsAppointments.filter(app => app.attendant === closerName).length;
-        const realizados = vendorsAppointments.filter(app => 
+        const realizados = vendorsAppointments.filter(app =>
             app.attendant === closerName && app.status === 'Realizado'
         ).length;
 
@@ -637,7 +637,7 @@ function renderClosersRanking() {
                     ${name || '(sem nome)'}
                 </td>
                 <td style="text-align: center; padding: 12px;">
-                    <span style="background-color: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 6px; font-weight: 600;">${metrics.realizados}</span>
+                    <span style="background-color: rgba(0, 230, 118, 0.1); color: #00E676; padding: 6px 12px; border-radius: 6px; font-weight: 600;">${metrics.realizados}</span>
                 </td>
                 <td style="text-align: center; padding: 12px;">
                     <span style="background-color: #f0fdf4; color: #15803d; padding: 6px 12px; border-radius: 6px; font-weight: 600;">${metrics.total}</span>
@@ -660,7 +660,7 @@ function renderClosersRanking() {
                 <td style="padding: 12px; text-align: center; font-weight: 600; color: #3b82f6;">${index + 1}</td>
                 <td style="padding: 12px; color: #1f2937;">${name || '(sem nome)'}</td>
                 <td style="padding: 12px; text-align: center;">
-                    <span style="background-color: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-weight: 600;">${metrics.realizados}</span>
+                    <span style="background-color: rgba(0, 230, 118, 0.1); color: #00E676; padding: 4px 8px; border-radius: 4px; font-weight: 600;">${metrics.realizados}</span>
                 </td>
                 <td style="padding: 12px; text-align: center;">
                     <span style="background-color: #f0fdf4; color: #15803d; padding: 4px 8px; border-radius: 4px; font-weight: 600;">${metrics.total}</span>
@@ -774,12 +774,12 @@ function createAppointmentsChart() {
                 {
                     label: 'Agendamentos Realizados',
                     data: realizadosData,
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderColor: '#00E676',
+                    backgroundColor: 'rgba(0, 230, 118, 0.1)',
                     tension: 0.4,
                     fill: true,
                     pointRadius: 5,
-                    pointBackgroundColor: '#10b981',
+                    pointBackgroundColor: '#00E676',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 2
                 },
@@ -798,12 +798,12 @@ function createAppointmentsChart() {
                 {
                     label: 'Agendamentos Cancelados',
                     data: canceladosData,
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderColor: '#FF1744',
+                    backgroundColor: 'rgba(255, 23, 68, 0.1)',
                     tension: 0.4,
                     fill: true,
                     pointRadius: 5,
-                    pointBackgroundColor: '#ef4444',
+                    pointBackgroundColor: '#FF1744',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 2
                 }
@@ -812,16 +812,16 @@ function createAppointmentsChart() {
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            onClick: function(event, activeElements) {
+            onClick: function (event, activeElements) {
                 if (activeElements.length > 0) {
                     const datasetIndex = activeElements[0].datasetIndex;
                     const dataIndex = activeElements[0].index;
                     const date = sortedDates[dataIndex];
-                    
+
                     // Determinar qual tipo de agendamento foi clicado
                     let statusFilter = null;
                     let typeTitle = '';
-                    
+
                     if (datasetIndex === 0) {
                         statusFilter = null; // Todos
                         typeTitle = `Todos os Agendamentos - ${labels[dataIndex]}`;
@@ -835,7 +835,7 @@ function createAppointmentsChart() {
                         statusFilter = 'Cancelado';
                         typeTitle = `Agendamentos Cancelados - ${labels[dataIndex]}`;
                     }
-                    
+
                     // Mostrar modal com agendamentos da data
                     showAppointmentsByDateModal(date, statusFilter, typeTitle);
                 }
