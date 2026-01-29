@@ -108,9 +108,33 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
     const updatePosition = () => {
         if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
+
+            // Calculate available width
+            const viewportWidth = window.innerWidth;
+            const dropdownWidth = 320; // w-80 is roughly 320px
+
+            // Default left position
+            let left = rect.left + window.scrollX;
+
+            // If dropdown would overflow to the right, align it to the right edge of screen minus padding
+            if (rect.left + dropdownWidth > viewportWidth) {
+                // Try aligning to right of input
+                const rightAlignedLeft = (rect.right + window.scrollX) - dropdownWidth;
+
+                // If right-align works (doesn't go off screen left), use it
+                // Otherwise force it to be onscreen with some padding
+                if (rightAlignedLeft >= 0) {
+                    left = rightAlignedLeft;
+                } else {
+                    // Center or fit within screen
+                    left = (viewportWidth - dropdownWidth) / 2;
+                    if (left < 10) left = 10; // Minimum margin
+                }
+            }
+
             setCoords({
                 top: rect.bottom + window.scrollY + 4,
-                left: rect.left + window.scrollX
+                left: left
             });
         }
     };

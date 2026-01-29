@@ -94,7 +94,7 @@ export const publicAppointmentSchema = z.object({
     phone: z.coerce.string()
         .regex(/^\d+$/, "O telefone deve conter apenas números")
         .min(10, "O telefone informado é muito curto") // Brazil phones are 10 or 11
-        .max(11, "O telefone informado é muito longo"),
+        .max(20, "O telefone informado é muito longo"),
 
     // Name validation
     lead: z.string()
