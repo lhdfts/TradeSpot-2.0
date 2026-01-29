@@ -134,6 +134,7 @@ export const Events: React.FC = () => {
                             <th className="px-6 py-4">Setor</th>
                             <th className="px-6 py-4">Data de Criação</th>
                             <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4 text-center">Link</th>
                             <th className="px-6 py-4 text-center">Ações</th>
                         </tr>
                     </thead>
@@ -157,6 +158,24 @@ export const Events: React.FC = () => {
                                         }`}>
                                         {event.status ? 'Ativo' : 'Arquivado'}
                                     </span>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                    {event.self_scheduling_link && (
+                                        <button
+                                            onClick={() => {
+                                                const url = `${window.location.origin}/agendar/${event.self_scheduling_link}`;
+                                                navigator.clipboard.writeText(url);
+                                                alert('Link copiado!');
+                                            }}
+                                            className="text-foreground hover:text-primary transition-colors"
+                                            title="Copiar Link de Auto-Agendamento"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                            </svg>
+                                        </button>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 text-center space-x-2">
                                     <button

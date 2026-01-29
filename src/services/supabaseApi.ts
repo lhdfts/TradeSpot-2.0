@@ -235,7 +235,8 @@ export class SupabaseApiService implements ApiService {
                 end_date: event.end_date,
                 status: event.status,
                 created_at: event.created_at,
-                sector: event.sector
+                sector: event.sector,
+                self_scheduling_link: event.self_scheduling_link
             }));
         },
         create: async (data: Omit<Event, 'id'>): Promise<Event> => {
@@ -246,7 +247,8 @@ export class SupabaseApiService implements ApiService {
                     start_date: data.start_date,
                     end_date: data.end_date,
                     status: data.status,
-                    sector: data.sector
+                    sector: data.sector,
+                    self_scheduling_link: data.self_scheduling_link
                 })
                 .select()
                 .single();
@@ -259,7 +261,8 @@ export class SupabaseApiService implements ApiService {
                 start_date: eventData.start_date,
                 end_date: eventData.end_date,
                 status: eventData.status,
-                sector: eventData.sector
+                sector: eventData.sector,
+                self_scheduling_link: eventData.self_scheduling_link
             };
         },
         update: async (id: string, data: Partial<Event>): Promise<Event> => {
@@ -270,7 +273,8 @@ export class SupabaseApiService implements ApiService {
                     start_date: data.start_date,
                     end_date: data.end_date,
                     status: data.status,
-                    sector: data.sector
+                    sector: data.sector,
+                    self_scheduling_link: data.self_scheduling_link
                 })
                 .eq('id', id)
                 .select()
@@ -284,7 +288,8 @@ export class SupabaseApiService implements ApiService {
                 start_date: eventData.start_date,
                 end_date: eventData.end_date,
                 status: eventData.status,
-                sector: eventData.sector
+                sector: eventData.sector,
+                self_scheduling_link: eventData.self_scheduling_link
             };
         },
         delete: async (id: string): Promise<void> => {
