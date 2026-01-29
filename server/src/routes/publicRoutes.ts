@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant } from '../utils/distribution.js';
 import { getAppointmentWebhooks } from '../config/webhooks.js';
+import { createGoogleMeetLink } from '../services/googleMeet.js';
 
 const router = Router();
 
@@ -173,6 +174,36 @@ router.post('/appointments', async (req: Request, res: Response) => {
         const eventId = req.body.eventId;
         if (!eventId) return res.status(400).json({ error: 'ID do evento é obrigatório' });
 
+        // 5.5 Create Google Meet Link
+        let meetLink = '';
+        let googleEventId = null;
+
+        // Calculate ISO strings for Google
+        // We need to handle potential date crossing if late night, but let's stick to simple ISO for now
+        // Assuming time is HH:MM and date is YYYY-MM-DD
+        const startIso = `${data.date}T${data.time}:00-03:00`;
+        const endIso = `${data.date}T${endTime}:00-03:00`;
+
+        // Get Attendant Email
+        const { data: attendantUser } = await supabase.from('user').select('email').eq('id', attendantId).single();
+        const attendees = [data.email]; // Client email
+        if (attendantUser && attendantUser.email) {
+            attendees.push(attendantUser.email);
+        }
+
+        // Create Event
+        const googleData = await createGoogleMeetLink(
+            `Reunião com ${data.lead}`,
+            startIso,
+            endIso,
+            attendees
+        );
+
+        if (googleData) {
+            meetLink = googleData.meetLink || '';
+            googleEventId = googleData.eventId;
+        }
+
         const appointmentPayload = {
             client_id: clientId,
             date: data.date,
@@ -182,15 +213,16 @@ router.post('/appointments', async (req: Request, res: Response) => {
             status: 'Pendente',
             attendant_id: attendantId,
             event_id: eventId,
-            meet_link: '', // No meet link generated for auto-scheduling unless requested? User didn't ask.
+            meet_link: meetLink,
             notes: 'Auto-agendamento via Link Público',
             additional_info: '',
+            google_event_id: googleEventId, // Save Google Event ID
             interest_level: 'Desconhecido',
             knowledge_level: 'Iniciante',
             financial_currency: 'BRL',
             financial_amount: 0,
             created_at: new Date().toISOString(),
-            created_by: null // System created
+            created_by: 'a6127506-db64-4ac9-ba09-7eac663b0b31' // System user ID
         };
 
         const { data: createdAppointment, error: appError } = await supabase

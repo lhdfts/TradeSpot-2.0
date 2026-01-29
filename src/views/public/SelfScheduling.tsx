@@ -7,6 +7,7 @@ import { TimePickerInput } from '../../components/TimePickerInput';
 import { FloatingInput } from '../../components/FloatingInput';
 import { Button } from '../../components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { FloatingCountrySelect } from '../../components/FloatingCountrySelect';
 
 const generateTimes = () => {
     const times = [];
@@ -33,6 +34,7 @@ export const SelfScheduling = () => {
     const [formData, setFormData] = useState({
         name: '',
         email: '',
+        ddi: '+55',
         phone: '',
         date: '',
         time: ''
@@ -70,7 +72,11 @@ export const SelfScheduling = () => {
         if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Email inválido';
 
         const cleanPhone = formData.phone.replace(/\D/g, '');
-        if (!cleanPhone || cleanPhone.length < 10 || cleanPhone.length > 11) newErrors.phone = 'Telefone inválido (10 ou 11 dígitos)';
+        if (formData.ddi === '+55') {
+            if (!cleanPhone || cleanPhone.length < 10 || cleanPhone.length > 11) newErrors.phone = 'Telefone inválido (10 ou 11 dígitos)';
+        } else {
+            if (!cleanPhone || cleanPhone.length < 5) newErrors.phone = 'Telefone inválido';
+        }
 
         if (!formData.date) newErrors.date = 'Selecione uma data';
         if (!formData.time) newErrors.time = 'Selecione um horário';
@@ -107,7 +113,7 @@ export const SelfScheduling = () => {
                 body: JSON.stringify({
                     lead: formData.name,
                     email: formData.email,
-                    phone: formData.phone,
+                    phone: `${formData.ddi}${formData.phone.replace(/\D/g, '')}`,
                     date: formData.date,
                     time: formData.time,
                     eventId: event.id
@@ -210,22 +216,29 @@ export const SelfScheduling = () => {
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         error={errors.email}
                     />
-                    <FloatingInput
-                        label="Telefone com DDI (Código do País), DDD e Número"
-                        value={formData.phone} // Masking logic ideally here or handled by component
-                        onChange={(e) => {
-                            // Simple mask
-                            let val = e.target.value.replace(/\D/g, '');
-                            if (val.length > 11) val = val.slice(0, 11);
-                            // Apply visual mask (##) #####-####
-                            // For simplicity in this vanilla component, just passing raw or simple formatter?
-                            // Let's passed sanitized to state but mask visual? No, FloatingInput controls value.
-                            // Just storing digits for now, backend sanitizes.
-                            setFormData({ ...formData, phone: val });
-                        }}
-                        placeholder="Ex: 11999999999"
-                        error={errors.phone}
-                    />
+                    <div className="flex gap-3">
+                        <div className="w-[130px] flex-shrink-0">
+                            <FloatingCountrySelect
+                                label="DDI"
+                                value={formData.ddi}
+                                onChange={(val) => setFormData({ ...formData, ddi: val })}
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <FloatingInput
+                                label="Telefone"
+                                value={formData.phone}
+                                onChange={(e) => {
+                                    let val = e.target.value.replace(/\D/g, '');
+                                    // Limit length only for BR to avoid weird UX for other countries
+                                    if (formData.ddi === '+55' && val.length > 11) val = val.slice(0, 11);
+                                    setFormData({ ...formData, phone: val });
+                                }}
+                                placeholder={formData.ddi === '+55' ? "Ex: 11999999999" : "Número do telefone"}
+                                error={errors.phone}
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 <div className="space-y-4 pt-4 border-t">
