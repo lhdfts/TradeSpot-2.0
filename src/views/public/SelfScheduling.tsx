@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar } from '../../components/ui/calendar';
+import { FloatingDateInput } from '../../components/FloatingDateInput';
+import { TimePickerInput } from '../../components/TimePickerInput';
 import { FloatingInput } from '../../components/FloatingInput';
 import { Button } from '../../components/ui/button';
-import { Loader2, CheckCircle2, Calendar as CalendarIcon, Clock, AlertCircle } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
-// Helper to generate time slots
 const generateTimes = () => {
     const times = [];
     for (let i = 0; i < 24; i++) {
@@ -35,7 +34,7 @@ export const SelfScheduling = () => {
         name: '',
         email: '',
         phone: '',
-        date: undefined as Date | undefined,
+        date: '',
         time: ''
     });
 
@@ -78,7 +77,7 @@ export const SelfScheduling = () => {
 
         // Buffer check (frontend side)
         if (formData.date && formData.time) {
-            const apptTime = new Date(`${format(formData.date, 'yyyy-MM-dd')}T${formData.time}:00`);
+            const apptTime = new Date(`${formData.date}T${formData.time}:00`);
             const now = new Date();
             const diff = (apptTime.getTime() - now.getTime()) / 60000;
             if (diff < 10) {
@@ -109,7 +108,7 @@ export const SelfScheduling = () => {
                     lead: formData.name,
                     email: formData.email,
                     phone: formData.phone,
-                    date: formData.date ? format(formData.date, 'yyyy-MM-dd') : '',
+                    date: formData.date,
                     time: formData.time,
                     eventId: event.id
                 })
@@ -167,7 +166,7 @@ export const SelfScheduling = () => {
                 <div className="bg-muted p-4 rounded-lg inline-block text-left mx-auto min-w-[200px]">
                     <p className="text-sm text-secondary">Data e Hora:</p>
                     <p className="font-semibold text-lg">
-                        {formData.date && format(formData.date, "dd 'de' MMMM", { locale: ptBR })}
+                        {formData.date && format(new Date(formData.date + 'T00:00:00'), "dd 'de' MMMM", { locale: ptBR })}
                         {' às '}
                         {formData.time}
                     </p>
@@ -212,7 +211,7 @@ export const SelfScheduling = () => {
                         error={errors.email}
                     />
                     <FloatingInput
-                        label="Telefone (com DDD)"
+                        label="Telefone com DDI (Código do País), DDD e Número"
                         value={formData.phone} // Masking logic ideally here or handled by component
                         onChange={(e) => {
                             // Simple mask
@@ -230,85 +229,32 @@ export const SelfScheduling = () => {
                 </div>
 
                 <div className="space-y-4 pt-4 border-t">
-                    <h3 className="tex-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                         2. Escolha o Horário
                     </h3>
 
-                    <div className="grid md:grid-cols-2 gap-8">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium flex items-center gap-2">
-                                <CalendarIcon size={16} /> Data
-                            </label>
-                            <div className="border rounded-md p-1 flex justify-center bg-surface">
-                                <Calendar
-                                    mode="single"
-                                    selected={formData.date}
-                                    onSelect={(d) => setFormData({ ...formData, date: d, time: '' })} // Reset time on date change
-                                    locale={ptBR}
-                                    disabled={(date) => {
-                                        const now = new Date();
-                                        now.setHours(0, 0, 0, 0);
-                                        return date < now || date.getDay() === 0 || date.getDay() === 6; // Disable weekends if needed? Or allow?
-                                        // Spec didn't say disable weekends. But "Ligação Closer" usually business days.
-                                        // Let's assume business days for safety, or just allow all futures.
-                                        // Let's allow all futures >= today.
-                                    }}
-                                    initialFocus
-                                />
-                            </div>
-                            {errors.date && <p className="text-xs text-destructive">{errors.date}</p>}
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium flex items-center gap-2">
-                                <Clock size={16} /> Horário
-                            </label>
-
-                            {!formData.date ? (
-                                <div className="h-full flex items-center justify-center text-muted-foreground text-sm border rounded-md min-h-[200px] bg-muted/50">
-                                    Selecione uma data primeiro
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-4 gap-2 max-h-[300px] overflow-y-auto pr-2">
-                                    {TIME_SLOTS.map(time => {
-                                        // Optional: Filter past times if today
-                                        let disabled = false;
-                                        if (formData.date) {
-                                            const now = new Date();
-                                            const isToday = formData.date.getDate() === now.getDate() &&
-                                                formData.date.getMonth() === now.getMonth();
-                                            if (isToday) {
-                                                const [h, m] = time.split(':').map(Number);
-                                                const slotTime = new Date(now);
-                                                slotTime.setHours(h, m, 0, 0);
-                                                if (slotTime <= now) disabled = true;
-                                            }
-                                        }
-
-                                        return (
-                                            <button
-                                                key={time}
-                                                type="button"
-                                                disabled={disabled}
-                                                onClick={() => setFormData({ ...formData, time })}
-                                                className={cn(
-                                                    "px-2 py-2 text-sm rounded transition-colors text-center border",
-                                                    formData.time === time
-                                                        ? "bg-primary text-primary-foreground border-primary"
-                                                        : disabled
-                                                            ? "bg-muted text-muted-foreground opacity-50 cursor-not-allowed border-transparent"
-                                                            : "hover:bg-accent hover:text-accent-foreground border-border"
-                                                )}
-                                            >
-                                                {time}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                            {errors.time && <p className="text-xs text-destructive">{errors.time}</p>}
-                        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FloatingDateInput
+                            label="Data"
+                            value={formData.date}
+                            onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
+                            minDate={new Date()}
+                            error={errors.date ? { message: errors.date } : undefined}
+                        />
+                        <TimePickerInput
+                            label="Horário"
+                            value={formData.time}
+                            onChange={(time) => setFormData({ ...formData, time })}
+                            availableTimes={TIME_SLOTS}
+                            // Optional: disable past times if today
+                            minTime={
+                                formData.date === format(new Date(), 'yyyy-MM-dd')
+                                    ? format(new Date(new Date().getTime() + 10 * 60000), 'HH:mm')
+                                    : undefined
+                            }
+                        />
                     </div>
+                    {errors.time && <p className="text-xs text-destructive">{errors.time}</p>}
                 </div>
 
                 <div className="pt-6">
