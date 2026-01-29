@@ -31,6 +31,15 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     const containerRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
 
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
     // Generate all times (00:00 to 23:45 in 15-minute intervals)
     const generateAllTimes = () => {
         const times: string[] = [];
@@ -58,9 +67,9 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
         }
     };
 
-    // Close dropdown when clicking outside or scrolling
+    // Close dropdown when clicking outside or scrolling (Desktop only)
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && !isMobile) {
             updatePosition();
             const handleScroll = (e: Event) => {
                 const target = e.target as Element;
@@ -75,7 +84,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                 window.removeEventListener('resize', () => setIsOpen(false));
             };
         }
-    }, [isOpen]);
+    }, [isOpen, isMobile]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -103,14 +112,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
 
     const hasValue = value !== '' && value !== undefined && value !== null;
 
-    const [isMobile, setIsMobile] = useState(false);
 
-    useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 768);
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
 
     const timePickerContent = (
         <div
