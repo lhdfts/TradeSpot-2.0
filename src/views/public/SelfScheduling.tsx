@@ -113,7 +113,7 @@ export const SelfScheduling = () => {
                 body: JSON.stringify({
                     lead: formData.name,
                     email: formData.email,
-                    phone: `${formData.ddi}${formData.phone.replace(/\D/g, '')}`,
+                    phone: `${formData.ddi.replace('+', '')}${formData.phone.replace(/\D/g, '')}`,
                     date: formData.date,
                     time: formData.time,
                     eventId: event.id
