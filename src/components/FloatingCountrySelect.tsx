@@ -167,7 +167,18 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
                         placeholder="Buscar país ou código..."
                         className="w-full bg-muted/50 border border-border rounded-md pl-8 pr-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            // Regex allows: a-z, A-Z, 0-9, space, +, and Latin-1 accented characters (covers pt-BR needs)
+                            const allowedPattern = /^[a-zA-Z0-9\s+\u00C0-\u00FF]*$/;
+
+                            // Validation checks
+                            if (!allowedPattern.test(val)) return; // Invalid character
+                            if (val.length > 50) return; // Max total length (user asked for max 50 letters, enforcing on total)
+                            if ((val.match(/\d/g) || []).length > 4) return; // Max 4 digits
+
+                            setSearchTerm(val);
+                        }}
                         onMouseDown={(e) => e.stopPropagation()} // Prevent closing
                     />
                 </div>
