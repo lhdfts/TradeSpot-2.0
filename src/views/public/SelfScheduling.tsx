@@ -250,7 +250,7 @@ export const SelfScheduling = () => {
                         <FloatingDateInput
                             label="Data"
                             value={formData.date}
-                            onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
+                            onChange={(e: any) => setFormData({ ...formData, date: e.target.value, time: '' })}
                             minDate={new Date()}
                             error={errors.date ? { message: errors.date } : undefined}
                         />
@@ -259,6 +259,7 @@ export const SelfScheduling = () => {
                             value={formData.time}
                             onChange={(time) => setFormData({ ...formData, time })}
                             availableTimes={TIME_SLOTS}
+                            disabled={!formData.date}
                             // Optional: disable past times if today
                             minTime={
                                 formData.date === format(new Date(), 'yyyy-MM-dd')
