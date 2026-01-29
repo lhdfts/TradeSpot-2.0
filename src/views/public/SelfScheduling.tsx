@@ -266,6 +266,7 @@ export const SelfScheduling = () => {
                                     ? format(new Date(new Date().getTime() + 10 * 60000), 'HH:mm')
                                     : undefined
                             }
+                            hideUnavailable={true}
                         />
                     </div>
                     {errors.time && <p className="text-xs text-destructive">{errors.time}</p>}

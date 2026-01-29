@@ -18,7 +18,7 @@ export const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 </main>
 
                 <footer className="text-center text-sm text-muted-foreground mt-8">
-                    &copy; {new Date().getFullYear()} TradeSpot. Todos os direitos reservados.
+                    &copy; {new Date().getFullYear()} TradeStars. Todos os direitos reservados.
                 </footer>
             </div>
         </div>

@@ -11,6 +11,7 @@ interface TimePickerInputProps {
     readOnly?: boolean;
     availableTimes?: string[];
     minTime?: string; // Format HH:MM - Should be the earliest allowed time slot
+    hideUnavailable?: boolean;
 }
 
 export const TimePickerInput: React.FC<TimePickerInputProps> = ({
@@ -21,6 +22,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     readOnly = false,
     availableTimes,
     minTime,
+    hideUnavailable = false,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
@@ -156,6 +158,8 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                     <div className="grid grid-cols-4 gap-2">
                         {allTimes.map(time => {
                             const available = isTimeAvailable(time);
+                            if (!available && hideUnavailable) return null;
+
                             return (
                                 <button
                                     key={time}
