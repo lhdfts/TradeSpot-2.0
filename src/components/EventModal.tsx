@@ -67,7 +67,8 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                     event_name: dataToSubmit.event_name || '',
                     start_date: now.toISOString(),
                     end_date: oneHourLater.toISOString(),
-                    status: dataToSubmit.status ?? true
+                    status: dataToSubmit.status ?? true,
+                    self_scheduling_link: dataToSubmit.self_scheduling_link || crypto.randomUUID()
                 } as Omit<Event, 'id'>);
             }
             onSuccess();
@@ -112,6 +113,29 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                         { value: 'false', label: 'Arquivado' }
                     ]}
                 />
+
+                {event && event.self_scheduling_link && (
+                    <div className="space-y-1">
+                        <label className="block text-sm font-medium text-secondary">Link de Auto-Agendamento</label>
+                        <div className="flex gap-2">
+                            <BaseInput
+                                readOnly
+                                value={`${window.location.origin}/agendar/${event.self_scheduling_link}`}
+                                className="bg-muted text-muted-foreground"
+                            />
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => {
+                                    navigator.clipboard.writeText(`${window.location.origin}/agendar/${event.self_scheduling_link}`);
+                                    // You might want to add a toast here, but for now just copy
+                                }}
+                            >
+                                Copiar
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex justify-end gap-2 pt-4">
                     <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>

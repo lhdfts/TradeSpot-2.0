@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import pipedriveRoutes from './routes/pipedriveRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 
+import publicRoutes from './routes/publicRoutes.js';
+
 // ESM alternative for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +23,7 @@ app.use(express.json());
 // Routes
 app.use('/api/pipedrive', pipedriveRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/public', publicRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend is running' });

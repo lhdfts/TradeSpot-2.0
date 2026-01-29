@@ -88,3 +88,31 @@ export const createAppointmentSchema = z.object({
 });
 
 export type CreateAppointmentDTO = z.infer<typeof createAppointmentSchema>;
+
+export const publicAppointmentSchema = z.object({
+    // Strict number validation
+    phone: z.coerce.string()
+        .regex(/^\d+$/, "O telefone deve conter apenas números")
+        .min(10, "O telefone informado é muito curto") // Brazil phones are 10 or 11
+        .max(11, "O telefone informado é muito longo"),
+
+    // Name validation
+    lead: z.string()
+        .regex(nameRegex, "Nome inválido (verifique espaços duplos)")
+        .max(100, "Nome muito longo")
+        .min(2, "Nome muito curto"),
+
+    // Secure email validation
+    email: z.string()
+        .email("Email inválido")
+        .regex(/^[\w\-\.@]+$/, "Caracteres inválidos no email"),
+
+    // Date DD/MM/YYYY or YYYY-MM-DD
+    date: z.string().refine((val) => /^\d{4}-\d{2}-\d{2}$/.test(val) || /^\d{2}\/\d{2}\/\d{4}$/.test(val), "Formato de data inválido"),
+
+    // Time (00, 15, 30, 45)
+    time: z.string().regex(/^(?:[01]\d|2[0-3]):(?:00|15|30|45)$/, "Horário inválido"),
+
+    // Type is optional in input but will be forced to 'Ligação Closer'
+    type: z.string().optional(),
+});

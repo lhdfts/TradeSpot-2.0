@@ -8,6 +8,8 @@ import { Metrics } from './views/Metrics';
 import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
 import { Login } from './views/Login';
+import { SelfScheduling } from './views/public/SelfScheduling';
+import { PublicLayout } from './layouts/PublicLayout';
 import { Modal } from './components/ui/modal';
 import { AppointmentForm } from './components/AppointmentForm';
 import type { Appointment } from './types';
@@ -102,6 +104,19 @@ const MainContent: React.FC = () => {
           </Routes>
         </main>
       </div>
+    );
+  }
+
+  // Handle Public Routes (Self-Scheduling)
+  if (currentView.startsWith('/agendar/')) {
+    return (
+      <Routes>
+        <Route path="/agendar/:link" element={
+          <PublicLayout>
+            <SelfScheduling />
+          </PublicLayout>
+        } />
+      </Routes>
     );
   }
 

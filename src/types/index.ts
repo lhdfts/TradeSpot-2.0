@@ -20,6 +20,7 @@ export interface Event {
     status: boolean;
     created_at?: string;
     sector?: string;
+    self_scheduling_link?: string;
 }
 
 export interface Attendant {
