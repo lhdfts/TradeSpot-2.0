@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { BookOpen, AlertCircle, Sun, Moon, Search, FileText } from 'lucide-react';
+import { BookOpen, AlertCircle, Sun, Moon, Search } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
