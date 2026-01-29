@@ -9,6 +9,7 @@ import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
 import { Login } from './views/Login';
 import { SelfScheduling } from './views/public/SelfScheduling';
+import { NotFound } from './views/public/NotFound';
 import { PublicLayout } from './layouts/PublicLayout';
 import { Modal } from './components/ui/modal';
 import { AppointmentForm } from './components/AppointmentForm';
@@ -108,7 +109,8 @@ const MainContent: React.FC = () => {
   }
 
   // Handle Public Routes (Self-Scheduling)
-  if (currentView.startsWith('/agendar/')) {
+  // Match "/agendar" exactly, "/agendar/" (trailing), or "/agendar/..."
+  if (currentView.startsWith('/agendar')) {
     return (
       <Routes>
         <Route path="/agendar/:link" element={
@@ -116,7 +118,23 @@ const MainContent: React.FC = () => {
             <SelfScheduling />
           </PublicLayout>
         } />
+        {/* Catch-all for /agendar base or invalid subpaths */}
+        <Route path="*" element={
+          <PublicLayout>
+            <NotFound />
+          </PublicLayout>
+        } />
       </Routes>
+    );
+  }
+
+  // If user is NOT logged in, and we haven't matched login or public routes by now,
+  // we should NOT show the sidebar/app shell. Show NotFound or Redirect.
+  if (!user) {
+    return (
+      <PublicLayout>
+        <NotFound />
+      </PublicLayout>
     );
   }
 
@@ -177,6 +195,9 @@ const MainContent: React.FC = () => {
               <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-Líder', 'Co-líder', 'Qualidade']} />}>
                 <Route path="/events" element={<Events />} />
               </Route>
+
+              {/* Catch all internal routes */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </div>

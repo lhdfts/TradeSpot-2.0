@@ -267,6 +267,7 @@ export const SelfScheduling = () => {
                                     : undefined
                             }
                             hideUnavailable={true}
+                            pickerGridClass="grid-cols-3 md:grid-cols-4"
                         />
                     </div>
                     {errors.time && <p className="text-xs text-destructive">{errors.time}</p>}

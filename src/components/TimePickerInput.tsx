@@ -12,6 +12,7 @@ interface TimePickerInputProps {
     availableTimes?: string[];
     minTime?: string; // Format HH:MM - Should be the earliest allowed time slot
     hideUnavailable?: boolean;
+    pickerGridClass?: string;
 }
 
 export const TimePickerInput: React.FC<TimePickerInputProps> = ({
@@ -23,6 +24,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     availableTimes,
     minTime,
     hideUnavailable = false,
+    pickerGridClass,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
@@ -155,7 +157,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                         // We don't force width here to allow it to be wider if needed, but w-96 is fixed width
                     }}
                 >
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className={cn("grid gap-2", pickerGridClass || "grid-cols-4")}>
                         {allTimes.map(time => {
                             const available = isTimeAvailable(time);
                             if (!available && hideUnavailable) return null;
