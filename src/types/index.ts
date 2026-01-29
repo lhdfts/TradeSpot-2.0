@@ -67,6 +67,7 @@ export interface Appointment {
         name: string;
         sector?: string;
     };
+    status_edit_count?: number;
 }
 
 export interface User {

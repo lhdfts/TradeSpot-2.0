@@ -199,9 +199,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
         }
     };
 
-    const handleFocus = () => {
-        inputRef.current?.select();
-    };
+
 
     const openDatePicker = () => {
         if (!isOpen) updatePosition();
@@ -332,6 +330,116 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
 
     const hasValue = value && value.length > 0;
 
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768); // md breakpoint
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    const calendarContent = (
+        <div
+            className={cn(
+                "bg-surface border border-border rounded-lg shadow-lg p-4",
+                isMobile ? "w-full mt-2 relative z-0" : "absolute z-[9999] w-80 datepicker-portal"
+            )}
+            style={!isMobile ? {
+                top: coords.top,
+                left: coords.left
+            } : undefined}
+            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+        >
+            {/* Header com navegação */}
+            <div className="flex items-center justify-between mb-4">
+                <button
+                    type="button"
+                    onClick={handlePrevMonth}
+                    className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
+                >
+                    <ChevronLeft size={16} />
+                </button>
+                <span className="text-sm font-bold capitalize text-foreground">
+                    {formattedMonthName}
+                </span>
+                <button
+                    type="button"
+                    onClick={handleNextMonth}
+                    className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
+                >
+                    <ChevronRight size={16} />
+                </button>
+            </div>
+
+            {/* Grid de dias da semana */}
+            <div className="grid grid-cols-7 gap-1 mb-2">
+                {weekDays.map((day) => (
+                    <div
+                        key={day}
+                        className="text-center text-xs font-normal text-foreground py-2"
+                    >
+                        {day.replace(/\d/g, "")}
+                    </div>
+                ))}
+            </div>
+
+            {/* Grid de dias */}
+            <div className="grid grid-cols-7 gap-1 mb-4">
+                {calendarDays.map((dayObj, index) => (
+                    <button
+                        key={index}
+                        type="button"
+                        onClick={() =>
+                            !dayObj.isOtherMonth && !isDateDisabled(dayObj.day) && handleDateSelect(dayObj.day)
+                        }
+                        disabled={dayObj.isOtherMonth || isDateDisabled(dayObj.day)}
+                        className={cn(
+                            "h-8 rounded text-sm transition-colors",
+                            dayObj.isOtherMonth
+                                ? "text-muted-foreground font-normal cursor-default"
+                                : isDateDisabled(dayObj.day)
+                                    ? "text-muted-foreground/50 cursor-not-allowed font-medium"
+                                    : isDateSelected(dayObj.day)
+                                        ? "bg-[#070707] text-white font-bold cursor-pointer hover:bg-[#070707]/90"
+                                        : "text-foreground font-bold hover:bg-accent cursor-pointer"
+                        )}
+                    >
+                        {dayObj.day}
+                    </button>
+                ))}
+            </div>
+
+            {/* Footer com botões */}
+            <div className="flex gap-2 justify-between pt-4 border-t border-border">
+                <button
+                    type="button"
+                    onClick={() => {
+                        setDisplayValue("");
+                        if (onChange) {
+                            onChange({ target: { id, name, value: "" } });
+                        }
+                        setIsOpen(false);
+                    }}
+                    className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
+                >
+                    Limpar
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        const today = new Date();
+                        setCurrentMonth(today);
+                        handleDateSelect(today.getDate());
+                    }}
+                    className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
+                >
+                    Hoje
+                </button>
+            </div>
+        </div>
+    );
+
     return (
         <div className={cn("relative", className)} ref={containerRef}>
             <input
@@ -340,10 +448,13 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                 ref={inputRef}
                 value={displayValue}
                 onChange={handleChange}
+                onClick={openDatePicker} // Ensure click opens it
                 onFocus={() => {
-                    if (!isOpen) openDatePicker();
-                    handleFocus();
+                    // Mobile: Do nothing on focus to verify if readOnly handles it better or if we need to blur
+                    if (!isMobile) openDatePicker();
                 }}
+                inputMode={isMobile ? "none" : "text"} // Prevent virtual keyboard on mobile
+                readOnly={isMobile} // Specific for mobile to prevent keyboard
                 onBlur={handleBlur}
                 placeholder=" "
                 disabled={disabled}
@@ -383,105 +494,17 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
             </button>
 
             {/* Datepicker customizado */}
-            {isOpen && !disabled && createPortal(
-                <div
-                    className="datepicker-portal absolute z-[9999] bg-surface border border-border rounded-lg shadow-lg p-4 w-80"
-                    style={{
-                        top: coords.top,
-                        left: coords.left
-                    }}
-                >
-                    {/* Header com navegação */}
-                    <div className="flex items-center justify-between mb-4">
-                        <button
-                            type="button"
-                            onClick={handlePrevMonth}
-                            className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
-                        >
-                            <ChevronLeft size={16} />
-                        </button>
-                        <span className="text-sm font-bold capitalize text-foreground">
-                            {formattedMonthName}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={handleNextMonth}
-                            className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
-                        >
-                            <ChevronRight size={16} />
-                        </button>
+            {isOpen && !disabled && (
+                isMobile ? (
+                    // Inline for Mobile
+                    <div className="w-full">
+                        {calendarContent}
                     </div>
-
-                    {/* Grid de dias da semana */}
-                    <div className="grid grid-cols-7 gap-1 mb-2">
-                        {weekDays.map((day) => (
-                            <div
-                                key={day}
-                                className="text-center text-xs font-normal text-foreground py-2"
-                            >
-                                {day.replace(/\d/g, "")}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Grid de dias */}
-                    <div className="grid grid-cols-7 gap-1 mb-4">
-                        {calendarDays.map((dayObj, index) => (
-                            <button
-                                key={index}
-                                type="button"
-                                onClick={() =>
-                                    !dayObj.isOtherMonth && !isDateDisabled(dayObj.day) && handleDateSelect(dayObj.day)
-                                }
-                                disabled={dayObj.isOtherMonth || isDateDisabled(dayObj.day)}
-                                className={cn(
-                                    "h-8 rounded text-sm transition-colors",
-                                    dayObj.isOtherMonth
-                                        ? "text-muted-foreground font-normal cursor-default"
-                                        : isDateDisabled(dayObj.day)
-                                            ? "text-muted-foreground/50 cursor-not-allowed font-medium"
-                                            : isDateSelected(dayObj.day)
-                                                ? "bg-[#070707] text-white font-bold cursor-pointer hover:bg-[#070707]/90"
-                                                : "text-foreground font-bold hover:bg-accent cursor-pointer"
-                                )}
-                            >
-                                {dayObj.day}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Footer com botões */}
-                    <div className="flex gap-2 justify-between pt-4 border-t border-border">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setDisplayValue("");
-                                if (onChange) {
-                                    onChange({ target: { id, name, value: "" } });
-                                }
-                                setIsOpen(false);
-                            }}
-                            className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
-                        >
-                            Limpar
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                const today = new Date();
-                                setCurrentMonth(today);
-                                handleDateSelect(today.getDate());
-                            }}
-                            className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
-                        >
-                            Hoje
-                        </button>
-                    </div>
-                </div>,
-                document.body
+                ) : (
+                    // Portal for Desktop
+                    createPortal(calendarContent, document.body)
+                )
             )}
-
-
 
             {/* Mensagem de erro */}
             {

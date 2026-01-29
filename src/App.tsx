@@ -10,6 +10,7 @@ import { Events } from './views/Events';
 import { Login } from './views/Login';
 import { SelfScheduling } from './views/public/SelfScheduling';
 import { NotFound } from './views/public/NotFound';
+import Docs from './views/Docs';
 import { PublicLayout } from './layouts/PublicLayout';
 import { Modal } from './components/ui/modal';
 import { AppointmentForm } from './components/AppointmentForm';
@@ -212,6 +213,13 @@ const MainRouter: React.FC = () => {
           </PublicLayout>
         } />
       </Routes>
+    );
+  }
+
+  // Documentation Route - Public
+  if (currentView === '/docs') {
+    return (
+      <Docs />
     );
   }
 

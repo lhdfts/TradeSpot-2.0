@@ -391,6 +391,24 @@ router.put('/:id', async (req: Request, res: Response) => {
 
         if (updates.status && currentApp.status !== updates.status) {
             updatePayload.oldStatus = currentApp.status;
+
+            // Increment edit count
+            const currentCount = currentApp.status_edit_count || 0;
+            updatePayload.status_edit_count = currentCount + 1;
+
+            // Enforce Limit for Closers
+            if (req.body.updatedBy) {
+                const { data: updater } = await supabase.from('user').select('role, sector').eq('id', req.body.updatedBy).single();
+                if (updater) {
+                    const isCloser = updater.sector === 'Closer';
+                    const isColaborador = updater.role === 'Colaborador';
+
+                    if (isCloser && isColaborador && currentCount >= 3) {
+                        return res.status(403).json({ error: 'Limite de edições de status excedido (Máximo: 3).' });
+                    }
+                }
+            }
+
             if ((updates.status === 'Cancelado' || updates.status === 'Reagendado') && currentApp.google_event_id) {
                 deleteGoogleMeetEvent(currentApp.google_event_id);
             }

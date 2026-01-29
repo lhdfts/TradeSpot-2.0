@@ -848,7 +848,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                             !['Líder', 'Co-Líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
                                         ) || (
                                             user.role === 'Colaborador' &&
-                                            initialData.status !== 'Pendente'
+                                            user.sector === 'Closer' &&
+                                            (initialData.status_edit_count || 0) >= 3
                                         )
                                     }
                                 />
