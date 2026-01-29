@@ -186,7 +186,14 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
                                 value === country.dial_code ? "bg-accent/50" : ""
                             )}
                         >
-                            <span className="text-xl leading-none">{country.flag}</span>
+                            <img
+                                src={`https://flagcdn.com/w40/${country.code.toLowerCase()}.png`}
+                                srcSet={`https://flagcdn.com/w80/${country.code.toLowerCase()}.png 2x`}
+                                width="30"
+                                height="20"
+                                alt={country.name}
+                                className="object-cover rounded-sm border border-border/50"
+                            />
                             <div className="flex flex-col">
                                 <span className={cn("text-sm font-medium", value === country.dial_code ? "text-primary" : "text-foreground")}>
                                     {country.name}
@@ -226,7 +233,14 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
             >
                 {selectedCountry ? (
                     <div className="flex items-center gap-2 pt-1">
-                        <span className="text-lg leading-none">{selectedCountry.flag}</span>
+                        <img
+                            src={`https://flagcdn.com/w40/${selectedCountry.code.toLowerCase()}.png`}
+                            srcSet={`https://flagcdn.com/w80/${selectedCountry.code.toLowerCase()}.png 2x`}
+                            width="24"
+                            height="16"
+                            alt={selectedCountry.name}
+                            className="object-cover rounded-sm border border-border/50"
+                        />
                         <span>{selectedCountry.dial_code}</span>
                     </div>
                 ) : (

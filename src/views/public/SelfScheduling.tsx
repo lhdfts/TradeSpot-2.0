@@ -234,7 +234,7 @@ export const SelfScheduling = () => {
                                     if (formData.ddi === '+55' && val.length > 11) val = val.slice(0, 11);
                                     setFormData({ ...formData, phone: val });
                                 }}
-                                placeholder={formData.ddi === '+55' ? "Ex: 11999999999" : "Número do telefone"}
+                                placeholder={formData.ddi === '+55' ? "" : ""}
                                 error={errors.phone}
                             />
                         </div>
