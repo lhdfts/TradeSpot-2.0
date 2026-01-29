@@ -57,12 +57,13 @@ const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void }> = ({ onSucce
   );
 };
 
-const MainContent: React.FC = () => {
+// Internal Layout component that wraps authenticated routes
+// This component is responsible for providing the AppointmentContext ONLY to internal users
+const InternalLayout: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAppt, setEditingAppt] = useState<Appointment | null>(null);
   const { refresh, loading } = useAppointments();
   const { user } = useAuth();
-
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -94,49 +95,6 @@ const MainContent: React.FC = () => {
   };
 
   const currentView = location.pathname;
-  const isLoginPage = currentView === '/login';
-
-  if (isLoginPage) {
-    return (
-      <div className="flex h-screen bg-background text-foreground overflow-hidden">
-        <main className="flex-1 overflow-y-auto">
-          <Routes>
-            <Route path="/login" element={<Login />} />
-          </Routes>
-        </main>
-      </div>
-    );
-  }
-
-  // Handle Public Routes (Self-Scheduling)
-  // Match "/agendar" exactly, "/agendar/" (trailing), or "/agendar/..."
-  if (currentView.startsWith('/agendar')) {
-    return (
-      <Routes>
-        <Route path="/agendar/:link" element={
-          <PublicLayout>
-            <SelfScheduling />
-          </PublicLayout>
-        } />
-        {/* Catch-all for /agendar base or invalid subpaths */}
-        <Route path="*" element={
-          <PublicLayout>
-            <NotFound />
-          </PublicLayout>
-        } />
-      </Routes>
-    );
-  }
-
-  // If user is NOT logged in, and we haven't matched login or public routes by now,
-  // we should NOT show the sidebar/app shell. Show NotFound or Redirect.
-  if (!user) {
-    return (
-      <PublicLayout>
-        <NotFound />
-      </PublicLayout>
-    );
-  }
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
@@ -217,16 +175,72 @@ const MainContent: React.FC = () => {
   );
 };
 
+// Main Router component to handle Public vs Internal routing logic
+const MainRouter: React.FC = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+
+  const currentView = location.pathname;
+  const isLoginPage = currentView === '/login';
+
+  if (isLoginPage) {
+    return (
+      <div className="flex h-screen bg-background text-foreground overflow-hidden">
+        <main className="flex-1 overflow-y-auto">
+          <Routes>
+            <Route path="/login" element={<Login />} />
+          </Routes>
+        </main>
+      </div>
+    );
+  }
+
+  // Handle Public Routes (Self-Scheduling)
+  // Match "/agendar" exactly, "/agendar/" (trailing), or "/agendar/..."
+  if (currentView.startsWith('/agendar')) {
+    return (
+      <Routes>
+        <Route path="/agendar/:link" element={
+          <PublicLayout>
+            <SelfScheduling />
+          </PublicLayout>
+        } />
+        {/* Catch-all for /agendar base or invalid subpaths */}
+        <Route path="*" element={
+          <PublicLayout>
+            <NotFound />
+          </PublicLayout>
+        } />
+      </Routes>
+    );
+  }
+
+  // If user is NOT logged in, and we haven't matched login or public routes by now,
+  // we should NOT show the sidebar/app shell. Show NotFound or Redirect.
+  if (!user) {
+    return (
+      <PublicLayout>
+        <NotFound />
+      </PublicLayout>
+    );
+  }
+
+  // Only wrap internal app in AppointmentProvider
+  return (
+    <AppointmentProvider>
+      <InternalLayout />
+    </AppointmentProvider>
+  );
+};
+
 function App() {
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <AuthProvider>
         <ThemeProvider>
-          <AppointmentProvider>
-            <ToastProvider position="top-right">
-              <MainContent />
-            </ToastProvider>
-          </AppointmentProvider>
+          <ToastProvider position="top-right">
+            <MainRouter />
+          </ToastProvider>
         </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>

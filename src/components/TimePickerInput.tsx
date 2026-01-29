@@ -150,7 +150,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
 
             {isOpen && !disabled && !readOnly && createPortal(
                 <div
-                    className="timepicker-portal absolute z-[9999] bg-surface border border-border rounded-lg shadow-lg p-4 w-96 max-h-96 overflow-y-auto"
+                    className="timepicker-portal absolute z-[9999] bg-surface border border-border rounded-lg shadow-lg p-4 w-[85vw] sm:w-96 max-h-96 overflow-y-auto"
                     style={{
                         top: coords.top,
                         left: coords.left,
