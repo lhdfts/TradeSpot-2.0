@@ -906,6 +906,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             error={errors.phone}
                             disabled={isEditing || isExistingClient}
                             maxLength={20}
+                            type="tel"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                         />
                         <FloatingInput
                             label="Nome"

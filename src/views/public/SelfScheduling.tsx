@@ -236,6 +236,9 @@ export const SelfScheduling = () => {
                                 }}
                                 placeholder={formData.ddi === '+55' ? "" : ""}
                                 error={errors.phone}
+                                type="tel"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                             />
                         </div>
                     </div>
