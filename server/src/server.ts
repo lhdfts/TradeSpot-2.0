@@ -3,10 +3,19 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// Firebase Admin initialization (must be early)
+import { initFirebaseAdmin } from './config/firebase-admin.js';
+initFirebaseAdmin();
+
+// Routes
 import pipedriveRoutes from './routes/pipedriveRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
-
 import publicRoutes from './routes/publicRoutes.js';
+
+// Middleware
+import { verifyFirebaseToken } from './middleware/firebaseAuth.js';
+import { apiRateLimiter, publicRateLimiter, strictPublicRateLimiter } from './middleware/rateLimiter.js';
 
 // ESM alternative for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -20,14 +29,19 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/pipedrive', pipedriveRoutes);
-app.use('/api/appointments', appointmentRoutes);
-app.use('/api/public', publicRoutes);
-
+// Health check - no auth required
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend is running' });
 });
+
+// Public routes - rate limited but no authentication
+// Apply general rate limiter to event lookup, strict limiter to appointment creation
+app.use('/api/public', publicRateLimiter, publicRoutes);
+
+// Protected routes - require authentication
+// Apply authentication middleware AND rate limiting
+app.use('/api/appointments', apiRateLimiter, verifyFirebaseToken, appointmentRoutes);
+app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, pipedriveRoutes);
 
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../../dist')));

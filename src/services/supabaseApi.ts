@@ -1,5 +1,6 @@
 
 import { supabase } from '../lib/supabase';
+import { getAuthHeaders } from '../lib/firebase';
 import type { ApiService } from './api';
 import type { Appointment, Attendant, Event } from '../types';
 
@@ -62,10 +63,12 @@ export class SupabaseApiService implements ApiService {
         create: async (data: Omit<Appointment, 'id'>): Promise<Appointment> => {
             // New Secure Flow (Spec 2.B): Send to Node.js Backend for Validation & Creation
             // Backend URL - uses local proxy or Vercel function
+            const authHeaders = await getAuthHeaders();
             const response = await fetch('/api/appointments', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    ...authHeaders
                 },
                 body: JSON.stringify(data)
             });
@@ -107,10 +110,12 @@ export class SupabaseApiService implements ApiService {
         },
         update: async (id: string | number, data: Partial<Appointment>): Promise<Appointment> => {
             // New Secure Flow: Send to Node.js Backend for Update & Webhook Trigger
+            const authHeaders = await getAuthHeaders();
             const response = await fetch(`/api/appointments/${id}`, {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    ...authHeaders
                 },
                 body: JSON.stringify(data)
             });

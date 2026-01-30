@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
+import { type AuthenticatedRequest, logSuccessfulAction } from '../middleware/firebaseAuth.js';
 
 
 
@@ -34,7 +35,7 @@ const calculateEndTime = (startTime: string, type: string): string => {
 };
 
 // POST /api/appointments
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
         // 1. Validate Input
         const validation = createAppointmentSchema.safeParse(req.body);
@@ -277,6 +278,9 @@ router.post('/', async (req: Request, res: Response) => {
             console.log(`No webhook configured for type: ${data.type}`);
         }
 
+        // Log successful action
+        logSuccessfulAction(req, 'CREATE', 'Appointment', createdAppointment.id);
+
         res.status(201).json(responseData);
 
     } catch (err: any) {
@@ -286,7 +290,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT /api/appointments/:id
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
     try {
         const validation = createAppointmentSchema.partial().safeParse(req.body);
@@ -504,6 +508,9 @@ router.put('/:id', async (req: Request, res: Response) => {
             }
         }
 
+
+        // Log successful action
+        logSuccessfulAction(req, 'UPDATE', 'Appointment', id);
 
         res.json(updated);
 
