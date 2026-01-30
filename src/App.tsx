@@ -229,16 +229,7 @@ const MainRouter: React.FC = () => {
   // If user is NOT logged in, and we haven't matched login or public routes by now,
   // we should NOT show the sidebar/app shell. Show NotFound or Redirect.
   if (!user) {
-    // If trying to access root, redirect to login
-    if (currentView === '/') {
-      return <Navigate to="/login" replace />;
-    }
-
-    return (
-      <PublicLayout>
-        <NotFound />
-      </PublicLayout>
-    );
+    return <Navigate to="/login" replace />;
   }
 
   // Only wrap internal app in AppointmentProvider
