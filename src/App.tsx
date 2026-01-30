@@ -185,6 +185,9 @@ const MainRouter: React.FC = () => {
   const isLoginPage = currentView === '/login';
 
   if (isLoginPage) {
+    if (user) {
+      return <Navigate to="/" replace />;
+    }
     return (
       <div className="flex h-screen bg-background text-foreground overflow-hidden">
         <main className="flex-1 overflow-y-auto">
