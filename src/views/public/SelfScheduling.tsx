@@ -9,26 +9,18 @@ import { Button } from '../../components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { FloatingCountrySelect } from '../../components/FloatingCountrySelect';
 
-const generateTimes = () => {
-    const times = [];
-    for (let i = 0; i < 24; i++) {
-        for (let j of [0, 15, 30, 45]) {
-            times.push(`${String(i).padStart(2, '0')}:${String(j).padStart(2, '0')}`);
-        }
-    }
-    return times;
-};
-
-const TIME_SLOTS = generateTimes();
-
 export const SelfScheduling = () => {
     const { link } = useParams<{ link: string }>();
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [loadingTimes, setLoadingTimes] = useState(false);
 
     const [event, setEvent] = useState<{ id: string, event_name: string, sector: string } | null>(null);
+
+    // Available times from backend
+    const [availableTimes, setAvailableTimes] = useState<string[]>([]);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -64,6 +56,33 @@ export const SelfScheduling = () => {
             fetchEvent();
         }
     }, [link]);
+
+    // Fetch available times when date changes
+    useEffect(() => {
+        const fetchAvailableTimes = async () => {
+            if (!formData.date) {
+                setAvailableTimes([]);
+                return;
+            }
+
+            setLoadingTimes(true);
+            try {
+                const response = await fetch(`/api/public/available-times?date=${formData.date}`);
+                if (!response.ok) {
+                    throw new Error('Erro ao buscar horários');
+                }
+                const data = await response.json();
+                setAvailableTimes(data.availableTimes || []);
+            } catch (err: any) {
+                console.error("Error fetching available times:", err);
+                setAvailableTimes([]);
+            } finally {
+                setLoadingTimes(false);
+            }
+        };
+
+        fetchAvailableTimes();
+    }, [formData.date]);
 
     const validate = () => {
         const newErrors: Record<string, string> = {};
@@ -258,11 +277,11 @@ export const SelfScheduling = () => {
                             error={errors.date ? { message: errors.date } : undefined}
                         />
                         <TimePickerInput
-                            label="Horário"
+                            label={loadingTimes ? "Carregando..." : "Horário"}
                             value={formData.time}
                             onChange={(time) => setFormData({ ...formData, time })}
-                            availableTimes={TIME_SLOTS}
-                            disabled={!formData.date}
+                            availableTimes={availableTimes}
+                            disabled={!formData.date || loadingTimes}
                             // Optional: disable past times if today
                             minTime={
                                 formData.date === format(new Date(), 'yyyy-MM-dd')

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant } from '../utils/distribution.js';
+import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment } from '../utils/distribution.js';
 import { getAppointmentWebhooks } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 
@@ -59,6 +59,115 @@ router.get('/events/:link', async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Erro Interno', details: err.message });
     }
 });
+
+// --- GET Available Times for a Date ---
+// Returns list of time slots that have at least one closer available
+router.get('/available-times', async (req: Request, res: Response) => {
+    const { date } = req.query;
+
+    if (!date || typeof date !== 'string') {
+        return res.status(400).json({ error: 'Data é obrigatória (formato: YYYY-MM-DD)' });
+    }
+
+    // Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Formato de data inválido. Use YYYY-MM-DD.' });
+    }
+
+    try {
+        const APPOINTMENT_TYPE = 'Ligação Closer';
+
+        // 1. Fetch Closers (including Líder and Co-Líder who can also attend)
+        const { data: attendants, error: attError } = await supabase
+            .from('user')
+            .select('*')
+            .in('sector', ['Closer', 'Líder', 'Co-Líder']);
+
+        if (attError || !attendants) {
+            console.error("Error fetching attendants:", attError);
+            return res.status(500).json({ error: 'Erro ao buscar atendentes' });
+        }
+
+        // 2. Fetch Appointments for this date
+        const { data: appointments, error: appError } = await supabase
+            .from('appointments')
+            .select('id, attendant_id, date, time, type, status')
+            .eq('date', date)
+            .neq('status', 'Cancelado');
+
+        if (appError) {
+            console.error("Error fetching appointments:", appError);
+            return res.status(500).json({ error: 'Erro ao buscar agendamentos' });
+        }
+
+        const existingAppointments = appointments || [];
+
+        // 3. Generate all possible time slots
+        const allTimes: string[] = [];
+        for (let hour = 0; hour < 24; hour++) {
+            for (const minute of [0, 15, 30, 45]) {
+                allTimes.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+            }
+        }
+
+        // 4. Filter times where at least ONE closer is available
+        const availableTimes: string[] = [];
+
+        for (const timeSlot of allTimes) {
+            // Check if any closer is available at this time
+            const hasAvailableCloser = await checkIfAnyCloserAvailable(
+                attendants,
+                existingAppointments,
+                date,
+                timeSlot,
+                APPOINTMENT_TYPE
+            );
+
+            if (hasAvailableCloser) {
+                availableTimes.push(timeSlot);
+            }
+        }
+
+        res.json({ date, availableTimes });
+
+    } catch (err: any) {
+        console.error("Available Times Fetch Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
+// Helper function to check if any closer is available at a given time
+async function checkIfAnyCloserAvailable(
+    attendants: any[],
+    appointments: any[],
+    date: string,
+    time: string,
+    type: string
+): Promise<boolean> {
+    // Filter by schedule first
+    const availableBySchedule = attendants.filter(a =>
+        isAttendantWithinSchedule(a, date, time, type)
+    );
+
+    if (availableBySchedule.length === 0) return false;
+
+    // Check if at least one doesn't have a conflict
+    for (const attendant of availableBySchedule) {
+        const hasConflict = hasConflictingAppointment(
+            attendant.id,
+            date,
+            time,
+            type,
+            appointments
+        );
+
+        if (!hasConflict) {
+            return true; // At least one closer is available
+        }
+    }
+
+    return false;
+}
 
 // --- POST Create Appointment ---
 router.post('/appointments', async (req: Request, res: Response) => {
