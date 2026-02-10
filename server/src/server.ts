@@ -14,7 +14,7 @@ import appointmentRoutes from './routes/appointmentRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
 
 // Middleware
-import { verifyFirebaseToken } from './middleware/firebaseAuth.js';
+import { verifyFirebaseToken, requireRole, AuthenticatedRequest } from './middleware/firebaseAuth.js';
 import { apiRateLimiter, publicRateLimiter, strictPublicRateLimiter } from './middleware/rateLimiter.js';
 
 // ESM alternative for __dirname
@@ -29,6 +29,12 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
+
+app.get('/api/me', verifyFirebaseToken, (req: AuthenticatedRequest, res) => {
+    // Agora o TypeScript reconhecerá req.user sem erros
+    res.json(req.user);
+});
+
 // Health check - no auth required
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend is running' });
@@ -40,8 +46,8 @@ app.use('/api/public', publicRateLimiter, publicRoutes);
 
 // Protected routes - require authentication
 // Apply authentication middleware AND rate limiting
-app.use('/api/appointments', apiRateLimiter, verifyFirebaseToken, appointmentRoutes);
-app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, pipedriveRoutes);
+app.use('/api/appointments', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Líder', 'Dev'), appointmentRoutes);
+app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Líder', 'Dev'), pipedriveRoutes);
 
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../../dist')));
