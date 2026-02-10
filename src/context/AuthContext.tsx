@@ -23,7 +23,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser?.email) {
                 const token = await firebaseUser.getIdToken();
-                await fetchUser(firebaseUser.email, firebaseUser.uid, token);
+                await fetchUser(firebaseUser.uid, token);
             } else {
                 setUser(null);
                 setLoading(false);
