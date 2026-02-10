@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from '../types';
-import { supabase } from '../lib/supabase';
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 
@@ -24,7 +23,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser?.email) {
                 const token = await firebaseUser.getIdToken();
-                await fetchUser(firebaseUser.email, firebaseUser.uid, token);
+                await fetchUser(firebaseUser.uid, token);
             } else {
                 setUser(null);
                 setLoading(false);
@@ -34,7 +33,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => unsubscribe();
     }, []);
 
-    const fetchUser = async (email: string, firebaseUid: string, token: string) => {
+    const fetchUser = async (firebaseUid: string, token: string) => {
     try {
         setLoading(true);
         
