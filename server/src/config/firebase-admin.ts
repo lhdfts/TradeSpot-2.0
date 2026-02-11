@@ -1,14 +1,11 @@
 import { initializeApp, cert, getApps, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 
-// Firebase Admin SDK initialization
-// Uses FIREBASE_SERVICE_ACCOUNT environment variable (JSON string) or individual variables
-
-let firebaseAdmin: ReturnType<typeof initializeApp> | null = null;
+let firebaseInitialized = false;
 
 export const initFirebaseAdmin = () => {
     if (getApps().length > 0) {
-        console.log('Firebase Admin already initialized');
+        firebaseInitialized = true;
         return getApps()[0];
     }
 
@@ -18,44 +15,55 @@ export const initFirebaseAdmin = () => {
 
         if (serviceAccountJson) {
             const serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
-            firebaseAdmin = initializeApp({
+
+            initializeApp({
                 credential: cert(serviceAccount)
             });
+
+            firebaseInitialized = true;
             console.log('Firebase Admin initialized with service account JSON');
-            return firebaseAdmin;
+            return getApps()[0];
         }
 
         // Option 2: Individual environment variables
         const projectId = process.env.FIREBASE_PROJECT_ID;
         const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-        const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+        const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
 
-        if (projectId && clientEmail && privateKey) {
-            firebaseAdmin = initializeApp({
-                credential: cert({
-                    projectId,
-                    clientEmail,
-                    privateKey
-                })
-            });
-            console.log('Firebase Admin initialized with individual credentials');
-            return firebaseAdmin;
+        if (!projectId || !clientEmail || !privateKeyRaw) {
+            console.warn('Firebase Admin credentials missing.');
+            return null;
         }
 
-        console.error('Firebase Admin: No valid credentials found. Set FIREBASE_SERVICE_ACCOUNT or individual variables.');
-        return null;
+        const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
+
+        initializeApp({
+            credential: cert({
+                projectId,
+                clientEmail,
+                privateKey
+            })
+        });
+
+        firebaseInitialized = true;
+        console.log('Firebase Admin initialized with individual credentials');
+        return getApps()[0];
 
     } catch (error) {
         console.error('Firebase Admin initialization failed:', error);
+        firebaseInitialized = false;
         return null;
     }
 };
 
 export const getFirebaseAuth = () => {
-    if (getApps().length === 0) {
+    if (!firebaseInitialized && getApps().length === 0) {
         initFirebaseAdmin();
     }
+
+    if (getApps().length === 0) {
+        throw new Error('Firebase Admin not initialized.');
+    }
+
     return getAuth();
 };
-
-export { firebaseAdmin };
