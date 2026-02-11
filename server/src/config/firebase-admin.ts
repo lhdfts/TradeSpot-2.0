@@ -11,18 +11,23 @@ export const initFirebaseAdmin = () => {
 
     try {
         // Option 1: Full service account JSON in environment variable
-        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+        try {
+            const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
 
-        if (serviceAccountJson) {
-            const serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
+            if (serviceAccountJson) {
+                const serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
 
-            initializeApp({
-                credential: cert(serviceAccount)
-            });
+                initializeApp({
+                    credential: cert(serviceAccount)
+                });
 
-            firebaseInitialized = true;
-            console.log('Firebase Admin initialized with service account JSON');
-            return getApps()[0];
+                firebaseInitialized = true;
+                console.log('Firebase Admin initialized with service account JSON');
+                return getApps()[0];
+            }
+        } catch (parseError) {
+            // If JSON is invalid, log warning but continue to Option 2
+            console.warn('Warning: FIREBASE_SERVICE_ACCOUNT is invalid JSON. Falling back to individual credentials.', parseError);
         }
 
         // Option 2: Individual environment variables
