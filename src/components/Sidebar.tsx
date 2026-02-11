@@ -151,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
 
                 {/* Attendants & Events - Admin/Líder only */}
                 {/* Attendants - Admin/Líder/Dev only (Co-Lider and Qualidade EXCLUDED) */}
-                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.role === 'Co-Líder' || user?.role === 'Co-líder') && (
+                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.role === 'Co-Líder' || user?.role === 'Co-líder' || user?.role === 'Qualidade') && (
                     <NavItem
                         icon={<Users size={20} />}
                         label={isCollapsed ? "" : "Atendentes"}
