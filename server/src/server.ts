@@ -29,6 +29,9 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
+// Essential for Vercel to correctly identify client IP addresses
+app.set('trust proxy', 1);
+
 
 app.get('/api/me', verifyFirebaseToken, (req: AuthenticatedRequest, res) => {
     // Agora o TypeScript reconhecerá req.user sem erros

@@ -147,6 +147,12 @@ export const verifyFirebaseToken = async (
 
         next();
     } catch (error: any) {
+        // Handle service unavailability specifically
+        if (error.message === 'Firebase Admin not initialized.') {
+            console.error('Authentication service unavailable:', error);
+            return res.status(500).json({ error: 'Serviço de autenticação indiponível' });
+        }
+
         logActivity({
             timestamp: new Date().toISOString(),
             userId: 'invalid-token',

@@ -13,14 +13,6 @@ export const publicRateLimiter = rateLimit({
     },
     standardHeaders: true, // Return rate limit info in headers
     legacyHeaders: false,
-    keyGenerator: (req: Request): string => {
-        // Use X-Forwarded-For for clients behind proxies (Vercel)
-        const forwarded = req.headers['x-forwarded-for'];
-        if (typeof forwarded === 'string') {
-            return forwarded.split(',')[0].trim();
-        }
-        return req.ip || 'unknown';
-    }
 });
 
 /**
@@ -35,13 +27,6 @@ export const strictPublicRateLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req: Request): string => {
-        const forwarded = req.headers['x-forwarded-for'];
-        if (typeof forwarded === 'string') {
-            return forwarded.split(',')[0].trim();
-        }
-        return req.ip || 'unknown';
-    }
 });
 
 /**
