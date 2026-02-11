@@ -1,4 +1,4 @@
-import { initializeApp, cert, getApps, type ServiceAccount } from 'firebase-admin/app';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 
 let firebaseInitialized = false;
@@ -10,33 +10,13 @@ export const initFirebaseAdmin = () => {
     }
 
     try {
-        // Option 1: Full service account JSON in environment variable
-        try {
-            const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
-
-            if (serviceAccountJson) {
-                const serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
-
-                initializeApp({
-                    credential: cert(serviceAccount)
-                });
-
-                firebaseInitialized = true;
-                console.log('Firebase Admin initialized with service account JSON');
-                return getApps()[0];
-            }
-        } catch (parseError) {
-            // If JSON is invalid, log warning but continue to Option 2
-            console.warn('Warning: FIREBASE_SERVICE_ACCOUNT is invalid JSON. Falling back to individual credentials.', parseError);
-        }
-
-        // Option 2: Individual environment variables
         const projectId = process.env.FIREBASE_PROJECT_ID;
         const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
         const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
 
         if (!projectId || !clientEmail || !privateKeyRaw) {
-            console.warn('Firebase Admin credentials missing.');
+            console.warn('Firebase Admin credentials missing. Initialization skipped.');
+            firebaseInitialized = false;
             return null;
         }
 
@@ -51,7 +31,8 @@ export const initFirebaseAdmin = () => {
         });
 
         firebaseInitialized = true;
-        console.log('Firebase Admin initialized with individual credentials');
+        console.log('Firebase Admin initialized with individual environment variables');
+
         return getApps()[0];
 
     } catch (error) {
