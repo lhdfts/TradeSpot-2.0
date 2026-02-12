@@ -219,10 +219,17 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         // 4. Distribution Logic
-        const attendantId = await findBestAttendant(data.date, data.time, APPOINTMENT_TYPE);
+        let finalAttendantId = req.body.attendantId; // Pega o ID enviado pelo link
 
-        if (!attendantId) {
-            return res.status(409).json({ error: 'Não há horários disponíveis para este momento. Por favor, escolha outro horário.' });
+        // Se não houver ID ou se for explicitamente para distribuição automática
+        if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
+            finalAttendantId = await findBestAttendant(data.date, data.time, APPOINTMENT_TYPE);
+        }
+
+        if (!finalAttendantId) {
+            return res.status(409).json({ 
+                error: 'Não há horários disponíveis para este momento. Por favor, escolha outro horário.' 
+            });
         }
 
         // 5. Client Management (Create or Update)
@@ -294,7 +301,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
         const endIso = `${data.date}T${endTime}:00-03:00`;
 
         // Get Attendant Email
-        const { data: attendantUser } = await supabase.from('user').select('email').eq('id', attendantId).single();
+        const { data: attendantUser } = await supabase.from('user').select('email').eq('id', finalAttendantId).single();
         const attendees = [data.email]; // Client email
         if (attendantUser && attendantUser.email) {
             attendees.push(attendantUser.email);
@@ -320,7 +327,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
             end_time: endTime,
             type: APPOINTMENT_TYPE,
             status: 'Pendente',
-            attendant_id: attendantId,
+            attendant_id: finalAttendantId,
             event_id: eventId,
             meet_link: meetLink,
             notes: 'Auto-agendamento via Link Público',
@@ -350,8 +357,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
         if (webhookUrl) {
             // Fetch attendant name for webhook
             let attendantName = '';
-            if (attendantId) {
-                const { data: att } = await supabase.from('user').select('name').eq('id', attendantId).single();
+            if (finalAttendantId) {
+                const { data: att } = await supabase.from('user').select('name').eq('id', finalAttendantId).single();
                 if (att) attendantName = att.name;
             }
 
