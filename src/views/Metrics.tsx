@@ -19,6 +19,7 @@ import {
 import { cn } from '../lib/utils';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 
 interface SDRRankingItem {
     id: string;
@@ -66,6 +67,10 @@ export const Metrics: React.FC = () => {
     const [eventFilter, setEventFilter] = useState('');
     const [uniqueClients, setUniqueClients] = useState('no'); // 'yes' or 'no'
 
+    const [availabilityDate, setAvailabilityDate] = useState(new Date().toISOString().split('T')[0]);
+    const [availabilityAttendant, setAvailabilityAttendant] = useState('');
+    const [availabilitySector, setAvailabilitySector] = useState('all');
+
     // --- UI STATE ---
     const { user } = useAuth();
     const [sectorFilter, setSectorFilter] = useState('all');
@@ -108,7 +113,7 @@ export const Metrics: React.FC = () => {
     };
 
     // --- DATA CALCULATION ---
-    const { sdrRanking, closerRanking, chartData, totals, filteredAppointments, sdrTotal, closerTotal, chartTotal } = useMemo(() => {
+    const { sdrRanking, closerRanking, chartData, totals, filteredAppointments, sdrTotal, closerTotal, chartTotal, availabilityGrid } = useMemo(() => {
         // 1. Filter Appointments by Date & Event
         let filtered = appointments.filter(a => {
             if (!a.date) return false;
@@ -315,9 +320,68 @@ export const Metrics: React.FC = () => {
         const closerTotal = closerRanking.reduce((acc, curr) => acc + curr.total, 0);
         const chartTotal = chartData.reduce((acc, curr) => acc + curr.total, 0);
 
-        return { sdrRanking, closerRanking, chartData, totals, filteredAppointments: filtered, sdrTotal, closerTotal, chartTotal };
-    }, [appointments, startDate, endDate, attendantFilter, eventFilter, attendants, sectorFilter, uniqueClients]);
+        const slots: { time: string; color: string; label: string }[] = [];
+    
+        const currentAttendantId = availabilityAttendant;
+        const selectedAtt = attendants.find(a => a.id === currentAttendantId);
+        const isAttendantInSector = !availabilitySector || availabilitySector === 'all' || selectedAtt?.sector === availabilitySector;
 
+        // Só calcula os slots se o atendente selecionado for válido para o setor
+        if (currentAttendantId && isAttendantInSector) {
+            for (let h = 0; h < 24; h++) {
+                for (let m = 0; m < 60; m += 15) {
+                    const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                    
+                    const appt = appointments.find(a => 
+                        a.attendantId === currentAttendantId && 
+                        a.date === availabilityDate &&
+                        a.time.startsWith(time)
+                    );
+
+                    let color = 'bg-muted/20'; 
+                    let label = 'Livre';
+
+                    if (appt) {
+                        // Mapeamento de cores seguindo o padrão do gráfico
+                        switch (appt.status) {
+                            case 'Realizado':
+                                color = 'bg-[#00E676]'; // Verde
+                                break;
+                            case 'Pendente':
+                                color = 'bg-[#B2B2B2]'; // Cinza Escuro
+                                break;
+                            case 'Cancelado':
+                                color = 'bg-[#FF1744]'; // Vermelho
+                                break;
+                            case 'Reagendado':
+                                color = 'bg-[#2979FF]'; // Azul
+                                break;
+                            case 'No-show':
+                                color = 'bg-[#FF9100]'; // Laranja
+                                break;
+                            // Esquecimento foi removido conforme solicitado
+                            default:
+                                color = 'bg-blue-500';
+                        }
+                        label = appt.status;
+                    }
+                    slots.push({ time, color, label });
+                }
+            }
+        }
+
+        return { sdrRanking, closerRanking, chartData, totals, filteredAppointments: filtered, sdrTotal, closerTotal, chartTotal, availabilityGrid: slots };
+    }, [appointments, startDate, endDate, attendantFilter, eventFilter, attendants, sectorFilter, uniqueClients, availabilityAttendant, availabilityDate, availabilitySector]);
+
+    React.useEffect(() => {
+        if (availabilitySector !== 'all' && availabilityAttendant) {
+            const selectedAtt = attendants.find(a => a.id === availabilityAttendant);
+            // Se o atendente não pertence ao novo setor, limpa a seleção
+            if (selectedAtt && selectedAtt.sector !== availabilitySector) {
+                setAvailabilityAttendant('');
+            }
+        }
+    }, [availabilitySector, availabilityAttendant, attendants]);
 
     const valueFormatter = (number: number) =>
         Intl.NumberFormat('pt-BR').format(number).toString();
@@ -694,6 +758,85 @@ export const Metrics: React.FC = () => {
                 data={rankingModal.data}
                 type={rankingModal.type}
             />
+            {(sectorFilter === 'all' || sectorFilter === 'Closer') && (
+                <Card className="mt-6">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
+                        <CardTitle>Disponibilidade Detalhada</CardTitle>
+                        <div className="flex gap-4">
+                            {/* NOVO: Seletor de Setor */}
+                            <FloatingSelect
+                                label="Setor"
+                                value={availabilitySector}
+                                onChange={(e: any) => setAvailabilitySector(e.target.value)}
+                                options={[
+                                    { value: 'all', label: 'Todos' },
+                                    { value: 'SDR', label: 'SDR' },
+                                    { value: 'Closer', label: 'Closer' }
+                                ]}
+                                className="w-32"
+                            />
+                            
+                            {/* ATUALIZADO: Seletor de Atendente filtrado por setor */}
+                            <FloatingSelect
+                                label="Atendente"
+                                value={availabilityAttendant}
+                                onChange={(e: any) => setAvailabilityAttendant(e.target.value)}
+                                options={[
+                                    { value: '', label: 'Selecione um atendente' },
+                                    ...attendants
+                                        .filter(a => availabilitySector === 'all' || a.sector === availabilitySector)
+                                        .sort((a, b) => a.name.localeCompare(b.name))
+                                        .map(a => ({ value: a.id, label: a.name }))
+                                ]}
+                                className="w-64"
+                            />
+                            
+                            <FloatingDateInput
+                                label="Data"
+                                value={availabilityDate}
+                                onChange={(e: any) => setAvailabilityDate(e.target.value)}
+                                className="w-44"
+                            />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {availabilityAttendant ? (
+                            <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-12 gap-2">
+                                {availabilityGrid.map((slot) => (
+                                    <div 
+                                        key={slot.time}
+                                        style={{ backgroundColor: slot.color.startsWith('bg-[') ? slot.color.slice(4, -1) : undefined }}
+                                        className={cn(
+                                            "flex flex-col items-center justify-center p-2 rounded-md border border-border text-[10px] font-medium transition-all text-white shadow-sm",
+                                            !slot.color.startsWith('bg-[') && slot.color, // Mantém bg-muted/20 se for livre
+                                            slot.color === 'bg-muted/20' && "text-secondary shadow-none"
+                                        )}
+                                        title={`${slot.time} - ${slot.label}`}
+                                    >
+                                        {slot.time}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="h-40 flex items-center justify-center text-secondary border-2 border-dashed border-border rounded-xl">
+                                Selecione um atendente para visualizar a agenda do dia.
+                            </div>
+                        )}
+                        
+                        {/* Legenda */}
+                        {availabilityAttendant && (
+                            <div className="mt-6 flex flex-wrap gap-4 text-xs text-secondary border-t border-border pt-4">
+                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-muted/20 border border-border" /> Livre</div>
+                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#00E676]" /> Realizado</div>
+                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#B2B2B2]" /> Pendente</div>
+                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#FF1744]" /> Cancelado</div>
+                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#2979FF]" /> Reagendado</div>
+                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#FF9100]" /> No-show</div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 };

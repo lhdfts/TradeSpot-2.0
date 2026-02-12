@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from '../types';
-import { supabase } from '../lib/supabase';
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 
@@ -23,7 +22,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser?.email) {
-                await fetchUser(firebaseUser.email, firebaseUser.uid);
+                const token = await firebaseUser.getIdToken();
+                await fetchUser(firebaseUser.uid, token);
             } else {
                 setUser(null);
                 setLoading(false);
@@ -33,46 +33,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => unsubscribe();
     }, []);
 
-    const fetchUser = async (email: string, firebaseUid: string) => {
-        try {
-            const { data: userData, error } = await supabase
-                .from('user')
-                .select('*')
-                .eq('email', email)
-                .maybeSingle();
+    const fetchUser = async (firebaseUid: string, token: string) => {
+    try {
+        setLoading(true);
+        
+        if (!token) throw new Error('Token não gerado pelo Firebase');
 
-            if (error || !userData) {
-                console.error('User not found in public.user table:', error);
-                setUser(null);
-            } else {
-                // Update Firebase UID in Supabase if missing (Optional synchronization)
-                if (!userData.firebase_id) {
-                    try {
-                        const { error: updateError } = await supabase.from('user').update({ firebase_id: firebaseUid }).eq('id', userData.id);
-                        if (updateError) {
-                            console.warn('Failed to sync firebase_id (likely RLS). Continuing...', updateError);
-                        }
-                    } catch (syncErr) {
-                        console.warn('Failed to sync firebase_id (exception). Continuing...', syncErr);
-                    }
-                }
+        console.log("Tentando validar sessão no servidor...");
+        
+        const response = await fetch('/api/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-                setUser({
-                    id: userData.id,
-                    firebase_id: firebaseUid,
-                    name: userData.name,
-                    email: userData.email,
-                    role: userData.role,
-                    sector: userData.sector
-                });
-            }
-        } catch (err) {
-            console.error('Error fetching user details:', err);
-            setUser(null);
-        } finally {
-            setLoading(false);
+        // Se a resposta não for OK, vamos ler o erro do servidor
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Erro do Servidor (${response.status}):`, errorText);
+            throw new Error(`Servidor negou acesso: ${response.status}`);
         }
-    };
+
+        const userData = await response.json();
+        console.log("Usuário validado com sucesso!", userData);
+
+        setUser({
+            id: userData.id,
+            firebase_id: firebaseUid,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role,
+            sector: userData.sector
+        });
+    } catch (err) {
+        console.error('FALHA NO LOGIN:', err);
+        setUser(null);
+    } finally {
+        setLoading(false);
+    }
+};
 
     const login = (newUser: User) => {
         setUser(newUser);

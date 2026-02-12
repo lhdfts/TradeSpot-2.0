@@ -134,7 +134,7 @@ export const Events: React.FC = () => {
                             <th className="px-6 py-4">Setor</th>
                             <th className="px-6 py-4">Data de Criação</th>
                             <th className="px-6 py-4">Status</th>
-                            <th className="px-6 py-4 text-center">Link</th>
+                            {/* <th className="px-6 py-4 text-center">Link</th> */}
                             <th className="px-6 py-4 text-center">Ações</th>
                         </tr>
                     </thead>
@@ -159,7 +159,7 @@ export const Events: React.FC = () => {
                                         {event.status ? 'Ativo' : 'Arquivado'}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 text-center">
+                                {/* <td className="px-6 py-4 text-center">
                                     {event.self_scheduling_link && (
                                         <button
                                             onClick={() => {
@@ -176,7 +176,7 @@ export const Events: React.FC = () => {
                                             </svg>
                                         </button>
                                     )}
-                                </td>
+                                </td> */}
                                 <td className="px-6 py-4 text-center space-x-2">
                                     <button
                                         onClick={() => handleEdit(event)}

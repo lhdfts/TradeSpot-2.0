@@ -14,3 +14,32 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+/**
+ * Get the current user's Firebase ID token for API authentication
+ * Returns null if user is not authenticated
+ */
+export const getIdToken = async (): Promise<string | null> => {
+    const user = auth.currentUser;
+    if (!user) {
+        return null;
+    }
+    try {
+        return await user.getIdToken();
+    } catch (error) {
+        console.error('Failed to get Firebase ID token:', error);
+        return null;
+    }
+};
+
+/**
+ * Get authorization headers for API requests
+ * Returns empty object if user is not authenticated
+ */
+export const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    const token = await getIdToken();
+    if (token) {
+        return { 'Authorization': `Bearer ${token}` };
+    }
+    return {};
+};
