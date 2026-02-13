@@ -93,7 +93,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
             .from('appointments')
             .select('id, attendant_id, date, time, type, status')
             .eq('date', date)
-            .neq('status', 'Cancelado');
+            .eq('status', 'Pendente');
 
         if (appError) {
             console.error("Error fetching appointments:", appError);
