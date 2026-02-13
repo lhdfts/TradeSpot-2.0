@@ -221,6 +221,20 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // 4. Distribution Logic
         let finalAttendantId = req.body.attendantId; // Pega o ID enviado pelo link
 
+        // Validação extra: se um ID foi enviado, verificar se o atendente é um Closer
+        if (finalAttendantId && finalAttendantId !== 'distribuicao_automatica') {
+            const { data: attendantData } = await supabase
+                .from('user')
+                .select('sector')
+                .eq('id', finalAttendantId)
+                .single();
+
+            // Se o atendente não existir ou não for do setor Closer, resetamos para distribuição automática
+            if (!attendantData || attendantData.sector !== 'Closer') {
+                finalAttendantId = 'distribuicao_automatica';
+            }
+        }
+
         // Se não houver ID ou se for explicitamente para distribuição automática
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
             finalAttendantId = await findBestAttendant(data.date, data.time, APPOINTMENT_TYPE);
