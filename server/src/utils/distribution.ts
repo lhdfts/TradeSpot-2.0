@@ -153,7 +153,7 @@ export const findBestAttendant = async (
         .from('appointments')
         .select('id, attendant_id, date, time, type, status')
         .eq('date', date)
-        .neq('status', 'Cancelado'); // Ignore cancelled
+        .eq('status', 'Pendente');
 
     if (appError || !appointments) {
         console.error("Error fetching appointments:", appError);
