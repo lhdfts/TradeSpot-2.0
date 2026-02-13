@@ -227,8 +227,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         if (!finalAttendantId) {
-            return res.status(409).json({ 
-                error: 'Não há horários disponíveis para este momento. Por favor, escolha outro horário.' 
+            return res.status(409).json({
+                error: 'Não há horários disponíveis para este momento. Por favor, escolha outro horário.'
             });
         }
 
@@ -289,6 +289,16 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // Let's rely on req.body.eventId being present but valid.
         const eventId = req.body.eventId;
         if (!eventId) return res.status(400).json({ error: 'ID do evento é obrigatório' });
+
+        const { data: eventData, error: eventError } = await supabase
+            .from('events')
+            .select('event_name')
+            .eq('id', eventId)
+            .single();
+
+        if (eventError || !eventData) {
+            return res.status(404).json({ error: 'Evento não encontrado' });
+        }
 
         // 5.5 Create Google Meet Link
         let meetLink = '';
@@ -373,7 +383,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
                     financial: { currency: 'BRL', amount: 0 }
                 },
                 attendant_name: attendantName,
-                event_name: 'Auto-Agendamento', // Simplified
+                event_name: eventData.event_name,
                 created_by_name: 'Sistema (Link Público)'
             };
 
