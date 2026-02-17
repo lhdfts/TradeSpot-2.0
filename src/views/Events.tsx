@@ -23,13 +23,6 @@ export const Events: React.FC = () => {
         setPortalContainer(document.getElementById('header-actions'));
     }, []);
 
-    // Redirect Colaborador away
-    useEffect(() => {
-        if (user && user.role === 'Colaborador') {
-            navigate('/');
-        }
-    }, [user, navigate]);
-
     const fetchEvents = async () => {
         setLoading(true);
         try {
@@ -116,10 +109,15 @@ export const Events: React.FC = () => {
 
     if (loading) return <div>Carregando...</div>;
 
+    const canCreateEvents = user?.role === 'Dev' || user?.sector === 'TEI';
+    const canEditEvents = user?.role === 'Dev' || user?.role === 'Admin';
+    const canExportEvents = user?.role === 'Dev' || user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Qualidade';
+    const canManageEvents = canEditEvents || canExportEvents;
+
     return (
         <div className="space-y-6">
 
-            {portalContainer && createPortal(
+            {portalContainer && canCreateEvents && createPortal(
                 <Button onClick={handleAddNew}>
                     <Plus size={18} className="mr-2" /> Novo Evento
                 </Button>,
@@ -134,8 +132,8 @@ export const Events: React.FC = () => {
                             <th className="px-6 py-4">Setor</th>
                             <th className="px-6 py-4">Data de Criação</th>
                             <th className="px-6 py-4">Status</th>
-                            {/* <th className="px-6 py-4 text-center">Link</th> */}
-                            <th className="px-6 py-4 text-center">Ações</th>
+                            <th className="px-6 py-4 text-center">Link</th>
+                            {canManageEvents && (<th className="px-6 py-4 text-center">Ações</th> )}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -159,11 +157,11 @@ export const Events: React.FC = () => {
                                         {event.status ? 'Ativo' : 'Arquivado'}
                                     </span>
                                 </td>
-                                {/* <td className="px-6 py-4 text-center">
+                                <td className="px-6 py-4 text-center">
                                     {event.self_scheduling_link && (
                                         <button
                                             onClick={() => {
-                                                const url = `${window.location.origin}/agendar/${event.self_scheduling_link}`;
+                                                const url = `${window.location.origin}/agendar/${event.self_scheduling_link}?attendantId=${user?.id}`;
                                                 navigator.clipboard.writeText(url);
                                                 alert('Link copiado!');
                                             }}
@@ -176,24 +174,29 @@ export const Events: React.FC = () => {
                                             </svg>
                                         </button>
                                     )}
-                                </td> */}
-                                <td className="px-6 py-4 text-center space-x-2">
-                                    <button
-                                        onClick={() => handleEdit(event)}
-                                        className="text-foreground hover:text-primary transition-colors"
-                                        title="Editar"
-                                    >
-                                        <Edit size={18} />
-                                    </button>
-                                    <button
-                                        onClick={() => handleExport(event)}
-                                        className="text-foreground hover:text-primary transition-colors"
-                                        title="Exportar Agendamentos"
-                                    >
-                                        <ExportIcon size={18} />
-                                    </button>
-
                                 </td>
+                                {canManageEvents && (
+                                    <td className="px-6 py-4 text-center space-x-2">
+                                        {canEditEvents && (
+                                            <button
+                                                onClick={() => handleEdit(event)}
+                                                className="text-foreground hover:text-primary transition-colors"
+                                                title="Editar"
+                                            >
+                                                <Edit size={18} />
+                                            </button>
+                                        )}
+                                        {canExportEvents && (
+                                            <button
+                                                onClick={() => handleExport(event)}
+                                                className="text-foreground hover:text-primary transition-colors"
+                                                title="Exportar Agendamentos"
+                                            >
+                                                <ExportIcon size={18} />
+                                            </button>
+                                        )}
+                                    </td>
+                                )}
                             </tr>
                         ))}
                     </tbody>

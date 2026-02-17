@@ -49,8 +49,8 @@ app.use('/api/public', publicRateLimiter, publicRoutes);
 
 // Protected routes - require authentication
 // Apply authentication middleware AND rate limiting
-app.use('/api/appointments', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Líder', 'Dev'), appointmentRoutes);
-app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Líder', 'Dev'), pipedriveRoutes);
+app.use('/api/appointments', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), appointmentRoutes);
+app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), pipedriveRoutes);
 
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../../dist')));

@@ -39,7 +39,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const [attendantFilter, setAttendantFilter] = useState('all');
     const [creatorFilter, setCreatorFilter] = useState('all');
     const [eventFilter, setEventFilter] = useState('all');
-    const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [dateRange, setDateRange] = useState({start: new Date().toISOString().split('T')[0], end: ''});
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 

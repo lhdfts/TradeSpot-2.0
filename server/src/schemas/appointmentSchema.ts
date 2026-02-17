@@ -113,6 +113,8 @@ export const publicAppointmentSchema = z.object({
     // Time (00, 15, 30, 45)
     time: z.string().regex(/^(?:[01]\d|2[0-3]):(?:00|15|30|45)$/, "Horário inválido"),
 
+    attendantId: z.string().optional(),
+
     // Type is optional in input but will be forced to 'Ligação Closer'
     type: z.string().optional(),
 });
