@@ -64,6 +64,7 @@ router.get('/events/:link', async (req: Request, res: Response) => {
 // Returns list of time slots that have at least one closer available
 router.get('/available-times', async (req: Request, res: Response) => {
     const { date } = req.query;
+    const { attendantId } = req.query;
 
     if (!date || typeof date !== 'string') {
         return res.status(400).json({ error: 'Data é obrigatória (formato: YYYY-MM-DD)' });
@@ -86,6 +87,11 @@ router.get('/available-times', async (req: Request, res: Response) => {
         if (attError || !attendants) {
             console.error("Error fetching attendants:", attError);
             return res.status(500).json({ error: 'Erro ao buscar atendentes' });
+        }
+
+        let filteredAttendants = attendants;
+        if (attendantId && typeof attendantId === 'string') {
+            filteredAttendants = attendants.filter(a => a.id === attendantId);
         }
 
         // 2. Fetch Appointments for this date
@@ -112,6 +118,16 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
         // 4. Filter times where at least ONE closer is available
         const availableTimes: string[] = [];
+        for (const timeSlot of allTimes) {
+            const hasAvailableCloser = await checkIfAnyCloserAvailable(
+                filteredAttendants, // Usa a lista filtrada
+                existingAppointments,
+                date,
+                timeSlot,
+                APPOINTMENT_TYPE
+            );
+            if (hasAvailableCloser) availableTimes.push(timeSlot);
+        }
 
         for (const timeSlot of allTimes) {
             // Check if any closer is available at this time
@@ -225,13 +241,18 @@ router.post('/appointments', async (req: Request, res: Response) => {
         if (finalAttendantId && finalAttendantId !== 'distribuicao_automatica') {
             const { data: attendantData } = await supabase
                 .from('user')
-                .select('sector')
+                .select('*') // Buscar tudo para ter schedule e pauses
                 .eq('id', finalAttendantId)
                 .single();
 
             // Se o atendente não existir ou não for do setor Closer, resetamos para distribuição automática
             if (!attendantData || attendantData.sector !== 'Closer') {
                 finalAttendantId = 'distribuicao_automatica';
+            } else {
+                // VALIDAR ESCALA
+                if (!isAttendantWithinSchedule(attendantData, data.date, data.time, APPOINTMENT_TYPE)) {
+                    return res.status(409).json({ error: 'O atendente selecionado não está disponível neste horário.' });
+                }
             }
         }
 
@@ -244,6 +265,18 @@ router.post('/appointments', async (req: Request, res: Response) => {
             return res.status(409).json({
                 error: 'Não há horários disponíveis para este momento. Por favor, escolha outro horário.'
             });
+        }
+
+        // VALIDAÇÃO FINAL DE CONFLITO (Double Booking)
+        const { data: conflicts } = await supabase
+            .from('appointments')
+            .select('id, attendant_id, date, time, type, status')
+            .eq('date', data.date)
+            .eq('attendant_id', finalAttendantId)
+            .neq('status', 'Cancelado');
+
+        if (conflicts && hasConflictingAppointment(finalAttendantId, data.date, data.time, APPOINTMENT_TYPE, conflicts)) {
+            return res.status(409).json({ error: 'Este horário acabou de ser preenchido. Por favor, escolha outro.' });
         }
 
         // 5. Client Management (Create or Update)
