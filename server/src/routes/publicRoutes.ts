@@ -284,6 +284,17 @@ router.post('/appointments', async (req: Request, res: Response) => {
         const endHours = (hours + 1) % 24;
         const endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 
+        // Dynamic created_by Attribution
+        const senderId = req.body.attendantId;
+        let validatedSenderId = 'a6127506-db64-4ac9-ba09-7eac663b0b31'; // Default system user
+
+        if (senderId && senderId !== 'distribuicao_automatica') {
+            const { data: userExists } = await supabase.from('user').select('id').eq('id', senderId).maybeSingle();
+            if (userExists) {
+                validatedSenderId = senderId;
+            }
+        }
+
         // Get Event ID from Link (we expect the link to be passed or we need the ID)
         // Actually, the Frontend should probably pass the Event ID explicitly if it has it, 
         // OR pass the link and we look it up.
@@ -362,7 +373,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
             financial_currency: 'BRL',
             financial_amount: 0,
             created_at: new Date().toISOString(),
-            created_by: 'a6127506-db64-4ac9-ba09-7eac663b0b31' // System user ID
+            created_by: validatedSenderId
         };
 
         const { data: createdAppointment, error: appError } = await supabase
@@ -379,11 +390,24 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // 7. Webhook Trigger
         const webhookUrl = getAppointmentWebhooks()[APPOINTMENT_TYPE];
         if (webhookUrl) {
-            // Fetch attendant name for webhook
+            // Fetch names for webhook
             let attendantName = '';
-            if (finalAttendantId) {
-                const { data: att } = await supabase.from('user').select('name').eq('id', finalAttendantId).single();
-                if (att) attendantName = att.name;
+            let creatorName = 'Sistema (Link Público)';
+
+            const idsToFetch = [finalAttendantId, validatedSenderId].filter(Boolean) as string[];
+            if (idsToFetch.length > 0) {
+                const { data: users } = await supabase.from('user').select('id, name').in('id', idsToFetch);
+                if (users) {
+                    const att = users.find(u => u.id === finalAttendantId);
+                    if (att) attendantName = att.name;
+
+                    const creator = users.find(u => u.id === validatedSenderId);
+                    if (creator) {
+                        creatorName = (validatedSenderId === 'a6127506-db64-4ac9-ba09-7eac663b0b31')
+                            ? 'Sistema (Link Público)'
+                            : creator.name || 'Sistema (Link Público)';
+                    }
+                }
             }
 
             const webhookPayload = {
@@ -398,7 +422,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 },
                 attendant_name: attendantName,
                 event_name: eventData.event_name,
-                created_by_name: 'Sistema (Link Público)'
+                created_by_name: creatorName
             };
 
             // Non-blocking webhook
