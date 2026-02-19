@@ -654,9 +654,9 @@ export const Metrics: React.FC = () => {
                                     tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
                                     dy={10}
                                 />
-                                <Tooltip
+                                <RechartsTooltip
                                     cursor={{ fill: 'var(--muted)', opacity: 0.2 }}
-                                    content={({ active, payload, label }) => {
+                                    content={({ active, payload, label }: any) => {
                                         if (!active || !payload) return null;
                                         return (
                                             <div className="bg-surface border border-border p-3 rounded-lg shadow-xl !opacity-100 min-w-[150px]">
@@ -811,7 +811,7 @@ export const Metrics: React.FC = () => {
                                         
                                         return (
                                             <Tooltip key={slot.time}>
-                                                <TooltipTrigger asChild>
+                                                <TooltipTrigger>
                                                     <div 
                                                         style={{ backgroundColor: slot.color.startsWith('bg-[') ? slot.color.slice(4, -1) : undefined }}
                                                         className={cn(
