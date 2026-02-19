@@ -20,7 +20,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const { user } = useAuth();
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [dateRange, setDateRange] = useState({start: new Date().toISOString().split('T')[0], end: ''});
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
 

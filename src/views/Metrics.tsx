@@ -11,7 +11,7 @@ import {
     ComposedChart,
     Bar,
     XAxis,
-    Tooltip,
+    Tooltip as RechartsTooltip,
     ResponsiveContainer,
     Line,
     LabelList
@@ -20,6 +20,12 @@ import { cn } from '../lib/utils';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { 
+    Tooltip, 
+    TooltipTrigger, 
+    TooltipContent, 
+    TooltipProvider 
+} from '../components/ui/tooltip';
 
 interface SDRRankingItem {
     id: string;
@@ -320,7 +326,7 @@ export const Metrics: React.FC = () => {
         const closerTotal = closerRanking.reduce((acc, curr) => acc + curr.total, 0);
         const chartTotal = chartData.reduce((acc, curr) => acc + curr.total, 0);
 
-        const slots: { time: string; color: string; label: string }[] = [];
+        const slots: { time: string; color: string; label: string; statusCounts: Record<string, number> }[] = [];
     
         const currentAttendantId = availabilityAttendant;
         const selectedAtt = attendants.find(a => a.id === currentAttendantId);
@@ -331,41 +337,38 @@ export const Metrics: React.FC = () => {
             for (let h = 0; h < 24; h++) {
                 for (let m = 0; m < 60; m += 15) {
                     const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                    
-                    const appt = appointments.find(a => 
+
+                    const apptsAtTime = appointments.filter(a => 
                         a.attendantId === currentAttendantId && 
                         a.date === availabilityDate &&
                         a.time.startsWith(time)
                     );
 
+                    // Agrupa e conta por status
+                    const statusCounts: Record<string, number> = {};
+                    apptsAtTime.forEach(a => {
+                        statusCounts[a.status] = (statusCounts[a.status] || 0) + 1;
+                    });
+
+                    // Define a prioridade de exibição da cor
+                    const priority: AppointmentStatus[] = ['Realizado', 'Pendente', 'Reagendado', 'Reagendado', 'Cancelado', 'No-show'];
+                    const primaryStatus = priority.find(s => statusCounts[s] > 0);
+
                     let color = 'bg-muted/20'; 
                     let label = 'Livre';
 
-                    if (appt) {
-                        // Mapeamento de cores seguindo o padrão do gráfico
-                        switch (appt.status) {
-                            case 'Realizado':
-                                color = 'bg-[#00E676]'; // Verde
-                                break;
-                            case 'Pendente':
-                                color = 'bg-[#B2B2B2]'; // Cinza Escuro
-                                break;
-                            case 'Cancelado':
-                                color = 'bg-[#FF1744]'; // Vermelho
-                                break;
-                            case 'Reagendado':
-                                color = 'bg-[#2979FF]'; // Azul
-                                break;
-                            case 'No-show':
-                                color = 'bg-[#FF9100]'; // Laranja
-                                break;
-                            // Esquecimento foi removido conforme solicitado
-                            default:
-                                color = 'bg-blue-500';
-                        }
-                        label = appt.status;
+                    if (primaryStatus) {
+                        const colorMap: Record<string, string> = {
+                            'Realizado': 'bg-[#00E676]',
+                            'Pendente': 'bg-[#B2B2B2]',
+                            'Cancelado': 'bg-[#FF1744]',
+                            'Reagendado': 'bg-[#2979FF]',
+                            'No-show': 'bg-[#FF9100]'
+                        };
+                        color = colorMap[primaryStatus] || 'bg-blue-500';
+                        label = primaryStatus;
                     }
-                    slots.push({ time, color, label });
+                    slots.push({ time, color, label, statusCounts });
                 }
             }
         }
@@ -651,9 +654,9 @@ export const Metrics: React.FC = () => {
                                     tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
                                     dy={10}
                                 />
-                                <Tooltip
+                                <RechartsTooltip
                                     cursor={{ fill: 'var(--muted)', opacity: 0.2 }}
-                                    content={({ active, payload, label }) => {
+                                    content={({ active, payload, label }: any) => {
                                         if (!active || !payload) return null;
                                         return (
                                             <div className="bg-surface border border-border p-3 rounded-lg shadow-xl !opacity-100 min-w-[150px]">
@@ -801,22 +804,56 @@ export const Metrics: React.FC = () => {
                     </CardHeader>
                     <CardContent>
                         {availabilityAttendant ? (
-                            <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-12 gap-2">
-                                {availabilityGrid.map((slot) => (
-                                    <div 
-                                        key={slot.time}
-                                        style={{ backgroundColor: slot.color.startsWith('bg-[') ? slot.color.slice(4, -1) : undefined }}
-                                        className={cn(
-                                            "flex flex-col items-center justify-center p-2 rounded-md border border-border text-[10px] font-medium transition-all text-white shadow-sm",
-                                            !slot.color.startsWith('bg-[') && slot.color, // Mantém bg-muted/20 se for livre
-                                            slot.color === 'bg-muted/20' && "text-secondary shadow-none"
-                                        )}
-                                        title={`${slot.time} - ${slot.label}`}
-                                    >
-                                        {slot.time}
-                                    </div>
-                                ))}
-                            </div>
+                            <TooltipProvider>
+                                <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-12 gap-2">
+                                    {availabilityGrid.map((slot) => {
+                                        const hasAppts = Object.keys(slot.statusCounts).length > 0;
+                                        
+                                        return (
+                                            <Tooltip key={slot.time}>
+                                                <TooltipTrigger>
+                                                    <div 
+                                                        style={{ backgroundColor: slot.color.startsWith('bg-[') ? slot.color.slice(4, -1) : undefined }}
+                                                        className={cn(
+                                                            "flex flex-col items-center justify-center p-2 rounded-md border border-border text-[10px] font-medium transition-all text-white shadow-sm cursor-default",
+                                                            !slot.color.startsWith('bg-[') && slot.color,
+                                                            slot.color === 'bg-muted/20' && "text-secondary shadow-none"
+                                                        )}
+                                                    >
+                                                        {slot.time}
+                                                    </div>
+                                                </TooltipTrigger>
+                                                
+                                                {hasAppts && (
+                                                    <TooltipContent className="p-3 min-w-[140px]">
+                                                        <div className="space-y-2">
+                                                            <p className="font-bold border-b border-border pb-1 mb-1">{slot.time}</p>
+                                                            <ul className="space-y-1">
+                                                                {Object.entries(slot.statusCounts).map(([status, count]) => (
+                                                                    <li key={status} className="flex items-center justify-between gap-3 text-[11px]">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <div className={cn(
+                                                                                "w-2 h-2 rounded-full",
+                                                                                status === 'Realizado' ? 'bg-[#00E676]' :
+                                                                                status === 'Pendente' ? 'bg-[#B2B2B2]' :
+                                                                                status === 'Cancelado' ? 'bg-[#FF1744]' :
+                                                                                status === 'Reagendado' ? 'bg-[#2979FF]' :
+                                                                                'bg-[#FF9100]'
+                                                                            )} />
+                                                                            <span>{status}</span>
+                                                                        </div>
+                                                                        <span className="font-bold">{count}</span>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    </TooltipContent>
+                                                )}
+                                            </Tooltip>
+                                        );
+                                    })}
+                                </div>
+                            </TooltipProvider>
                         ) : (
                             <div className="h-40 flex items-center justify-center text-secondary border-2 border-dashed border-border rounded-xl">
                                 Selecione um atendente para visualizar a agenda do dia.
