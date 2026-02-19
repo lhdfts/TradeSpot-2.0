@@ -69,7 +69,8 @@ export const SelfScheduling = () => {
 
             setLoadingTimes(true);
             try {
-                const response = await fetch(`/api/public/available-times?date=${formData.date}`);
+                const attendantId = searchParams.get('attendantId') || '';
+                const response = await fetch(`/api/public/available-times?date=${formData.date}&attendantId=${attendantId}`);
                 if (!response.ok) {
                     throw new Error('Erro ao buscar horários');
                 }
@@ -84,7 +85,7 @@ export const SelfScheduling = () => {
         };
 
         fetchAvailableTimes();
-    }, [formData.date]);
+    }, [formData.date, searchParams]);
 
     const validate = () => {
         const newErrors: Record<string, string> = {};
@@ -293,7 +294,7 @@ export const SelfScheduling = () => {
                                     ? format(new Date(new Date().getTime() + 10 * 60000), 'HH:mm')
                                     : undefined
                             }
-                            hideUnavailable={true}
+                            hideUnavailable={false}
                             pickerGridClass="grid-cols-3 md:grid-cols-4"
                         />
                     </div>
