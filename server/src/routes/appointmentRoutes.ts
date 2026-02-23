@@ -309,6 +309,16 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
         const merged = { ...currentApp, ...updates };
 
+        // Ensure snake_case keys are updated from camelCase updates for logic checks
+        if (updates.attendantId) merged.attendant_id = updates.attendantId;
+        if (updates.eventId) merged.event_id = updates.eventId;
+
+        // Robust Date Format Handling: Convert DD/MM/YYYY to YYYY-MM-DD if needed
+        if (merged.date && typeof merged.date === 'string' && merged.date.includes('/')) {
+            const [d, m, y] = merged.date.split('/');
+            merged.date = `${y}-${m}-${d}`;
+        }
+
         if (updates.time || updates.type) {
             merged.end_time = calculateEndTime(merged.time, merged.type);
         }
