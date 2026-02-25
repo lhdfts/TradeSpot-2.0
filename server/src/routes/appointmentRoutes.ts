@@ -80,6 +80,24 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 return res.status(400).json({ error: 'Atendente não encontrado.' });
             }
 
+            // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
+            const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade'];
+            const closerSectors = ['Closer', 'Líder', 'Co-Líder'];
+
+            if (closerTypes.includes(data.type) && !closerSectors.includes(attendant.sector)) {
+                console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to ${data.type}. Expected sectors: ${closerSectors.join(', ')}`);
+                return res.status(409).json({
+                    error: `O atendente ${attendant.name} não pertence ao setor Closer (setor atual: ${attendant.sector}). Atualize a página e tente novamente.`
+                });
+            }
+
+            if (data.type === 'Ligação SDR' && attendant.sector !== 'SDR') {
+                console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to Ligação SDR.`);
+                return res.status(409).json({
+                    error: `O atendente ${attendant.name} não pertence ao setor SDR (setor atual: ${attendant.sector}). Atualize a página e tente novamente.`
+                });
+            }
+
             if (data.type !== 'Fora da agenda') {
                 const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type);
                 if (!isWithinSchedule) {
