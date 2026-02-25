@@ -31,7 +31,7 @@ interface AppointmentFormProps {
 
 export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, prefillData, onSuccess }) => {
     const { createAppointment, updateAppointment, appointments } = useAppointments();
-    const { attendants, events, loading } = useFormData();
+    const { attendants, events, loading, refreshAttendants } = useFormData();
     const { user } = useAuth();
     const [rates, setRates] = useState<Record<string, number>>({});
     const [isExistingClient, setIsExistingClient] = useState(false);
@@ -520,14 +520,19 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
             // Resolve Automatic Distribution on Submit
             if (formData.attendantId === 'distribuicao_automatica') {
+                // FRESH DATA: Refresh attendants before distribution to avoid stale sector/schedule data
+                const freshAttendants = await refreshAttendants();
+                console.log('[DISTRIBUTION] Refreshed attendants before submit:', freshAttendants.length, 'total');
+
                 const bestCloser = findAvailableCloser(
                     formData.date,
                     formData.time,
                     formData.type,
-                    attendants,
+                    freshAttendants,
                     appointments
                 );
                 if (bestCloser) {
+                    console.log(`[DISTRIBUTION] Assigned: ${bestCloser.name} (sector: ${bestCloser.sector}, id: ${bestCloser.id})`);
                     finalAttendantId = bestCloser.id;
                 } else {
                     alert('Não há closers disponíveis para este horário.');
