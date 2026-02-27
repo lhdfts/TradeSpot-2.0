@@ -341,7 +341,7 @@ export const Metrics: React.FC = () => {
                     const slotMinutes = h * 60 + m;
 
                     const apptsAtTime = appointments.filter(a => {
-                        if (a.attendantId !== currentAttendantId || a.date !== availabilityDate) return false;
+                        if (a.attendantId !== currentAttendantId) return false;
 
                         const timeParts = a.time.split(':');
                         if (timeParts.length < 2) return false;
@@ -353,7 +353,28 @@ export const Metrics: React.FC = () => {
                         const isCloser = selectedAtt?.sector === 'Closer';
                         const duration = isCloser ? 60 : 15;
 
-                        return slotMinutes >= apptMinutes && slotMinutes < apptMinutes + duration;
+                        // Case 1: Appointment is on the exact same date being viewed
+                        if (a.date === availabilityDate) {
+                            return slotMinutes >= apptMinutes && slotMinutes < apptMinutes + duration;
+                        }
+
+                        // Case 2: Appointment was on the PREVIOUS day, but spans past midnight INTO the viewed date
+                        // e.g., viewing 00:00, appointment was on previous day at 23:45 (spans to 00:45)
+                        const viewedDateObj = new Date(availabilityDate + 'T12:00:00'); // Safe timezone assumption for date math
+                        const previousDateObj = new Date(viewedDateObj);
+                        previousDateObj.setDate(viewedDateObj.getDate() - 1);
+                        const prevDateStr = previousDateObj.toISOString().split('T')[0];
+
+                        if (a.date === prevDateStr) {
+                            const endMinutes = apptMinutes + duration;
+                            if (endMinutes > 24 * 60) {
+                                // Spills into next (viewed) day. Calculate remaining minutes inside the new day
+                                const overflowMinutes = endMinutes - (24 * 60);
+                                return slotMinutes >= 0 && slotMinutes < overflowMinutes;
+                            }
+                        }
+
+                        return false;
                     });
 
                     // Agrupa e conta por status
