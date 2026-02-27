@@ -20,11 +20,11 @@ import { cn } from '../lib/utils';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { 
-    Tooltip, 
-    TooltipTrigger, 
-    TooltipContent, 
-    TooltipProvider 
+import {
+    Tooltip,
+    TooltipTrigger,
+    TooltipContent,
+    TooltipProvider
 } from '../components/ui/tooltip';
 
 interface SDRRankingItem {
@@ -327,7 +327,7 @@ export const Metrics: React.FC = () => {
         const chartTotal = chartData.reduce((acc, curr) => acc + curr.total, 0);
 
         const slots: { time: string; color: string; label: string; statusCounts: Record<string, number> }[] = [];
-    
+
         const currentAttendantId = availabilityAttendant;
         const selectedAtt = attendants.find(a => a.id === currentAttendantId);
         const isAttendantInSector = !availabilitySector || availabilitySector === 'all' || selectedAtt?.sector === availabilitySector;
@@ -338,11 +338,44 @@ export const Metrics: React.FC = () => {
                 for (let m = 0; m < 60; m += 15) {
                     const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 
-                    const apptsAtTime = appointments.filter(a => 
-                        a.attendantId === currentAttendantId && 
-                        a.date === availabilityDate &&
-                        a.time.startsWith(time)
-                    );
+                    const slotMinutes = h * 60 + m;
+
+                    const apptsAtTime = appointments.filter(a => {
+                        if (a.attendantId !== currentAttendantId) return false;
+
+                        const timeParts = a.time.split(':');
+                        if (timeParts.length < 2) return false;
+
+                        const apptH = parseInt(timeParts[0], 10);
+                        const apptM = parseInt(timeParts[1], 10);
+                        const apptMinutes = apptH * 60 + apptM;
+
+                        const isCloser = selectedAtt?.sector === 'Closer';
+                        const duration = isCloser ? 60 : 15;
+
+                        // Case 1: Appointment is on the exact same date being viewed
+                        if (a.date === availabilityDate) {
+                            return slotMinutes >= apptMinutes && slotMinutes < apptMinutes + duration;
+                        }
+
+                        // Case 2: Appointment was on the PREVIOUS day, but spans past midnight INTO the viewed date
+                        // e.g., viewing 00:00, appointment was on previous day at 23:45 (spans to 00:45)
+                        const viewedDateObj = new Date(availabilityDate + 'T12:00:00'); // Safe timezone assumption for date math
+                        const previousDateObj = new Date(viewedDateObj);
+                        previousDateObj.setDate(viewedDateObj.getDate() - 1);
+                        const prevDateStr = previousDateObj.toISOString().split('T')[0];
+
+                        if (a.date === prevDateStr) {
+                            const endMinutes = apptMinutes + duration;
+                            if (endMinutes > 24 * 60) {
+                                // Spills into next (viewed) day. Calculate remaining minutes inside the new day
+                                const overflowMinutes = endMinutes - (24 * 60);
+                                return slotMinutes >= 0 && slotMinutes < overflowMinutes;
+                            }
+                        }
+
+                        return false;
+                    });
 
                     // Agrupa e conta por status
                     const statusCounts: Record<string, number> = {};
@@ -354,7 +387,7 @@ export const Metrics: React.FC = () => {
                     const priority: AppointmentStatus[] = ['Realizado', 'Pendente', 'Reagendado', 'Reagendado', 'Cancelado', 'No-show'];
                     const primaryStatus = priority.find(s => statusCounts[s] > 0);
 
-                    let color = 'bg-muted/20'; 
+                    let color = 'bg-muted/20';
                     let label = 'Livre';
 
                     if (primaryStatus) {
@@ -373,7 +406,13 @@ export const Metrics: React.FC = () => {
             }
         }
 
-        return { sdrRanking, closerRanking, chartData, totals, filteredAppointments: filtered, sdrTotal, closerTotal, chartTotal, availabilityGrid: slots };
+        const sortedFiltered = [...filtered].sort((a, b) => {
+            const dateA = new Date(`${a.date}T${a.time}`);
+            const dateB = new Date(`${b.date}T${b.time}`);
+            return dateA.getTime() - dateB.getTime();
+        });
+
+        return { sdrRanking, closerRanking, chartData, totals, filteredAppointments: sortedFiltered, sdrTotal, closerTotal, chartTotal, availabilityGrid: slots };
     }, [appointments, startDate, endDate, attendantFilter, eventFilter, attendants, sectorFilter, uniqueClients, availabilityAttendant, availabilityDate, availabilitySector]);
 
     React.useEffect(() => {
@@ -778,7 +817,7 @@ export const Metrics: React.FC = () => {
                                 ]}
                                 className="w-32"
                             />
-                            
+
                             {/* ATUALIZADO: Seletor de Atendente filtrado por setor */}
                             <FloatingSelect
                                 label="Atendente"
@@ -793,7 +832,7 @@ export const Metrics: React.FC = () => {
                                 ]}
                                 className="w-64"
                             />
-                            
+
                             <FloatingDateInput
                                 label="Data"
                                 value={availabilityDate}
@@ -808,11 +847,11 @@ export const Metrics: React.FC = () => {
                                 <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-12 gap-2">
                                     {availabilityGrid.map((slot) => {
                                         const hasAppts = Object.keys(slot.statusCounts).length > 0;
-                                        
+
                                         return (
                                             <Tooltip key={slot.time}>
                                                 <TooltipTrigger>
-                                                    <div 
+                                                    <div
                                                         style={{ backgroundColor: slot.color.startsWith('bg-[') ? slot.color.slice(4, -1) : undefined }}
                                                         className={cn(
                                                             "flex flex-col items-center justify-center p-2 rounded-md border border-border text-[10px] font-medium transition-all text-white shadow-sm cursor-default",
@@ -823,7 +862,7 @@ export const Metrics: React.FC = () => {
                                                         {slot.time}
                                                     </div>
                                                 </TooltipTrigger>
-                                                
+
                                                 {hasAppts && (
                                                     <TooltipContent className="p-3 min-w-[140px]">
                                                         <div className="space-y-2">
@@ -835,10 +874,10 @@ export const Metrics: React.FC = () => {
                                                                             <div className={cn(
                                                                                 "w-2 h-2 rounded-full",
                                                                                 status === 'Realizado' ? 'bg-[#00E676]' :
-                                                                                status === 'Pendente' ? 'bg-[#B2B2B2]' :
-                                                                                status === 'Cancelado' ? 'bg-[#FF1744]' :
-                                                                                status === 'Reagendado' ? 'bg-[#2979FF]' :
-                                                                                'bg-[#FF9100]'
+                                                                                    status === 'Pendente' ? 'bg-[#B2B2B2]' :
+                                                                                        status === 'Cancelado' ? 'bg-[#FF1744]' :
+                                                                                            status === 'Reagendado' ? 'bg-[#2979FF]' :
+                                                                                                'bg-[#FF9100]'
                                                                             )} />
                                                                             <span>{status}</span>
                                                                         </div>
@@ -859,7 +898,7 @@ export const Metrics: React.FC = () => {
                                 Selecione um atendente para visualizar a agenda do dia.
                             </div>
                         )}
-                        
+
                         {/* Legenda */}
                         {availabilityAttendant && (
                             <div className="mt-6 flex flex-wrap gap-4 text-xs text-secondary border-t border-border pt-4">
