@@ -121,7 +121,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
-        return dateB.getTime() - dateA.getTime(); // Descending for better recent visibility
+        return dateA.getTime() - dateB.getTime(); // Ascending for closest appointments first
     });
 
     // Pagination Logic
