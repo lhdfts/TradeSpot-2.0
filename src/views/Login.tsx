@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
 import { Logo } from '../components/Logo';
 import { auth } from '../lib/firebase';
-import { signInWithPopup, SAMLAuthProvider } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, SAMLAuthProvider } from 'firebase/auth';
 
 export const Login: React.FC = () => {
     const [loading, setLoading] = useState(false);
 
-    const handleGoogleLogin = async () => {
+    React.useEffect(() => {
+        getRedirectResult(auth).catch((error) => {
+            console.error('Error from redirect login:', error);
+            alert(`Erro no login por redirecionamento: ${error.message}`);
+        });
+    }, []);
+
+    const handleGoogleLogin = async (method: 'popup' | 'redirect') => {
         setLoading(true);
         const provider = new SAMLAuthProvider(
             "saml.sistema-depositos-google-workspace"
@@ -16,14 +23,30 @@ export const Login: React.FC = () => {
             authDomain: auth.app.options.authDomain,
             projectId: auth.app.options.projectId
         });
+
         try {
-            await signInWithPopup(auth, provider);
+            if (method === 'popup') {
+                await signInWithPopup(auth, provider);
+            } else {
+                await signInWithRedirect(auth, provider);
+            }
             // AuthContext will handle state change
-        } catch (error) {
-            console.error('Error logging in with Google:', error);
-            alert(`Erro ao fazer login com Google: ${(error as any).message}`);
-        } finally {
-            setLoading(false);
+        } catch (error: any) {
+            console.warn(`${method} login failed...`, error);
+
+            if (method === 'popup' && (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/web-storage-unsupported' || error.message.includes('popup'))) {
+                try {
+                    await signInWithRedirect(auth, provider);
+                } catch (redirectError: any) {
+                    console.error('Error starting redirect login:', redirectError);
+                    alert(`Erro ao iniciar login: ${redirectError.message}`);
+                    setLoading(false);
+                }
+            } else {
+                console.error('Error logging in with Google:', error);
+                alert(`Erro ao fazer login com Google: ${error.message}`);
+                setLoading(false);
+            }
         }
     };
 
@@ -44,9 +67,9 @@ export const Login: React.FC = () => {
                         </p>
                     </div>
 
-                    <div className="mt-8 flex justify-center">
+                    <div className="mt-8 flex flex-col justify-center gap-4">
                         <button
-                            onClick={handleGoogleLogin}
+                            onClick={() => handleGoogleLogin('popup')}
                             disabled={loading}
                             type="button"
                             className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface px-8 py-4 text-sm font-medium text-foreground shadow-sm hover:bg-white/5 disabled:opacity-50 transition-colors"
@@ -74,6 +97,15 @@ export const Login: React.FC = () => {
                                 </svg>
                             )}
                             <span>Entrar com Google</span>
+                        </button>
+
+                        <button
+                            onClick={() => handleGoogleLogin('redirect')}
+                            disabled={loading}
+                            type="button"
+                            className="flex w-full items-center justify-center gap-3 rounded-lg border border-border px-8 py-4 text-sm font-medium text-secondary hover:text-foreground hover:bg-white/5 disabled:opacity-50 transition-colors"
+                        >
+                            <span>Problemas com o painel em branco? Tente o acesso alternativo</span>
                         </button>
                     </div>
                 </div>
