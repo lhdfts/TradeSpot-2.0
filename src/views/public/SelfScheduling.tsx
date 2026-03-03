@@ -86,7 +86,7 @@ export const SelfScheduling = () => {
         };
 
         fetchAvailableTimes();
-    }, [formData.date, searchParams]);
+    }, [formData.date, searchParams, event]);
 
     const validate = () => {
         const newErrors: Record<string, string> = {};

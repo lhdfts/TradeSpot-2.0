@@ -82,6 +82,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
         if (eventId && typeof eventId === 'string') {
             const { data: eventData } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
+            console.log('[AVAILABLE-TIMES] Event lookup:', { eventId, eventData });
             if (eventData) {
                 if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
                     APPOINTMENT_TYPE = 'Gold Call';
@@ -90,13 +91,19 @@ router.get('/available-times', async (req: Request, res: Response) => {
                     sectors = ['Perpétuos'];
                 }
             }
+        } else {
+            console.log('[AVAILABLE-TIMES] No eventId received in query params');
         }
+
+        console.log('[AVAILABLE-TIMES] Using sectors:', sectors, '| Type:', APPOINTMENT_TYPE);
 
         // 1. Fetch Attendants based on sector
         const { data: attendants, error: attError } = await supabase
             .from('user')
             .select('*')
             .in('sector', sectors);
+
+        console.log('[AVAILABLE-TIMES] Attendants found:', attendants?.length || 0, attendants?.map(a => ({ name: a.name, sector: a.sector, hasSchedule: !!a.schedule })));
 
         if (attError || !attendants) {
             console.error("Error fetching attendants:", attError);
