@@ -170,7 +170,7 @@ export const Metrics: React.FC = () => {
         // 2. SDR Ranking
         const sdrMap = new Map<string, SDRRankingItem>();
         filtered.forEach(a => {
-            if (a.createdBy && ['Ligação Closer', 'Reagendamento Closer', 'Upgrade'].includes(a.type)) {
+            if (a.createdBy && ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(a.type)) {
                 const creator = attendants.find(att => att.id === a.createdBy);
                 if (creator && (creator.sector === 'SDR' || creator.sector === 'Leads')) {
                     if (!sdrMap.has(a.createdBy)) {
@@ -194,7 +194,7 @@ export const Metrics: React.FC = () => {
                     if (a.status as string in stats) {
                         stats[a.status]++;
                     }
-                    if (a.type === 'Ligação Closer') stats.ligacao++;
+                    if (a.type === 'Ligação Closer' || a.type === 'Gold Call') stats.ligacao++;
                     if (a.type === 'Reagendamento Closer') stats.reagendamento++;
                     if (a.type === 'Upgrade') stats.upgrade++;
                 }
@@ -487,7 +487,8 @@ export const Metrics: React.FC = () => {
                             options={[
                                 { value: 'all', label: 'Todos os Setores' },
                                 { value: 'SDR', label: 'SDR' },
-                                { value: 'Closer', label: 'Closer' }
+                                { value: 'Closer', label: 'Closer' },
+                                { value: 'Perpétuos', label: 'Perpétuos' }
                             ]}
                             className="w-40"
                         />
@@ -578,7 +579,7 @@ export const Metrics: React.FC = () => {
                         <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
                             <div className="col-span-4">Nome</div>
                             <div className="col-span-2 text-center">T. Marc.</div>
-                            <div className="col-span-2 text-center text-blue-500">Lig. Clo.</div>
+                            <div className="col-span-2 text-center text-blue-500">Lig. Clo/Gold</div>
                             <div className="col-span-2 text-center text-orange-500">R. Clo.</div>
                             <div className="col-span-2 text-center text-purple-500">Upgrade</div>
                         </div>

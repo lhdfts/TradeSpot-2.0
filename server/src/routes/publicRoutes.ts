@@ -65,6 +65,7 @@ router.get('/events/:link', async (req: Request, res: Response) => {
 router.get('/available-times', async (req: Request, res: Response) => {
     const { date } = req.query;
     const { attendantId } = req.query;
+    const { eventId } = req.query;
 
     if (!date || typeof date !== 'string') {
         return res.status(400).json({ error: 'Data é obrigatória (formato: YYYY-MM-DD)' });
@@ -76,13 +77,26 @@ router.get('/available-times', async (req: Request, res: Response) => {
     }
 
     try {
-        const APPOINTMENT_TYPE = 'Ligação Closer';
+        let APPOINTMENT_TYPE = 'Ligação Closer';
+        let sectors = ['Closer', 'Líder', 'Co-Líder'];
 
-        // 1. Fetch Closers (including Líder and Co-Líder who can also attend)
+        if (eventId && typeof eventId === 'string') {
+            const { data: eventData } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
+            if (eventData) {
+                if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
+                    APPOINTMENT_TYPE = 'Gold Call';
+                }
+                if (eventData.sector === 'Perpétuos') {
+                    sectors = ['Perpétuos'];
+                }
+            }
+        }
+
+        // 1. Fetch Attendants based on sector
         const { data: attendants, error: attError } = await supabase
             .from('user')
             .select('*')
-            .in('sector', ['Closer', 'Líder', 'Co-Líder']);
+            .in('sector', sectors);
 
         if (attError || !attendants) {
             console.error("Error fetching attendants:", attError);
@@ -129,22 +143,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
             if (hasAvailableCloser) availableTimes.push(timeSlot);
         }
 
-        for (const timeSlot of allTimes) {
-            // Check if any closer is available at this time
-            const hasAvailableCloser = await checkIfAnyCloserAvailable(
-                attendants,
-                existingAppointments,
-                date,
-                timeSlot,
-                APPOINTMENT_TYPE
-            );
-
-            if (hasAvailableCloser) {
-                availableTimes.push(timeSlot);
-            }
-        }
-
-        res.json({ date, availableTimes });
+        const finalAvailableTimes = Array.from(new Set(availableTimes)).sort();
+        res.json({ date, availableTimes: finalAvailableTimes });
 
     } catch (err: any) {
         console.error("Available Times Fetch Error:", err);
@@ -199,8 +199,23 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         const data = validation.data;
-        // Force type
-        const APPOINTMENT_TYPE = 'Ligação Closer';
+        const eventId = req.body.eventId;
+        if (!eventId) return res.status(400).json({ error: 'ID do evento é obrigatório' });
+
+        const { data: eventData, error: eventError } = await supabase
+            .from('events')
+            .select('event_name')
+            .eq('id', eventId)
+            .single();
+
+        if (eventError || !eventData) {
+            return res.status(404).json({ error: 'Evento não encontrado' });
+        }
+
+        let APPOINTMENT_TYPE = 'Ligação Closer';
+        if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
+            APPOINTMENT_TYPE = 'Gold Call';
+        }
 
         // 2. Buffer Check (10 minutes)
         const now = new Date();
@@ -245,8 +260,9 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 .eq('id', finalAttendantId)
                 .single();
 
-            // Se o atendente não existir ou não for do setor Closer, resetamos para distribuição automática
-            if (!attendantData || attendantData.sector !== 'Closer') {
+            // Se o atendente não existir ou não for do setor Closer (ou Perpétuos para Gold Call), resetamos
+            const isValidSector = attendantData?.sector === 'Closer' || (APPOINTMENT_TYPE === 'Gold Call' && attendantData?.sector === 'Perpétuos');
+            if (!attendantData || !isValidSector) {
                 finalAttendantId = 'distribuicao_automatica';
             } else {
                 // VALIDAR ESCALA
@@ -258,7 +274,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
 
         // Se não houver ID ou se for explicitamente para distribuição automática
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            finalAttendantId = await findBestAttendant(data.date, data.time, APPOINTMENT_TYPE);
+            finalAttendantId = await findBestAttendant(data.date, data.time, APPOINTMENT_TYPE, eventId);
         }
 
         if (!finalAttendantId) {
@@ -344,19 +360,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // Actually, I missed adding `eventId` to `publicAppointmentSchema`. 
         // I'll grab it from the body directly for now, or assume it is sent.
 
-        // Let's rely on req.body.eventId being present but valid.
-        const eventId = req.body.eventId;
-        if (!eventId) return res.status(400).json({ error: 'ID do evento é obrigatório' });
-
-        const { data: eventData, error: eventError } = await supabase
-            .from('events')
-            .select('event_name')
-            .eq('id', eventId)
-            .single();
-
-        if (eventError || !eventData) {
-            return res.status(404).json({ error: 'Evento não encontrado' });
-        }
+        // Removed late event check since it was moved to the top.
 
         // 5.5 Create Google Meet Link
         let meetLink = '';

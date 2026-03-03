@@ -32,7 +32,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                             <div className="col-span-1 text-center text-violet-500">Esquecimento</div>
                             <div className="col-span-1 text-center text-rose-500">No-show</div>
                             <div className="col-span-1 text-center text-blue-500">Reagendado</div>
-                            <div className="col-span-1 text-center text-blue-400">Ligação Closer</div>
+                            <div className="col-span-1 text-center text-blue-400">Lig. Closer/Gold</div>
                             <div className="col-span-2 text-center text-orange-400">Reagendamento Closer</div>
                             <div className="col-span-1 text-center text-purple-400">Upgrade</div>
                         </>

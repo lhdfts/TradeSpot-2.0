@@ -18,7 +18,7 @@ const timeToMinutes = (time: string): number => {
 };
 
 const getDuration = (type: string): number => {
-    if (['Ligação Closer', 'Reschedule', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal'].includes(type)) {
+    if (['Ligação Closer', 'Gold Call', 'Reschedule', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal'].includes(type)) {
         return 60;
     }
     return 30;

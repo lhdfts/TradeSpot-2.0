@@ -63,7 +63,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         // Agent Logic
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            const availableId = await findBestAttendant(data.date, data.time, data.type);
+            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId);
             if (!availableId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
             }
@@ -81,8 +81,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
 
             // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
-            const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade'];
+            const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
             const closerSectors = ['Closer', 'Líder', 'Co-Líder'];
+            if (data.type === 'Gold Call') {
+                closerSectors.push('Perpétuos');
+            }
 
             if (closerTypes.includes(data.type) && !closerSectors.includes(attendant.sector)) {
                 console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to ${data.type}. Expected sectors: ${closerSectors.join(', ')}`);

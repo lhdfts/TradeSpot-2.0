@@ -70,7 +70,8 @@ export const SelfScheduling = () => {
             setLoadingTimes(true);
             try {
                 const attendantId = searchParams.get('attendantId') || '';
-                const response = await fetch(`/api/public/available-times?date=${formData.date}&attendantId=${attendantId}`);
+                const eventIdParam = event ? `&eventId=${event.id}` : '';
+                const response = await fetch(`/api/public/available-times?date=${formData.date}&attendantId=${attendantId}${eventIdParam}`);
                 if (!response.ok) {
                     throw new Error('Erro ao buscar horários');
                 }

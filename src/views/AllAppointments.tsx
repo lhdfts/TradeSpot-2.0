@@ -39,7 +39,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const [attendantFilter, setAttendantFilter] = useState('all');
     const [creatorFilter, setCreatorFilter] = useState('all');
     const [eventFilter, setEventFilter] = useState('all');
-    const [dateRange, setDateRange] = useState({start: new Date().toISOString().split('T')[0], end: ''});
+    const [dateRange, setDateRange] = useState({ start: new Date().toISOString().split('T')[0], end: '' });
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
@@ -117,7 +117,14 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             }
         }
 
-        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesDate;
+        // Perpétuos Sector restriction
+        let matchesSector = true;
+        if (user?.sector === 'Perpétuos') {
+            const linkedEvent = events.find(e => e.id === a.eventId);
+            matchesSector = !!linkedEvent && linkedEvent.sector === 'Perpétuos';
+        }
+
+        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesDate && matchesSector;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);

@@ -4,7 +4,7 @@ import { z } from 'zod';
 const nameRegex = /^[a-zA-Z\u00C0-\u00FF]+(?:\s[a-zA-Z\u00C0-\u00FF]+)*$/;
 
 // Example Enums (Should strictly match database if possible, but hardcoded for now based on system constants)
-const VALID_TYPES = ['Ligação SDR', 'Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda'] as const;
+const VALID_TYPES = ['Ligação SDR', 'Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'] as const;
 const VALID_CURRENCIES = ['BRL', 'USD', 'EUR', 'JPY', 'AOA'] as const;
 const VALID_INTEREST_LEVELS = ['Alto', 'Mediano', 'Desconhecido'] as const;
 const VALID_KNOWLEDGE_LEVELS = ['Iniciante', 'Intermediário', 'Avançado'] as const;
