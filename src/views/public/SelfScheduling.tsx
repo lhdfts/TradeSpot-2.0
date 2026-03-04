@@ -297,6 +297,7 @@ export const SelfScheduling = () => {
                             }
                             hideUnavailable={false}
                             pickerGridClass="grid-cols-3 md:grid-cols-4"
+                            isPerpetuosEvent={event?.sector === 'Perpétuos'}
                         />
                     </div>
                     {errors.time && <p className="text-xs text-destructive">{errors.time}</p>}

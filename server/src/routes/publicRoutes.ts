@@ -86,7 +86,6 @@ router.get('/available-times', async (req: Request, res: Response) => {
     try {
         let APPOINTMENT_TYPE = 'Ligação Closer';
         let sectors = ['Closer', 'Líder', 'Co-Líder'];
-        let isPerpetuosEvent = false;
 
         if (eventId && typeof eventId === 'string') {
             const { data: eventData, error: eventError } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
@@ -97,7 +96,6 @@ router.get('/available-times', async (req: Request, res: Response) => {
                 }
                 if (eventData.sector === 'Perpétuos') {
                     sectors = ['Perpétuos'];
-                    isPerpetuosEvent = true;
                 }
             }
         } else {
@@ -144,11 +142,9 @@ router.get('/available-times', async (req: Request, res: Response) => {
         const existingAppointments = appointments || [];
 
         // 3. Generate all possible time slots
-        // For Perpétuos events, only :00 and :30 are available
         const allTimes: string[] = [];
-        const minutes = isPerpetuosEvent ? [0, 30] : [0, 15, 30, 45];
         for (let hour = 0; hour < 24; hour++) {
-            for (const minute of minutes) {
+            for (const minute of [0, 15, 30, 45]) {
                 allTimes.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
             }
         }

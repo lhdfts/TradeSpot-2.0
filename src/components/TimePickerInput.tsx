@@ -13,6 +13,7 @@ interface TimePickerInputProps {
     minTime?: string; // Format HH:MM - Should be the earliest allowed time slot
     hideUnavailable?: boolean;
     pickerGridClass?: string;
+    isPerpetuosEvent?: boolean; // If true, only show :00 and :30 time slots
 }
 
 export const TimePickerInput: React.FC<TimePickerInputProps> = ({
@@ -25,6 +26,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     minTime,
     hideUnavailable = false,
     pickerGridClass,
+    isPerpetuosEvent = false,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
@@ -54,7 +56,14 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
 
     const allTimes = generateAllTimes();
     // If availableTimes is provided, use it (even if empty). If not (undefined), show all times.
-    const availableTimesSet = new Set(availableTimes !== undefined ? availableTimes : allTimes);
+    // For Perpétuos events, filter to only :00 and :30 slots
+    const filteredAllTimes = isPerpetuosEvent
+        ? allTimes.filter(time => {
+            const minutes = time.split(':')[1];
+            return minutes === '00' || minutes === '30';
+        })
+        : allTimes;
+    const availableTimesSet = new Set(availableTimes !== undefined ? availableTimes : filteredAllTimes);
 
     const updatePosition = () => {
         if (buttonRef.current) {
@@ -129,7 +138,15 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
             onClick={(e) => e.stopPropagation()}
         >
             <div className={cn("grid gap-2", pickerGridClass || "grid-cols-4")}>
-                {allTimes.map(time => {
+                {filteredAllTimes.map(time => {
+                    // For Perpétuos events, hide :15 and :45 time slots
+                    if (isPerpetuosEvent) {
+                        const minutes = time.split(':')[1];
+                        if (minutes === '15' || minutes === '45') {
+                            return null;
+                        }
+                    }
+
                     const available = isTimeAvailable(time);
                     if (!available && hideUnavailable) return null;
 
