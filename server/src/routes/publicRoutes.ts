@@ -86,6 +86,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
     try {
         let APPOINTMENT_TYPE = 'Ligação Closer';
         let sectors = ['Closer', 'Líder', 'Co-Líder'];
+        let isPerpetuosEvent = false;
 
         if (eventId && typeof eventId === 'string') {
             const { data: eventData, error: eventError } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
@@ -96,6 +97,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
                 }
                 if (eventData.sector === 'Perpétuos') {
                     sectors = ['Perpétuos'];
+                    isPerpetuosEvent = true;
                 }
             }
         } else {
@@ -142,9 +144,11 @@ router.get('/available-times', async (req: Request, res: Response) => {
         const existingAppointments = appointments || [];
 
         // 3. Generate all possible time slots
+        // For Perpétuos events, only :00 and :30 are available
         const allTimes: string[] = [];
+        const minutes = isPerpetuosEvent ? [0, 30] : [0, 15, 30, 45];
         for (let hour = 0; hour < 24; hour++) {
-            for (const minute of [0, 15, 30, 45]) {
+            for (const minute of minutes) {
                 allTimes.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
             }
         }
@@ -263,13 +267,13 @@ router.post('/appointments', async (req: Request, res: Response) => {
             APPOINTMENT_TYPE = 'Gold Call';
         }
 
-        // 2. Buffer Check (10 minutes)
+        // 2. Buffer Check (30 minutes)
         const now = new Date();
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`);
         const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
-        if (diffMinutes < 10) {
-            return res.status(400).json({ error: 'O agendamento deve ter pelo menos 10 minutos de antecedência.' });
+        if (diffMinutes < 30) {
+            return res.status(400).json({ error: 'O agendamento deve ter pelo menos 30 minutos de antecedência.' });
         }
 
         // 3. Client Validation (1 Pending Rule)
@@ -518,70 +522,6 @@ router.post('/appointments', async (req: Request, res: Response) => {
     } catch (err: any) {
         console.error("Public Create Error:", err);
         res.status(500).json({ error: 'Erro Interno do Servidor' });
-    }
-});
-
-// --- DEBUG Endpoint ---
-router.get('/debug/available-times', async (req: Request, res: Response) => {
-    const { date } = req.query;
-    const { eventId } = req.query;
-
-    if (!date || typeof date !== 'string') {
-        return res.status(400).json({ error: 'Data é obrigatória' });
-    }
-
-    try {
-        let sectors = ['Closer', 'Líder', 'Co-Líder'];
-        let APPOINTMENT_TYPE = 'Ligação Closer';
-
-        if (eventId && typeof eventId === 'string') {
-            const { data: eventData } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
-            if (eventData && eventData.sector === 'Perpétuos') {
-                sectors = ['Perpétuos'];
-            }
-            if (eventData && (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand')) {
-                APPOINTMENT_TYPE = 'Gold Call';
-            }
-        }
-
-        // Fetch attendants
-        const { data: attendants } = await supabase.from('user').select('*').in('sector', sectors);
-
-        // Fetch appointments
-        const { data: appointments } = await supabase
-            .from('appointments')
-            .select('id, attendant_id, date, time, type, status')
-            .eq('date', date)
-            .neq('status', 'Cancelado');
-
-        const debugInfo = {
-            date,
-            eventId,
-            sectors,
-            appointmentType: APPOINTMENT_TYPE,
-            attendantsFound: attendants?.length || 0,
-            attendants: attendants?.map(a => ({
-                id: a.id,
-                name: a.name,
-                sector: a.sector,
-                hasSchedule: !!a.schedule,
-                schedule: a.schedule
-            })) || [],
-            appointmentsFound: appointments?.length || 0,
-            appointments: appointments?.map(a => ({
-                id: a.id,
-                attendant_id: a.attendant_id,
-                date: a.date,
-                time: a.time,
-                type: a.type,
-                status: a.status
-            })) || []
-        };
-
-        res.json(debugInfo);
-    } catch (err: any) {
-        console.error('Debug Error:', err);
-        res.status(500).json({ error: err.message });
     }
 });
 

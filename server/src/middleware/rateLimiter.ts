@@ -17,11 +17,11 @@ export const publicRateLimiter = rateLimit({
 
 /**
  * Stricter rate limiter for appointment creation via public link
- * Only 3 appointments per hour per IP to prevent spam
+ * Only 2 appointments per hour per IP to prevent spam
  */
 export const strictPublicRateLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 3, // Limit each IP to 3 appointment creations per hour
+    max: 2, // Limit each IP to 2 appointment creations per hour
     message: {
         error: 'Limite de agendamentos atingido. Por favor, aguarde uma hora antes de tentar novamente.'
     },

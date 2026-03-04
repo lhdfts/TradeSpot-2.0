@@ -43,10 +43,12 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend is running' });
 });
 
-// Public routes - rate limited but no authentication
-// Apply general rate limiter to most endpoints, strict limiter only to appointment creation
+// Public routes - no authentication required
+// Apply strict rate limiter only to appointment creation (prevents spam/abuse)
 app.use('/api/public/appointments', strictPublicRateLimiter);
-app.use('/api/public', publicRateLimiter, publicRoutes);
+// Apply general public rate limiter to event lookup (100 req/15min)
+app.use('/api/public/events', publicRateLimiter);
+app.use('/api/public', publicRoutes);
 
 // Protected routes - require authentication
 // Apply authentication middleware AND rate limiting
