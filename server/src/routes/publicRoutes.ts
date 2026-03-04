@@ -98,10 +98,17 @@ router.get('/available-times', async (req: Request, res: Response) => {
         console.log('[AVAILABLE-TIMES] Using sectors:', sectors, '| Type:', APPOINTMENT_TYPE);
 
         // 1. Fetch Attendants based on sector
-        const { data: attendants, error: attError } = await supabase
-            .from('user')
-            .select('*')
-            .in('sector', sectors);
+        let attendantsQuery = supabase.from('user').select('*');
+        
+        if (attendantId && typeof attendantId === 'string') {
+            // If specific attendant ID is provided, fetch that attendant regardless of sector
+            attendantsQuery = attendantsQuery.eq('id', attendantId);
+        } else {
+            // Otherwise, fetch by sectors
+            attendantsQuery = attendantsQuery.in('sector', sectors);
+        }
+        
+        const { data: attendants, error: attError } = await attendantsQuery;
 
         console.log('[AVAILABLE-TIMES] Attendants found:', attendants?.length || 0, attendants?.map(a => ({ name: a.name, sector: a.sector, hasSchedule: !!a.schedule })));
 
@@ -110,10 +117,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
             return res.status(500).json({ error: 'Erro ao buscar atendentes' });
         }
 
-        let filteredAttendants = attendants;
-        if (attendantId && typeof attendantId === 'string') {
-            filteredAttendants = attendants.filter(a => a.id === attendantId);
-        }
+        // Use attendants directly - already filtered by query above
+        const filteredAttendants = attendants;
 
         // 2. Fetch Appointments for this date
         const { data: appointments, error: appError } = await supabase
@@ -267,8 +272,9 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 .eq('id', finalAttendantId)
                 .single();
 
-            // Se o atendente não existir ou não for do setor Closer (ou Perpétuos para Gold Call), resetamos
-            const isValidSector = attendantData?.sector === 'Closer' || (APPOINTMENT_TYPE === 'Gold Call' && attendantData?.sector === 'Perpétuos');
+            // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI), resetamos
+            const allowedSectors = ['Closer', 'Líder', 'Co-Líder', 'Perpétuos', 'TEI'];
+            const isValidSector = attendantData && allowedSectors.includes(attendantData.sector);
             if (!attendantData || !isValidSector) {
                 finalAttendantId = 'distribuicao_automatica';
             } else {

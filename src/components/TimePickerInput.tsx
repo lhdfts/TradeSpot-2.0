@@ -72,8 +72,8 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
         if (isOpen && !isMobile) {
             updatePosition();
             const handleScroll = (e: Event) => {
-                const target = e.target as Element;
-                if (!target.closest('.timepicker-portal')) {
+                const target = e.target;
+                if (target instanceof Element && !target.closest('.timepicker-portal')) {
                     setIsOpen(false);
                 }
             };
