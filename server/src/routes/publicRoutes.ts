@@ -151,6 +151,10 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
         // 4. Filter times where at least ONE closer is available
         const availableTimes: string[] = [];
+        
+        // Log first few time slots to debug
+        const timeSlotsToDebug = ['09:00', '10:00', '14:00', '16:00'];
+        
         for (const timeSlot of allTimes) {
             const hasAvailableCloser = await checkIfAnyCloserAvailable(
                 filteredAttendants, // Usa a lista filtrada
@@ -161,6 +165,14 @@ router.get('/available-times', async (req: Request, res: Response) => {
             );
             if (hasAvailableCloser) availableTimes.push(timeSlot);
         }
+
+        console.log('[AVAILABLE-TIMES] Final result:', {
+            date,
+            attendantsCount: filteredAttendants.length,
+            appointmentsCount: existingAppointments.length,
+            availableTimesCount: availableTimes.length,
+            sampleAvailableTimes: availableTimes.slice(0, 5)
+        });
 
         const finalAvailableTimes = Array.from(new Set(availableTimes)).sort();
         res.json({ date, availableTimes: finalAvailableTimes });
