@@ -63,6 +63,11 @@ router.get('/events/:link', async (req: Request, res: Response) => {
 // --- GET Available Times for a Date ---
 // Returns list of time slots that have at least one closer available
 router.get('/available-times', async (req: Request, res: Response) => {
+    // Disable caching for this endpoint
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     const { date } = req.query;
     const { attendantId } = req.query;
     const { eventId } = req.query;
