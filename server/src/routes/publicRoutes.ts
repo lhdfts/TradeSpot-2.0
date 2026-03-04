@@ -67,6 +67,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
     const { attendantId } = req.query;
     const { eventId } = req.query;
 
+    console.log('[AVAILABLE-TIMES] Request received:', { date, attendantId, eventId });
+
     if (!date || typeof date !== 'string') {
         return res.status(400).json({ error: 'Data é obrigatória (formato: YYYY-MM-DD)' });
     }
@@ -81,8 +83,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
         let sectors = ['Closer', 'Líder', 'Co-Líder'];
 
         if (eventId && typeof eventId === 'string') {
-            const { data: eventData } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
-            console.log('[AVAILABLE-TIMES] Event lookup:', { eventId, eventData });
+            const { data: eventData, error: eventError } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
+            console.log('[AVAILABLE-TIMES] Event lookup:', { eventId, eventData, eventError });
             if (eventData) {
                 if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
                     APPOINTMENT_TYPE = 'Gold Call';
@@ -173,11 +175,23 @@ async function checkIfAnyCloserAvailable(
     type: string
 ): Promise<boolean> {
     // Filter by schedule first
-    const availableBySchedule = attendants.filter(a =>
-        isAttendantWithinSchedule(a, date, time, type)
-    );
+    const availableBySchedule = attendants.filter(a => {
+        const isWithinSchedule = isAttendantWithinSchedule(a, date, time, type);
+        if (!isWithinSchedule && time === '09:00') {
+            console.log(`[DEBUG] ${a.name} (${a.id}): NOT within schedule for ${date} ${time}`, {
+                hasSchedule: !!a.schedule,
+                schedule: a.schedule
+            });
+        }
+        return isWithinSchedule;
+    });
 
-    if (availableBySchedule.length === 0) return false;
+    if (availableBySchedule.length === 0) {
+        if (time === '09:00') {
+            console.log(`[DEBUG] No attendants within schedule for ${date} ${time}`);
+        }
+        return false;
+    }
 
     // Check if at least one doesn't have a conflict
     for (const attendant of availableBySchedule) {
@@ -194,6 +208,9 @@ async function checkIfAnyCloserAvailable(
         }
     }
 
+    if (time === '09:00') {
+        console.log(`[DEBUG] All available attendants have conflicts for ${date} ${time}`);
+    }
     return false;
 }
 
