@@ -521,4 +521,68 @@ router.post('/appointments', async (req: Request, res: Response) => {
     }
 });
 
+// --- DEBUG Endpoint ---
+router.get('/debug/available-times', async (req: Request, res: Response) => {
+    const { date } = req.query;
+    const { eventId } = req.query;
+
+    if (!date || typeof date !== 'string') {
+        return res.status(400).json({ error: 'Data é obrigatória' });
+    }
+
+    try {
+        let sectors = ['Closer', 'Líder', 'Co-Líder'];
+        let APPOINTMENT_TYPE = 'Ligação Closer';
+
+        if (eventId && typeof eventId === 'string') {
+            const { data: eventData } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
+            if (eventData && eventData.sector === 'Perpétuos') {
+                sectors = ['Perpétuos'];
+            }
+            if (eventData && (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand')) {
+                APPOINTMENT_TYPE = 'Gold Call';
+            }
+        }
+
+        // Fetch attendants
+        const { data: attendants } = await supabase.from('user').select('*').in('sector', sectors);
+
+        // Fetch appointments
+        const { data: appointments } = await supabase
+            .from('appointments')
+            .select('id, attendant_id, date, time, type, status')
+            .eq('date', date)
+            .neq('status', 'Cancelado');
+
+        const debugInfo = {
+            date,
+            eventId,
+            sectors,
+            appointmentType: APPOINTMENT_TYPE,
+            attendantsFound: attendants?.length || 0,
+            attendants: attendants?.map(a => ({
+                id: a.id,
+                name: a.name,
+                sector: a.sector,
+                hasSchedule: !!a.schedule,
+                schedule: a.schedule
+            })) || [],
+            appointmentsFound: appointments?.length || 0,
+            appointments: appointments?.map(a => ({
+                id: a.id,
+                attendant_id: a.attendant_id,
+                date: a.date,
+                time: a.time,
+                type: a.type,
+                status: a.status
+            })) || []
+        };
+
+        res.json(debugInfo);
+    } catch (err: any) {
+        console.error('Debug Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;
