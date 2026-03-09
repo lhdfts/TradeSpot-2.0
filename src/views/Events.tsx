@@ -109,8 +109,8 @@ export const Events: React.FC = () => {
 
     if (loading) return <div>Carregando...</div>;
 
-    const canCreateEvents = user?.role === 'Dev' || user?.sector === 'TEI';
-    const canEditEvents = user?.role === 'Dev' || user?.role === 'Admin';
+    const canCreateEvents = ['Dev', 'Admin', 'Líder'].includes(user?.role || '') || user?.sector === 'TEI';
+    const canEditEvents = ['Dev', 'Admin', 'Líder'].includes(user?.role || '');
     const canExportEvents = user?.role === 'Dev' || user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Qualidade';
     const canManageEvents = canEditEvents || canExportEvents;
 
@@ -133,7 +133,7 @@ export const Events: React.FC = () => {
                             <th className="px-6 py-4">Data de Criação</th>
                             <th className="px-6 py-4">Status</th>
                             <th className="px-6 py-4 text-center">Link</th>
-                            {canManageEvents && (<th className="px-6 py-4 text-center">Ações</th> )}
+                            {canManageEvents && (<th className="px-6 py-4 text-center">Ações</th>)}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
