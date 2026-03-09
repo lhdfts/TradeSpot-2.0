@@ -120,30 +120,39 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             { value: 'Fora da agenda', label: 'Fora da agenda' }
         ];
 
+        const selectedEvent = events.find(e => e.id === formData.eventId);
+        if (selectedEvent && (selectedEvent.event_name === 'Primeiro Dólar na Prática' || selectedEvent.event_name === 'Dollar On Demand')) {
+            allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
+        }
+
         if (!user) return [];
         if (user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin') return allTypes;
 
         if (user.sector === 'SDR') {
-            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda'].includes(t.value));
+            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Closer') {
-            return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda'].includes(t.value));
+            return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Tribo') {
             return allTypes.filter(t => ['Agendamento Pessoal'].includes(t.value));
         }
         if (user.sector === 'Social Seller') {
-            return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
+            return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
+        }
+        if (user.sector === 'Perpétuos') {
+            return allTypes.filter(t => ['Gold Call'].includes(t.value));
         }
 
         return allTypes;
-    }, [user]);
+    }, [user, formData.eventId, events]);
 
     const attendantOptions = React.useMemo(() => {
         // When EDITING, filter attendants by appointment type strictly
         if (isEditing) {
             const typeToSectorMap: Record<string, string> = {
                 'Ligação Closer': 'Closer',
+                'Gold Call': 'Closer',
                 'Reagendamento Closer': 'Closer',
                 'Upgrade': 'Closer',
                 'Ligação SDR': 'SDR'
@@ -183,12 +192,12 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
     const eventOptions = React.useMemo(() => {
         // Filter active events by sector (or if user is privileged)
-        const filtered = events.filter(e =>
-            e.status === true && (
-                !e.sector ||
-                (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role) || user.sector === e.sector))
-            )
-        );
+        const filtered = events.filter(e => {
+            if (e.status !== true) return false;
+            if (user?.sector === 'Perpétuos') return e.sector === 'Perpétuos';
+
+            return !e.sector || (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role) || user.sector === e.sector));
+        });
 
         // If we are editing and the current event is not in the list, add it
         if (initialData?.eventId && !filtered.some(e => e.id === initialData.eventId)) {
@@ -243,8 +252,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     setFormData(prev => ({ ...prev, attendantId: user.id }));
                 }
             }
-            // 2. Ligação Closer
-            else if (formData.type === 'Ligação Closer') {
+            // 2. Ligação Closer & Gold Call
+            else if (formData.type === 'Ligação Closer' || formData.type === 'Gold Call') {
                 if (user.sector === 'Closer') {
                     setFormData(prev => ({ ...prev, attendantId: user.id }));
                 } else {
@@ -269,6 +278,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const appPhone = String(app.phone);
                     return appPhone === targetPhone &&
                         (app.type === 'Ligação Closer' ||
+                            app.type === 'Gold Call' ||
                             app.type === 'Reagendamento Closer' ||
                             app.type === 'Agendamento Pessoal' ||
                             app.type === 'Upgrade');
@@ -304,7 +314,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         return appointments.some(app =>
             String(app.phone) === cleanPhone &&
-            ['Ligação Closer', 'Upgrade'].includes(app.type)
+            ['Ligação Closer', 'Upgrade', 'Gold Call'].includes(app.type)
         );
     };
 
@@ -353,7 +363,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             if (!checkEligibility(formData.phone)) {
                 toastManager.add({
                     title: "Permissão Negada",
-                    description: "Este cliente não possui um histórico (Ligação Closer ou Upgrade) para realizar um reagendamento.",
+                    description: "Este cliente não possui um histórico (Ligação Closer, Gold Call ou Upgrade) para realizar um reagendamento.",
                     type: 'error'
                 });
                 setFormData(prev => ({ ...prev, type: '' as AppointmentType }));
@@ -446,7 +456,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             if (!checkEligibility(formData.phone)) {
                 toastManager.add({
                     title: "Erro",
-                    description: "Este cliente não possui um histórico (Ligação Closer ou Upgrade) para realizar um reagendamento.",
+                    description: "Este cliente não possui um histórico (Ligação Closer, Gold Call ou Upgrade) para realizar um reagendamento.",
                     type: 'error'
                 });
                 return;

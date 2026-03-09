@@ -134,14 +134,23 @@ export const hasConflictingAppointment = (
 export const findBestAttendant = async (
     date: string,
     time: string,
-    type: string
+    type: string,
+    eventId?: string
 ): Promise<string | null> => {
-    // 1. Fetch Closers
-    // Note: Assuming 'user' table holds attendants.
+    let sectors = ['Closer', 'Líder', 'Co-Líder'];
+
+    if (eventId) {
+        const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
+        if (eventData && eventData.sector === 'Perpétuos') {
+            sectors = ['Perpétuos'];
+        }
+    }
+
+    // 1. Fetch Closers / Attendants
     const { data: attendants, error: attError } = await supabase
         .from('user')
         .select('*')
-        .in('sector', ['Closer', 'Líder', 'Co-Líder']); // Correct sector logic
+        .in('sector', sectors);
 
     if (attError || !attendants) {
         console.error("Error fetching attendants:", attError);

@@ -202,6 +202,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                         options={[
                             { value: 'SDR', label: 'SDR' },
                             { value: 'Closer', label: 'Closer' },
+                            { value: 'Perpétuos', label: 'Perpétuos' },
                             { value: 'Tribo', label: 'Tribo' },
                             { value: 'Aldeia', label: 'Aldeia' },
                             { value: 'Social Seller', label: 'Social Seller' }

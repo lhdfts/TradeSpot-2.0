@@ -63,8 +63,16 @@ router.get('/events/:link', async (req: Request, res: Response) => {
 // --- GET Available Times for a Date ---
 // Returns list of time slots that have at least one closer available
 router.get('/available-times', async (req: Request, res: Response) => {
+    // Disable caching for this endpoint
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     const { date } = req.query;
     const { attendantId } = req.query;
+    const { eventId } = req.query;
+
+    console.log('[AVAILABLE-TIMES] Request received:', { date, attendantId, eventId });
 
     if (!date || typeof date !== 'string') {
         return res.status(400).json({ error: 'Data é obrigatória (formato: YYYY-MM-DD)' });
@@ -76,23 +84,48 @@ router.get('/available-times', async (req: Request, res: Response) => {
     }
 
     try {
-        const APPOINTMENT_TYPE = 'Ligação Closer';
+        let APPOINTMENT_TYPE = 'Ligação Closer';
+        let sectors = ['Closer', 'Líder', 'Co-Líder'];
 
-        // 1. Fetch Closers (including Líder and Co-Líder who can also attend)
-        const { data: attendants, error: attError } = await supabase
-            .from('user')
-            .select('*')
-            .in('sector', ['Closer', 'Líder', 'Co-Líder']);
+        if (eventId && typeof eventId === 'string') {
+            const { data: eventData, error: eventError } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
+            console.log('[AVAILABLE-TIMES] Event lookup:', { eventId, eventData, eventError });
+            if (eventData) {
+                if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
+                    APPOINTMENT_TYPE = 'Gold Call';
+                }
+                if (eventData.sector === 'Perpétuos') {
+                    sectors = ['Perpétuos'];
+                }
+            }
+        } else {
+            console.log('[AVAILABLE-TIMES] No eventId received in query params');
+        }
+
+        console.log('[AVAILABLE-TIMES] Using sectors:', sectors, '| Type:', APPOINTMENT_TYPE);
+
+        // 1. Fetch Attendants based on sector
+        let attendantsQuery = supabase.from('user').select('*');
+        
+        if (attendantId && typeof attendantId === 'string') {
+            // If specific attendant ID is provided, fetch that attendant regardless of sector
+            attendantsQuery = attendantsQuery.eq('id', attendantId);
+        } else {
+            // Otherwise, fetch by sectors
+            attendantsQuery = attendantsQuery.in('sector', sectors);
+        }
+        
+        const { data: attendants, error: attError } = await attendantsQuery;
+
+        console.log('[AVAILABLE-TIMES] Attendants found:', attendants?.length || 0, attendants?.map(a => ({ name: a.name, sector: a.sector, hasSchedule: !!a.schedule })));
 
         if (attError || !attendants) {
             console.error("Error fetching attendants:", attError);
             return res.status(500).json({ error: 'Erro ao buscar atendentes' });
         }
 
-        let filteredAttendants = attendants;
-        if (attendantId && typeof attendantId === 'string') {
-            filteredAttendants = attendants.filter(a => a.id === attendantId);
-        }
+        // Use attendants directly - already filtered by query above
+        const filteredAttendants = attendants;
 
         // 2. Fetch Appointments for this date
         const { data: appointments, error: appError } = await supabase
@@ -118,6 +151,10 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
         // 4. Filter times where at least ONE closer is available
         const availableTimes: string[] = [];
+        
+        // Log first few time slots to debug
+        const timeSlotsToDebug = ['09:00', '10:00', '14:00', '16:00'];
+        
         for (const timeSlot of allTimes) {
             const hasAvailableCloser = await checkIfAnyCloserAvailable(
                 filteredAttendants, // Usa a lista filtrada
@@ -129,22 +166,16 @@ router.get('/available-times', async (req: Request, res: Response) => {
             if (hasAvailableCloser) availableTimes.push(timeSlot);
         }
 
-        for (const timeSlot of allTimes) {
-            // Check if any closer is available at this time
-            const hasAvailableCloser = await checkIfAnyCloserAvailable(
-                attendants,
-                existingAppointments,
-                date,
-                timeSlot,
-                APPOINTMENT_TYPE
-            );
+        console.log('[AVAILABLE-TIMES] Final result:', {
+            date,
+            attendantsCount: filteredAttendants.length,
+            appointmentsCount: existingAppointments.length,
+            availableTimesCount: availableTimes.length,
+            sampleAvailableTimes: availableTimes.slice(0, 5)
+        });
 
-            if (hasAvailableCloser) {
-                availableTimes.push(timeSlot);
-            }
-        }
-
-        res.json({ date, availableTimes });
+        const finalAvailableTimes = Array.from(new Set(availableTimes)).sort();
+        res.json({ date, availableTimes: finalAvailableTimes });
 
     } catch (err: any) {
         console.error("Available Times Fetch Error:", err);
@@ -161,11 +192,23 @@ async function checkIfAnyCloserAvailable(
     type: string
 ): Promise<boolean> {
     // Filter by schedule first
-    const availableBySchedule = attendants.filter(a =>
-        isAttendantWithinSchedule(a, date, time, type)
-    );
+    const availableBySchedule = attendants.filter(a => {
+        const isWithinSchedule = isAttendantWithinSchedule(a, date, time, type);
+        if (!isWithinSchedule && time === '09:00') {
+            console.log(`[DEBUG] ${a.name} (${a.id}): NOT within schedule for ${date} ${time}`, {
+                hasSchedule: !!a.schedule,
+                schedule: a.schedule
+            });
+        }
+        return isWithinSchedule;
+    });
 
-    if (availableBySchedule.length === 0) return false;
+    if (availableBySchedule.length === 0) {
+        if (time === '09:00') {
+            console.log(`[DEBUG] No attendants within schedule for ${date} ${time}`);
+        }
+        return false;
+    }
 
     // Check if at least one doesn't have a conflict
     for (const attendant of availableBySchedule) {
@@ -182,6 +225,9 @@ async function checkIfAnyCloserAvailable(
         }
     }
 
+    if (time === '09:00') {
+        console.log(`[DEBUG] All available attendants have conflicts for ${date} ${time}`);
+    }
     return false;
 }
 
@@ -199,16 +245,31 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         const data = validation.data;
-        // Force type
-        const APPOINTMENT_TYPE = 'Ligação Closer';
+        const eventId = req.body.eventId;
+        if (!eventId) return res.status(400).json({ error: 'ID do evento é obrigatório' });
 
-        // 2. Buffer Check (10 minutes)
+        const { data: eventData, error: eventError } = await supabase
+            .from('events')
+            .select('event_name')
+            .eq('id', eventId)
+            .single();
+
+        if (eventError || !eventData) {
+            return res.status(404).json({ error: 'Evento não encontrado' });
+        }
+
+        let APPOINTMENT_TYPE = 'Ligação Closer';
+        if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
+            APPOINTMENT_TYPE = 'Gold Call';
+        }
+
+        // 2. Buffer Check (30 minutes)
         const now = new Date();
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`);
         const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
-        if (diffMinutes < 10) {
-            return res.status(400).json({ error: 'O agendamento deve ter pelo menos 10 minutos de antecedência.' });
+        if (diffMinutes < 30) {
+            return res.status(400).json({ error: 'O agendamento deve ter pelo menos 30 minutos de antecedência.' });
         }
 
         // 3. Client Validation (1 Pending Rule)
@@ -245,8 +306,10 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 .eq('id', finalAttendantId)
                 .single();
 
-            // Se o atendente não existir ou não for do setor Closer, resetamos para distribuição automática
-            if (!attendantData || attendantData.sector !== 'Closer') {
+            // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI), resetamos
+            const allowedSectors = ['Closer', 'Líder', 'Co-Líder', 'Perpétuos', 'TEI'];
+            const isValidSector = attendantData && allowedSectors.includes(attendantData.sector);
+            if (!attendantData || !isValidSector) {
                 finalAttendantId = 'distribuicao_automatica';
             } else {
                 // VALIDAR ESCALA
@@ -258,7 +321,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
 
         // Se não houver ID ou se for explicitamente para distribuição automática
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            finalAttendantId = await findBestAttendant(data.date, data.time, APPOINTMENT_TYPE);
+            finalAttendantId = await findBestAttendant(data.date, data.time, APPOINTMENT_TYPE, eventId);
         }
 
         if (!finalAttendantId) {
@@ -344,19 +407,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // Actually, I missed adding `eventId` to `publicAppointmentSchema`. 
         // I'll grab it from the body directly for now, or assume it is sent.
 
-        // Let's rely on req.body.eventId being present but valid.
-        const eventId = req.body.eventId;
-        if (!eventId) return res.status(400).json({ error: 'ID do evento é obrigatório' });
-
-        const { data: eventData, error: eventError } = await supabase
-            .from('events')
-            .select('event_name')
-            .eq('id', eventId)
-            .single();
-
-        if (eventError || !eventData) {
-            return res.status(404).json({ error: 'Evento não encontrado' });
-        }
+        // Removed late event check since it was moved to the top.
 
         // 5.5 Create Google Meet Link
         let meetLink = '';
