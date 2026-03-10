@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +8,7 @@ import { Button } from '../components/ui/button';
 import { FloatingInput } from '../components/FloatingInput';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { DateRangePicker } from '../components/DateRangePicker';
+import { Pagination } from '../components/ui/pagination';
 import { toastManager } from '../components/ui/toast';
 
 
@@ -20,9 +21,16 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const { user } = useAuth();
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [dateRange, setDateRange] = useState({start: new Date().toISOString().split('T')[0], end: ''});
+    const [dateRange, setDateRange] = useState({ start: new Date().toISOString().split('T')[0], end: '' });
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, statusFilter, dateRange]);
 
     const filtered = appointments.filter(a => {
         const matchesUser = user && (a.attendantId === user.id || a.createdBy === user.id);
@@ -64,6 +72,13 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
         const dateB = new Date(`${b.date}T${b.time}`);
         return dateA.getTime() - dateB.getTime();
     });
+
+    // Pagination Logic
+    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+    const paginated = filtered.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
 
     const copyPhone = async (phone: number | string, id: string) => {
         const phoneStr = phone.toString();
@@ -161,7 +176,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {filtered.map(appt => (
+                        {paginated.map(appt => (
                             <tr key={appt.id} className="hover:bg-background/50 transition-colors group">
                                 <td className="px-6 py-4">
                                     <div className="text-foreground font-medium">{new Date(appt.date + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
@@ -208,7 +223,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
 
             {/* Mobile Cards */}
             <div className="md:hidden space-y-4">
-                {filtered.map(appt => (
+                {paginated.map(appt => (
                     <div key={appt.id} className="bg-surface p-4 rounded-lg border border-border shadow-sm space-y-3">
                         <div className="flex justify-between items-start">
                             <div>
@@ -249,6 +264,16 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                     </div>
                 ))}
             </div>
+
+            {filtered.length > 0 && totalPages > 1 && (
+                <div className="flex justify-center py-4">
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                    />
+                </div>
+            )}
 
             {filtered.length === 0 && (
                 <div className="text-center py-12 text-secondary bg-surface rounded-lg border border-border">
