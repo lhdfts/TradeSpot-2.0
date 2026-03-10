@@ -26,7 +26,7 @@ export class SupabaseApiService implements ApiService {
                 `)
                 .order('date', { ascending: false })
                 .order('time', { ascending: false })
-                .limit(2000); // Increase limit just in case, but ordering ensures recent first
+                .limit(10000); // Aumentado para 10000 para evitar que agendamentos mais antigos sumam da tela
 
             if (error) throw new Error(error.message);
 

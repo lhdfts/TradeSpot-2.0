@@ -109,27 +109,60 @@ export const verifyFirebaseToken = async (
         }
 
         // Fetch REAL user data from database - this CANNOT be faked
-        const { data: userData, error } = await supabase
+        let { data: userData, error } = await supabase
             .from('user')
             .select('id, name, role, sector')
             .eq('email', email)
             .single();
 
         if (error || !userData) {
+            // New logic: Auto-register user if they pass Firebase auth
+            const defaultName = decodedToken.name || email.split('@')[0];
+
             logActivity({
                 timestamp: new Date().toISOString(),
                 userId: decodedToken.uid,
-                userName: email,
-                userRole: 'none',
-                userSector: 'none',
-                action: req.method,
+                userName: defaultName,
+                userRole: 'Colaborador',
+                userSector: 'Suporte',
+                action: 'REGISTER_NEW_USER',
                 resource: req.originalUrl,
                 ipAddress,
                 userAgent,
-                success: false,
-                errorMessage: 'User not found in system'
+                success: true
             });
-            return res.status(403).json({ error: 'Usuário não autorizado no sistema' });
+
+            // Insert new user into the database
+            const { data: newUser, error: insertError } = await supabase
+                .from('user')
+                .insert({
+                    email: email,
+                    name: defaultName,
+                    role: 'Colaborador', // Default role
+                    sector: 'Suporte',       // Default sector
+                    status: true         // Make sure they are active
+                })
+                .select('id, name, role, sector')
+                .single();
+
+            if (insertError || !newUser) {
+                logActivity({
+                    timestamp: new Date().toISOString(),
+                    userId: decodedToken.uid,
+                    userName: email,
+                    userRole: 'none',
+                    userSector: 'none',
+                    action: req.method,
+                    resource: req.originalUrl,
+                    ipAddress,
+                    userAgent,
+                    success: false,
+                    errorMessage: 'Failed to create new user in system: ' + (insertError?.message || 'Unknown error')
+                });
+                return res.status(500).json({ error: 'Erro ao registrar novo usuário no sistema' });
+            }
+
+            userData = newUser;
         }
 
         // Attach verified user to request
