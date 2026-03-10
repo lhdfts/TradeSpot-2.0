@@ -90,13 +90,16 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
     };
 
     const updateSchedule = (day: string, field: 'start' | 'end', value: string) => {
-        setFormData(prev => ({
-            ...prev,
-            schedule: {
-                ...prev.schedule,
-                [day]: { ...prev.schedule![day]!, [field]: value }
-            }
-        }));
+        setFormData(prev => {
+            const currentDaySchedule = prev.schedule?.[day] || { start: '', end: '' };
+            return {
+                ...prev,
+                schedule: {
+                    ...(prev.schedule || {}),
+                    [day]: { ...currentDaySchedule, [field]: value }
+                }
+            };
+        });
     };
 
     const addPause = (day: string) => {
@@ -107,7 +110,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             return {
                 ...prev,
                 pauses: {
-                    ...prev.pauses,
+                    ...(prev.pauses || {}),
                     [day]: [...currentPauses, { start: '', end: '' }]
                 }
             };
@@ -118,7 +121,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
         setFormData(prev => ({
             ...prev,
             pauses: {
-                ...prev.pauses,
+                ...(prev.pauses || {}),
                 [day]: prev.pauses?.[day]?.filter((_, i) => i !== index) || []
             }
         }));
@@ -132,7 +135,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             return {
                 ...prev,
                 pauses: {
-                    ...prev.pauses,
+                    ...(prev.pauses || {}),
                     [day]: currentPauses
                 }
             };
