@@ -46,6 +46,13 @@ export const isAttendantWithinSchedule = (
 ): boolean => {
     if (!attendant.schedule) return false;
 
+    if (attendant.sector === 'CEO') {
+        const customDates = attendant.schedule.custom_dates || {};
+        const timesForDate = customDates[dateStr];
+        // For CEO, they are only available if the exact time is listed in their custom_dates for that day
+        return Array.isArray(timesForDate) && timesForDate.includes(timeStr);
+    }
+
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     const dayKey = DAY_MAP[date.getDay()];

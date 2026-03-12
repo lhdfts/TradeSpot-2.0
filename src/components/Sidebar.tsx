@@ -160,12 +160,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                     />
                 )}
 
-                {/* Events - Admin/Líder/Dev/Co-Líder/Qualidade */}
+                {/* Events - Admin/Líder/Dev/Co-Líder/Qualidade/Colaborador */}
                 {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.role === 'Co-Líder' || user?.role === 'Co-líder' || user?.role === 'Qualidade' || user?.role === 'Colaborador') && (
                     <NavItem
                         icon={<Ticket size={20} />}
                         label={isCollapsed ? "" : "Eventos"}
                         to="/events"
+                        collapsed={isCollapsed}
+                    />
+                )}
+
+                {/* CEO Scheduler - Admin only */}
+                {(user?.role === 'Admin') && (
+                    <NavItem
+                        icon={<Calendar size={20} />}
+                        label={isCollapsed ? "" : "Agenda CEO"}
+                        to="/ceo-scheduler"
                         collapsed={isCollapsed}
                     />
                 )}
