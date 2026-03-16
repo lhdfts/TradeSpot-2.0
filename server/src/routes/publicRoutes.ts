@@ -99,6 +99,9 @@ router.get('/available-times', async (req: Request, res: Response) => {
                 } else if (eventData.sector === 'CEO') {
                     sectors = ['CEO'];
                     APPOINTMENT_TYPE = 'Agendamento Pessoal'; // Ajuste o tipo se necessário, mas vou manter Agendamento Pessoal ou Ligação Closer
+                } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+                    sectors = [eventData.sector];
+                    APPOINTMENT_TYPE = 'Onboarding';
                 }
             }
         } else {
@@ -284,6 +287,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
             APPOINTMENT_TYPE = 'Gold Call';
         } else if (eventData.sector === 'CEO') {
             APPOINTMENT_TYPE = 'Agendamento Pessoal';
+        } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+            APPOINTMENT_TYPE = 'Onboarding';
         }
 
         // 2. Buffer Check (30 minutes)

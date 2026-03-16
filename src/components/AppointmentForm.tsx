@@ -125,6 +125,12 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
         }
 
+        if (user && (user.sector === 'Aldeia' || user.sector === 'Tribo' || user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin')) {
+            allTypes.push(
+                { value: 'Onboarding', label: 'Onboarding' }
+            );
+        }
+
         if (!user) return [];
         if (user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin') return allTypes;
 
@@ -135,7 +141,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Tribo') {
-            return allTypes.filter(t => ['Agendamento Pessoal'].includes(t.value));
+            return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
+        }
+        if (user.sector === 'Aldeia') {
+            return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
         }
         if (user.sector === 'Social Seller') {
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
@@ -265,8 +274,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
 
-            // Special case for Tribo: Always force attendant to self if type matches (which is enforced by allowedTypes)
-            if (user.sector === 'Tribo') {
+            // Special case for Tribo and Aldeia: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
+            if ((user.sector === 'Tribo' || user.sector === 'Aldeia') && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
             // 4. Reagendamento Closer
@@ -820,7 +829,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         {/* Row 3: Atendente and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={!initialData ? "col-span-2" : ""}>
-                                {formData.type === 'Agendamento Pessoal' && !initialData && user ? (
+                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia') && !initialData && user ? (
                                     <FloatingInput
                                         label="Atendente"
                                         value={user.name}

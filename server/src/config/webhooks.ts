@@ -5,7 +5,8 @@ export const getAppointmentWebhooks = (): Record<string, string> => ({
     'Reagendamento Closer': process.env.WEBHOOK_REAGENDAMENTO_CLOSER || '',
     'Upgrade': process.env.WEBHOOK_UPGRADE || '',
     'Gold Call': process.env.WEBHOOK_GOLD_CALL || '',
-    'Fora da agenda': process.env.WEBHOOK_FORA_DA_AGENDA || ''
+    'Fora da agenda': process.env.WEBHOOK_FORA_DA_AGENDA || '',
+    'Onboarding': process.env.WEBHOOK_ONBOARDING || ''
 });
 
 export const getUpdateWebhook = (): string => {
