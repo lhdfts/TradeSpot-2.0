@@ -117,11 +117,14 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             }
         }
 
-        // Perpétuos Sector restriction
+        // Sector restrictions
         let matchesSector = true;
         if (user?.sector === 'Perpétuos') {
             const linkedEvent = events.find(e => e.id === a.eventId);
             matchesSector = !!linkedEvent && linkedEvent.sector === 'Perpétuos';
+        } else if (user?.sector === 'Tribo') {
+            const linkedAttendant = attendants.find(att => att.id === a.attendantId);
+            matchesSector = !!linkedAttendant && linkedAttendant.sector === 'Tribo';
         }
 
         return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesDate && matchesSector;
