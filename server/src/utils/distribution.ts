@@ -145,19 +145,29 @@ export const findBestAttendant = async (
     eventId?: string
 ): Promise<string | null> => {
     let sectors = ['Closer', 'Líder', 'Co-Líder'];
+    let roleFilter: string | null = null;
 
     if (eventId) {
         const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
-        if (eventData && eventData.sector === 'Perpétuos') {
-            sectors = ['Perpétuos'];
+        if (eventData) {
+            if (eventData.sector === 'Perpétuos') {
+                sectors = ['Perpétuos'];
+            } else if (eventData.sector === 'Tribo') {
+                sectors = ['Tribo'];
+                roleFilter = 'Colaborador';
+            } else if (eventData.sector === 'Aldeia') {
+                sectors = ['Aldeia'];
+                roleFilter = 'Colaborador';
+            }
         }
     }
 
-    // 1. Fetch Closers / Attendants
-    const { data: attendants, error: attError } = await supabase
-        .from('user')
-        .select('*')
-        .in('sector', sectors);
+    // 1. Fetch Attendants filtered by sector (and role if needed)
+    let attendantsQuery = supabase.from('user').select('*').in('sector', sectors);
+    if (roleFilter) {
+        attendantsQuery = attendantsQuery.eq('role', roleFilter);
+    }
+    const { data: attendants, error: attError } = await attendantsQuery;
 
     if (attError || !attendants) {
         console.error("Error fetching attendants:", attError);

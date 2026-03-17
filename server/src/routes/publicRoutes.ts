@@ -335,7 +335,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 .single();
 
             // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI/CEO), resetamos
-            const allowedSectors = ['Closer', 'Líder', 'Co-Líder', 'Perpétuos', 'TEI', 'CEO'];
+            const allowedSectors = ['Closer', 'Líder', 'Co-Líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia'];
             const isValidSector = attendantData && allowedSectors.includes(attendantData.sector);
             if (!attendantData || !isValidSector) {
                 finalAttendantId = 'distribuicao_automatica';
