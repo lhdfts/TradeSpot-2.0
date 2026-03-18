@@ -152,6 +152,8 @@ export const findBestAttendant = async (
         if (eventData) {
             if (eventData.sector === 'Perpétuos') {
                 sectors = ['Perpétuos'];
+            } else if (eventData.sector === 'CEO') {
+                sectors = ['CEO'];
             } else if (eventData.sector === 'Tribo') {
                 sectors = ['Tribo'];
                 roleFilter = 'Colaborador';
