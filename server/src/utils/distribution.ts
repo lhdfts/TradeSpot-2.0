@@ -22,6 +22,21 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl!, supabaseKey!);
 
+// Event-specific blocklist: prevent specific closer(s) from receiving appointments
+// for a given event, even if they have schedule availability.
+const BLOCKED_ATTENDANTS_BY_EVENT: Record<string, string[]> = {
+    // event_id: df5f53c4-d659-4fa5-b779-627f6ec4f064
+    // closer user_id: 5b2553e4-6c1a-434d-909d-ae479f74faee
+    'df5f53c4-d659-4fa5-b779-627f6ec4f064': ['5b2553e4-6c1a-434d-909d-ae479f74faee']
+};
+
+export const isAttendantBlockedForEvent = (attendantId?: string | null, eventId?: string | null): boolean => {
+    if (!attendantId || !eventId) return false;
+    const blockedIds = BLOCKED_ATTENDANTS_BY_EVENT[eventId];
+    if (!blockedIds || blockedIds.length === 0) return false;
+    return blockedIds.includes(attendantId);
+};
+
 const DAY_MAP: Record<number, string> = {
     1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat', 0: 'sun'
 };
@@ -176,6 +191,12 @@ export const findBestAttendant = async (
         return null;
     }
 
+    // 2.5. Apply event-specific blocklist to prevent assigning blocked closers
+    const blockedIds = eventId ? (BLOCKED_ATTENDANTS_BY_EVENT[eventId] ?? []) : [];
+    const attendantsForEvent = blockedIds.length > 0
+        ? attendants.filter(a => !blockedIds.includes(a.id))
+        : attendants;
+
     // 2. Fetch Appointments for this day to check load/conflicts
     const { data: appointments, error: appError } = await supabase
         .from('appointments')
@@ -189,7 +210,7 @@ export const findBestAttendant = async (
     }
 
     // 3. Filter by Schedule
-    const available = attendants.filter(a => isAttendantWithinSchedule(a, date, time, type));
+    const available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type));
     if (available.length === 0) return null;
 
     // 4. Calculate Load

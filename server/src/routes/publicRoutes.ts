@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment } from '../utils/distribution.js';
+import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { getAppointmentWebhooks } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 
@@ -72,6 +72,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
     const { attendantId } = req.query;
     const { eventId } = req.query;
 
+    const eventIdStr = eventId && typeof eventId === 'string' ? eventId : undefined;
+
     console.log('[AVAILABLE-TIMES] Request received:', { date, attendantId, eventId });
 
     if (!date || typeof date !== 'string') {
@@ -131,7 +133,9 @@ router.get('/available-times', async (req: Request, res: Response) => {
         }
 
         // Use attendants directly - already filtered by query above
-        const filteredAttendants = attendants;
+        const filteredAttendants = eventIdStr
+            ? attendants.filter(a => !isAttendantBlockedForEvent(a.id, eventIdStr))
+            : attendants;
 
         // 2. Fetch Appointments for this date
         const { data: appointments, error: appError } = await supabase
@@ -355,6 +359,13 @@ router.post('/appointments', async (req: Request, res: Response) => {
         if (!finalAttendantId) {
             return res.status(409).json({
                 error: 'Não há horários disponíveis para este momento. Por favor, escolha outro horário.'
+            });
+        }
+
+        // Event-specific blocklist: never assign blocked closer for this event
+        if (isAttendantBlockedForEvent(finalAttendantId, eventId)) {
+            return res.status(409).json({
+                error: 'Este atendente está bloqueado para este evento.'
             });
         }
 

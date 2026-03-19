@@ -18,6 +18,13 @@ import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
 
+const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
+const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
+
+const isCloserBlockedForSelectedEvent = (eventId: string, attendantId: string) => {
+    return eventId === BLOCKED_EVENT_ID && attendantId === BLOCKED_CLOSER_ID;
+};
+
 
 interface AppointmentFormProps {
     initialData?: Appointment | null;
@@ -90,8 +97,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         const allTimes = generateAllTimes();
         const filtered = allTimes.filter(time => {
+            const isEditing = !!initialData;
+            const isSameExistingAssignment = isEditing &&
+                initialData?.attendantId === formData.attendantId &&
+                initialData?.eventId === formData.eventId;
+            const isBlockedForThisEvent = isCloserBlockedForSelectedEvent(formData.eventId, formData.attendantId);
+
             // 1. Manually Selected Attendant
             if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
+                if (isBlockedForThisEvent && !isSameExistingAssignment) return false;
+
                 const attendant = attendants.find(a => a.id === formData.attendantId);
                 if (!attendant) return false;
                 return isAttendantWithinSchedule(attendant, formData.date, time, formData.type) &&
@@ -100,12 +115,15 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
             // 2. Automatic Distribution (or nothing selected yet)
             // Returns true if ANY closer is available (findAvailableCloser encapsulates schedule & conflict checks)
-            const available = findAvailableCloser(formData.date, time, formData.type, attendants, appointments);
+            const attendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
+                ? attendants.filter(a => a.id !== BLOCKED_CLOSER_ID)
+                : attendants;
+            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments);
             return !!available;
         });
 
         setAvailableTimes(filtered);
-    }, [formData.date, formData.type, formData.attendantId, attendants, appointments, initialData]);
+    }, [formData.date, formData.type, formData.attendantId, formData.eventId, attendants, appointments, initialData]);
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
@@ -174,7 +192,14 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 ? attendants.filter(a => a.sector === requiredSector)
                 : attendants; // For other types like 'Agendamento Pessoal', 'Fora da agenda', show all
 
-            return filteredAttendants.map(a => ({ value: a.id, label: a.name }));
+            const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
+            const filteredAttendantsForBlock = shouldBlock
+                ? filteredAttendants.filter(a =>
+                    a.id !== BLOCKED_CLOSER_ID || a.id === initialData?.attendantId
+                )
+                : filteredAttendants;
+
+            return filteredAttendantsForBlock.map(a => ({ value: a.id, label: a.name }));
         }
 
         // Original logic for CREATING new appointments
@@ -182,6 +207,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             ...(formData.type === 'Fora da agenda' ? [] : [{ value: 'distribuicao_automatica', label: 'Distribuição Automática' }]),
             ...attendants
                 .filter(a => {
+                    const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
+                    if (shouldBlock && a.id === BLOCKED_CLOSER_ID) return false;
+
                     const selectedEvent = events.find(e => e.id === formData.eventId);
                     const eventSector = selectedEvent?.sector;
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
@@ -475,6 +503,21 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         // Helper to check availability
         const checkAvailability = (attendantId: string) => {
             if (formData.type === 'Fora da agenda') return true;
+
+            // Blocked closer cannot be assigned for this event (except when editing the existing assignment)
+            const isEditingMode = !!initialData;
+            const isSameExistingAssignment = isEditingMode &&
+                initialData?.attendantId === attendantId &&
+                initialData?.eventId === formData.eventId;
+            if (isCloserBlockedForSelectedEvent(formData.eventId, attendantId) && !isSameExistingAssignment) {
+                toastManager.add({
+                    title: "Indisponibilidade",
+                    description: "Este atendente está bloqueado para este evento.",
+                    type: 'error'
+                });
+                return false;
+            }
+
             const selectedAttendant = attendants.find(a => a.id === attendantId);
             if (!selectedAttendant) return true; // Can't validate if not found
 
@@ -543,11 +586,15 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 const freshAttendants = await refreshAttendants();
                 console.log('[DISTRIBUTION] Refreshed attendants before submit:', freshAttendants.length, 'total');
 
+                const freshAttendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
+                    ? freshAttendants.filter(a => a.id !== BLOCKED_CLOSER_ID)
+                    : freshAttendants;
+
                 const bestCloser = findAvailableCloser(
                     formData.date,
                     formData.time,
                     formData.type,
-                    freshAttendants,
+                    freshAttendantsForEvent,
                     appointments
                 );
                 if (bestCloser) {
