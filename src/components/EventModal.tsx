@@ -98,6 +98,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                         { value: 'Aldeia', label: 'Aldeia' },
                         { value: 'Closer', label: 'Closer' },
                         { value: 'Perpétuos', label: 'Perpétuos' },
+                        { value: 'CEO', label: 'CEO' },
                         { value: 'SDR', label: 'SDR' },
                         { value: 'Tribo', label: 'Tribo' },
                         { value: 'Social Seller', label: 'Social Seller' }

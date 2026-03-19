@@ -3,7 +3,7 @@ import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js';
 import { createClient } from '@supabase/supabase-js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration } from '../utils/distribution.js';
+import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction } from '../middleware/firebaseAuth.js';
 
@@ -107,6 +107,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                     return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
                 }
             }
+        }
+
+        // Event-specific blocklist: never assign blocked closer for this event
+        if (isAttendantBlockedForEvent(finalAttendantId, data.eventId)) {
+            return res.status(409).json({
+                error: 'Este atendente está bloqueado para este evento.'
+            });
         }
 
         const endTime = calculateEndTime(data.time, data.type);
@@ -329,6 +336,18 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (fetchError || !currentApp) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
         const merged = { ...currentApp, ...updates };
+
+        // Event-specific blocklist for assignment changes only
+        const isAttendantChangeRequested = typeof (updates as any).attendantId === 'string' && (updates as any).attendantId.length > 0;
+        const isEventChangeRequested = typeof (updates as any).eventId === 'string' && (updates as any).eventId.length > 0;
+        const targetEventId = isEventChangeRequested ? (updates as any).eventId : (currentApp as any).event_id;
+        const targetAttendantId = isAttendantChangeRequested ? (updates as any).attendantId : (currentApp as any).attendant_id;
+
+        if ((isAttendantChangeRequested || isEventChangeRequested) && isAttendantBlockedForEvent(targetAttendantId, targetEventId)) {
+            return res.status(409).json({
+                error: 'Este atendente está bloqueado para este evento.'
+            });
+        }
 
         if (updates.time || updates.type) {
             merged.end_time = calculateEndTime(merged.time, merged.type);

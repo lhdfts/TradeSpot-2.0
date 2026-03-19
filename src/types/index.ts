@@ -1,5 +1,5 @@
 export type AppointmentStatus = 'Cancelado' | 'Esquecimento' | 'No-show' | 'Pendente' | 'Realizado' | 'Reagendado';
-export type AppointmentType = 'Ligação SDR' | 'Ligação Closer' | 'Agendamento Pessoal' | 'Reagendamento Closer' | 'Upgrade' | 'Fora da agenda' | 'Gold Call';
+export type AppointmentType = 'Ligação SDR' | 'Ligação Closer' | 'Agendamento Pessoal' | 'Reagendamento Closer' | 'Upgrade' | 'Fora da agenda' | 'Gold Call' | 'Onboarding';
 export type ProfileLevel = 'Alto' | 'Mediano' | 'Desconhecido';
 export type KnowledgeLevel = 'Iniciante' | 'Intermediário' | 'Avançado';
 
@@ -30,7 +30,8 @@ export interface Attendant {
     role: 'Suporte' | 'Qualidade' | 'Co-Líder' | 'Co-líder' | 'Líder' | 'Admin' | 'Dev' | 'Colaborador';
     sector: string; // Relaxed to string to match data like "Closer", "TEI"
     schedule: {
-        [key: string]: { start: string; end: string } | null; // key is day of week (mon, tue, etc.)
+        [key: string]: { start: string; end: string } | null | any; // key is day of week (mon, tue, etc.)
+        custom_dates?: { [dateStr: string]: string[] };
     };
     pauses: {
         [key: string]: { start: string; end: string }[];

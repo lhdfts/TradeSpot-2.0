@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment } from '../utils/distribution.js';
+import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { getAppointmentWebhooks } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 
@@ -72,6 +72,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
     const { attendantId } = req.query;
     const { eventId } = req.query;
 
+    const eventIdStr = eventId && typeof eventId === 'string' ? eventId : undefined;
+
     console.log('[AVAILABLE-TIMES] Request received:', { date, attendantId, eventId });
 
     if (!date || typeof date !== 'string') {
@@ -96,6 +98,12 @@ router.get('/available-times', async (req: Request, res: Response) => {
                 }
                 if (eventData.sector === 'Perpétuos') {
                     sectors = ['Perpétuos'];
+                } else if (eventData.sector === 'CEO') {
+                    sectors = ['CEO'];
+                    APPOINTMENT_TYPE = 'Agendamento Pessoal'; // Ajuste o tipo se necessário, mas vou manter Agendamento Pessoal ou Ligação Closer
+                } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+                    sectors = [eventData.sector];
+                    APPOINTMENT_TYPE = 'Onboarding';
                 }
             }
         } else {
@@ -125,7 +133,9 @@ router.get('/available-times', async (req: Request, res: Response) => {
         }
 
         // Use attendants directly - already filtered by query above
-        const filteredAttendants = attendants;
+        const filteredAttendants = eventIdStr
+            ? attendants.filter(a => !isAttendantBlockedForEvent(a.id, eventIdStr))
+            : attendants;
 
         // 2. Fetch Appointments for this date
         const { data: appointments, error: appError } = await supabase
@@ -141,29 +151,47 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
         const existingAppointments = appointments || [];
 
-        // 3. Generate all possible time slots
-        const allTimes: string[] = [];
-        for (let hour = 0; hour < 24; hour++) {
-            for (const minute of [0, 15, 30, 45]) {
-                allTimes.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
-            }
-        }
-
-        // 4. Filter times where at least ONE closer is available
+        // 3 & 4. Generate  time slots and filter
         const availableTimes: string[] = [];
-        
-        // Log first few time slots to debug
-        const timeSlotsToDebug = ['09:00', '10:00', '14:00', '16:00'];
-        
-        for (const timeSlot of allTimes) {
-            const hasAvailableCloser = await checkIfAnyCloserAvailable(
-                filteredAttendants, // Usa a lista filtrada
-                existingAppointments,
-                date,
-                timeSlot,
-                APPOINTMENT_TYPE
-            );
-            if (hasAvailableCloser) availableTimes.push(timeSlot);
+
+        // If we are looking for CEO, we use their custom_dates instead of allTimes 0-24h
+        if (sectors.includes('CEO') && filteredAttendants.length > 0) {
+            // Assume only one CEO is fetched if sector is CEO
+            const ceo = filteredAttendants[0];
+            const customDates = ceo.schedule?.custom_dates || {};
+            const ceoTimesForDate = customDates[date] || [];
+
+            for (const timeSlot of ceoTimesForDate) {
+                const hasConflict = hasConflictingAppointment(
+                    ceo.id,
+                    date,
+                    timeSlot,
+                    APPOINTMENT_TYPE,
+                    existingAppointments
+                );
+                if (!hasConflict) {
+                    availableTimes.push(timeSlot);
+                }
+            }
+        } else {
+            // Standard Closer Logic
+            const allTimes: string[] = [];
+            for (let hour = 0; hour < 24; hour++) {
+                for (const minute of [0, 15, 30, 45]) {
+                    allTimes.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+                }
+            }
+
+            for (const timeSlot of allTimes) {
+                const hasAvailableCloser = await checkIfAnyCloserAvailable(
+                    filteredAttendants,
+                    existingAppointments,
+                    date,
+                    timeSlot,
+                    APPOINTMENT_TYPE
+                );
+                if (hasAvailableCloser) availableTimes.push(timeSlot);
+            }
         }
 
         console.log('[AVAILABLE-TIMES] Final result:', {
@@ -250,7 +278,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
 
         const { data: eventData, error: eventError } = await supabase
             .from('events')
-            .select('event_name')
+            .select('event_name, sector')
             .eq('id', eventId)
             .single();
 
@@ -261,6 +289,10 @@ router.post('/appointments', async (req: Request, res: Response) => {
         let APPOINTMENT_TYPE = 'Ligação Closer';
         if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
             APPOINTMENT_TYPE = 'Gold Call';
+        } else if (eventData.sector === 'CEO') {
+            APPOINTMENT_TYPE = 'Agendamento Pessoal';
+        } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+            APPOINTMENT_TYPE = 'Onboarding';
         }
 
         // 2. Buffer Check (30 minutes)
@@ -306,8 +338,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 .eq('id', finalAttendantId)
                 .single();
 
-            // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI), resetamos
-            const allowedSectors = ['Closer', 'Líder', 'Co-Líder', 'Perpétuos', 'TEI'];
+            // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI/CEO), resetamos
+            const allowedSectors = ['Closer', 'Líder', 'Co-Líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia'];
             const isValidSector = attendantData && allowedSectors.includes(attendantData.sector);
             if (!attendantData || !isValidSector) {
                 finalAttendantId = 'distribuicao_automatica';
@@ -327,6 +359,13 @@ router.post('/appointments', async (req: Request, res: Response) => {
         if (!finalAttendantId) {
             return res.status(409).json({
                 error: 'Não há horários disponíveis para este momento. Por favor, escolha outro horário.'
+            });
+        }
+
+        // Event-specific blocklist: never assign blocked closer for this event
+        if (isAttendantBlockedForEvent(finalAttendantId, eventId)) {
+            return res.status(409).json({
+                error: 'Este atendente está bloqueado para este evento.'
             });
         }
 

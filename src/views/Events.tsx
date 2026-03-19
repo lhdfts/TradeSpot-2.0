@@ -161,7 +161,7 @@ export const Events: React.FC = () => {
                                     {event.self_scheduling_link && (
                                         <button
                                             onClick={() => {
-                                                const url = `${window.location.origin}/agendar/${event.self_scheduling_link}?attendantId=${user?.id}`;
+                                                const url = `${window.location.origin}/agendar/${event.self_scheduling_link}`;
                                                 navigator.clipboard.writeText(url);
                                                 alert('Link copiado!');
                                             }}

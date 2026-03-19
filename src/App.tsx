@@ -7,6 +7,7 @@ import { AllAppointments } from './views/AllAppointments';
 import { Metrics } from './views/Metrics';
 import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
+import { CeoScheduler } from './views/CeoScheduler';
 import { Login } from './views/Login';
 import { SelfScheduling } from './views/public/SelfScheduling';
 import { NotFound } from './views/public/NotFound';
@@ -114,6 +115,7 @@ const InternalLayout: React.FC = () => {
                 {currentView === '/metrics' && 'Métricas'}
                 {currentView === '/attendants' && 'Gerenciar Atendentes'}
                 {currentView === '/events' && 'Gerenciar Eventos'}
+                {currentView === '/ceo-scheduler' && 'Configurações CEO'}
               </h1>
               <div className="flex items-center gap-4">
                 <div id="header-actions" style={{ display: 'flex', alignItems: 'center' }}></div>
@@ -153,6 +155,11 @@ const InternalLayout: React.FC = () => {
 
               <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-Líder', 'Co-líder', 'Qualidade', 'Colaborador']} />}>
                 <Route path="/events" element={<Events />} />
+              </Route>
+
+              {/* CEO Only Management */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
+                <Route path="/ceo-scheduler" element={<CeoScheduler />} />
               </Route>
 
               {/* Catch all internal routes */}
