@@ -159,10 +159,12 @@ export const findBestAttendant = async (
     type: string,
     eventId?: string
 ): Promise<string | null> => {
-    let sectors = ['Closer', 'Líder', 'Co-Líder'];
+    let sectors = ['Closer'];
     let roleFilter: string | null = null;
 
-    if (eventId) {
+    const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
+
+    if (eventId && !isCloserType) {
         const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
         if (eventData) {
             if (eventData.sector === 'Perpétuos') {
@@ -175,6 +177,8 @@ export const findBestAttendant = async (
             } else if (eventData.sector === 'Aldeia') {
                 sectors = ['Aldeia'];
                 roleFilter = 'Colaborador';
+            } else {
+                sectors = [eventData.sector];
             }
         }
     }

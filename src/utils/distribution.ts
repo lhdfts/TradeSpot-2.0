@@ -152,39 +152,35 @@ export const findAvailableCloser = (
     attendants: Attendant[],
     allAppointments: Appointment[]
 ): Attendant | null => {
-    // 1. Filter Closers (Closer, Líder and Co-Líder)
-    const closers = attendants.filter(a => ['Closer', 'Líder', 'Co-Líder'].includes(a.sector));
-    if (closers.length === 0) return null;
+    const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(appointmentType);
+    const eligibleAttendants = isCloserType ? attendants.filter(a => a.sector === 'Closer') : attendants;
+    if (eligibleAttendants.length === 0) return null;
 
-    // 2. Filter by Schedule (who is working today?)
-    const closersWithSchedule = closers.filter(closer =>
-        isAttendantWithinSchedule(closer, dateStr, timeStr, appointmentType)
+    const attendantsWithSchedule = eligibleAttendants.filter(attendant =>
+        isAttendantWithinSchedule(attendant, dateStr, timeStr, appointmentType)
     );
 
-    if (closersWithSchedule.length === 0) return null;
+    if (attendantsWithSchedule.length === 0) return null;
 
-    // 3. Calculate Load (count pending appointments for this day)
-    const closersWithLoad = closersWithSchedule.map(closer => {
+    const attendantsWithLoad = attendantsWithSchedule.map(attendant => {
         const count = allAppointments.filter(appt =>
-            appt.attendantId === closer.id &&
+            appt.attendantId === attendant.id &&
             appt.date === dateStr &&
-            appt.status === 'Pendente' && // "Pendente" is the active status
-            appt.type !== 'Agendamento Pessoal' // Exclude personal from load count
+            appt.status === 'Pendente' &&
+            appt.type !== 'Agendamento Pessoal'
         ).length;
 
-        return { ...closer, load: count };
+        return { ...attendant, load: count };
     });
 
-    // 4. Sort by Load (asc) then Random
-    closersWithLoad.sort((a, b) => {
+    attendantsWithLoad.sort((a, b) => {
         if (a.load !== b.load) return a.load - b.load;
         return Math.random() - 0.5;
     });
 
-    // 5. Find first one without conflict
-    for (const closer of closersWithLoad) {
-        if (!hasConflictingAppointment(closer.id, dateStr, timeStr, appointmentType, allAppointments)) {
-            return closer;
+    for (const attendant of attendantsWithLoad) {
+        if (!hasConflictingAppointment(attendant.id, dateStr, timeStr, appointmentType, allAppointments)) {
+            return attendant;
         }
     }
 

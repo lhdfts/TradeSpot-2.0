@@ -87,7 +87,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
     try {
         let APPOINTMENT_TYPE = 'Ligação Closer';
-        let sectors = ['Closer', 'Líder', 'Co-Líder'];
+        let sectors = ['Closer'];
 
         if (eventId && typeof eventId === 'string') {
             const { data: eventData, error: eventError } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
@@ -96,14 +96,20 @@ router.get('/available-times', async (req: Request, res: Response) => {
                 if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
                     APPOINTMENT_TYPE = 'Gold Call';
                 }
-                if (eventData.sector === 'Perpétuos') {
-                    sectors = ['Perpétuos'];
-                } else if (eventData.sector === 'CEO') {
-                    sectors = ['CEO'];
-                    APPOINTMENT_TYPE = 'Agendamento Pessoal'; // Ajuste o tipo se necessário, mas vou manter Agendamento Pessoal ou Ligação Closer
-                } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
-                    sectors = [eventData.sector];
-                    APPOINTMENT_TYPE = 'Onboarding';
+
+                const isCloserType = ['Ligação Closer', 'Gold Call'].includes(APPOINTMENT_TYPE);
+                if (!isCloserType) {
+                    if (eventData.sector === 'Perpétuos') {
+                        sectors = ['Perpétuos'];
+                    } else if (eventData.sector === 'CEO') {
+                        sectors = ['CEO'];
+                        APPOINTMENT_TYPE = 'Agendamento Pessoal';
+                    } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+                        sectors = [eventData.sector];
+                        APPOINTMENT_TYPE = 'Onboarding';
+                    } else {
+                        sectors = [eventData.sector];
+                    }
                 }
             }
         } else {
