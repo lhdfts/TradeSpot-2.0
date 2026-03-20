@@ -20,6 +20,7 @@ import { getPurchasesByEmail } from '../services/pipedriveService';
 
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
+const ON_THE_ROAD_EVENT_ID = '62936e18-6042-43c9-8526-6ec920184351';
 
 const isCloserBlockedForSelectedEvent = (eventId: string, attendantId: string) => {
     return eventId === BLOCKED_EVENT_ID && attendantId === BLOCKED_CLOSER_ID;
@@ -162,7 +163,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
         }
         if (user.sector === 'Aldeia') {
-            return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
+            const allowed = ['Agendamento Pessoal', 'Onboarding'];
+            if (formData.eventId === ON_THE_ROAD_EVENT_ID) {
+                allowed.push('Ligação Closer');
+            }
+            return allTypes.filter(t => allowed.includes(t.value));
         }
         if (user.sector === 'Social Seller') {
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
@@ -203,7 +208,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         }
 
         // Original logic for CREATING new appointments
-        return [
+        const options = [
             ...(formData.type === 'Fora da agenda' ? [] : [{ value: 'distribuicao_automatica', label: 'Distribuição Automática' }]),
             ...attendants
                 .filter(a => {
@@ -214,7 +219,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const eventSector = selectedEvent?.sector;
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
-                    if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda') return a.sector === 'Closer';
+                    if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
 
                     if (isAdministrative) {
                         return eventSector ? a.sector === eventSector : true;
@@ -225,6 +230,12 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 })
                 .map(a => ({ value: a.id, label: a.name }))
         ];
+
+        if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call')) {
+            return options.filter(opt => opt.value === 'distribuicao_automatica');
+        }
+
+        return options;
     }, [isEditing, formData.type, formData.eventId, attendants, events, user]);
 
     const eventOptions = React.useMemo(() => {
