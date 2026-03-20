@@ -1,0 +1,599 @@
+{
+  "name": "Atualização de Agendamento",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eaff56ab-d661-460a-811c-f6a2677142ed",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        48,
+        0
+      ],
+      "id": "ab04931b-7ad6-42e3-8246-47f67426d509",
+      "name": "Webhook",
+      "webhookId": "eaff56ab-d661-460a-811c-f6a2677142ed"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4cbd6562-ca86-4c4a-9130-97f7f9151b7f",
+              "name": "telefone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "890c3ff9-7d34-4dad-afc0-cd943015e0ba",
+              "name": "status",
+              "value": "={{ $json.body.status }}",
+              "type": "string"
+            },
+            {
+              "id": "247a1943-8c92-4d06-9b88-5f6091ddd3c2",
+              "name": "atendente",
+              "value": "={{ $json.body.attendant_name }}",
+              "type": "string"
+            },
+            {
+              "id": "70d9c59e-c08e-4b45-b9c4-f82f397b8111",
+              "name": "tipo",
+              "value": "={{ $json.body.type }}",
+              "type": "string"
+            },
+            {
+              "id": "a5a41260-32b1-4522-8554-f83fc18d2df0",
+              "name": "evento",
+              "value": "={{ $json.body.event_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ],
+      "id": "9db25a22-c4ed-45b0-ae14-0b38ba071d9c",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/j5qNWAfMEuBJmKabYeY8",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "telefone",
+              "value": "={{ $node[\"Edit Fields\"].json[\"telefone\"] }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $node[\"Edit Fields\"].json[\"status\"] }}"
+            },
+            {
+              "name": "atendente",
+              "value": "={{ $node[\"Edit Fields\"].json[\"atendente\"] }}"
+            },
+            {
+              "name": "tipo",
+              "value": "={{ $node[\"Edit Fields\"].json[\"tipo\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1152,
+        240
+      ],
+      "id": "120f7dc7-e4b0-45fb-9019-dddbb71d1a66",
+      "name": "Enviar para \"SDR\""
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/MiRTIMs4YvEarv9ojO5L",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "telefone",
+              "value": "={{ $node[\"Edit Fields\"].json[\"telefone\"] }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $node[\"Edit Fields\"].json[\"status\"] }}"
+            },
+            {
+              "name": "atendente",
+              "value": "={{ $node[\"Edit Fields\"].json[\"atendente\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        704,
+        -96
+      ],
+      "id": "78b765b2-3652-471c-9919-500170f77918",
+      "name": "Enviar para \"Closer\""
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7d51a9d0-e426-4e52-8726-7aa538459d62",
+              "leftValue": "={{ $json.evento }}",
+              "rightValue": "Agendamento Lead Closer",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "1ca5410d-3ad8-4505-b737-277e1850cf19",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/MiRTIMs4YvEarv9ojO5L",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "telefone",
+              "value": "={{ $node[\"Edit Fields\"].json[\"telefone\"] }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $node[\"Edit Fields\"].json[\"status\"] }}"
+            },
+            {
+              "name": "atendente",
+              "value": "={{ $node[\"Edit Fields\"].json[\"atendente\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1344,
+        240
+      ],
+      "id": "49cac31a-df19-45c1-8336-8476801c4b3b",
+      "name": "Enviar para \"Closer\"1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.evento }}",
+                    "rightValue": "0126 - Social Seller (Instagram)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "9982021d-f34d-46f3-aacd-9afc255c29ee"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Instagram - Social Seller"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "9bec9948-fe60-4c35-87ee-020958be7c93",
+                    "leftValue": "={{ $json.evento }}",
+                    "rightValue": "0126 - Social Seller (WhatsApp)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WhatsApp - Social Seller"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "e53781e0-8541-4e66-82df-3454e78f565a",
+                    "leftValue": "={{ $json.evento }}",
+                    "rightValue": "Social Seller",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notContains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Não é"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        704,
+        96
+      ],
+      "id": "dc7e6f81-77c8-4fdc-ad94-f426b4c70d99",
+      "name": "Social Seller"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/j5qNWAfMEuBJmKabYeY8",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "telefone",
+              "value": "={{ $node[\"Edit Fields\"].json[\"telefone\"] }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $node[\"Edit Fields\"].json[\"status\"] }}"
+            },
+            {
+              "name": "atendente",
+              "value": "={{ $node[\"Edit Fields\"].json[\"atendente\"] }}"
+            },
+            {
+              "name": "tipo",
+              "value": "={{ $node[\"Edit Fields\"].json[\"tipo\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1152,
+        32
+      ],
+      "id": "b7dbfa03-1036-4e78-8ef9-8780fa1a165e",
+      "name": "Enviar para \"Social Seller (WhatsApp)\""
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/MiRTIMs4YvEarv9ojO5L",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "telefone",
+              "value": "={{ $node[\"Edit Fields\"].json[\"telefone\"] }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $node[\"Edit Fields\"].json[\"status\"] }}"
+            },
+            {
+              "name": "atendente",
+              "value": "={{ $node[\"Edit Fields\"].json[\"atendente\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1152,
+        400
+      ],
+      "id": "150e2e62-4ced-4af8-8bf4-48b80a9172e8",
+      "name": "Enviar para \"Closer\"2"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.creator_sector }}",
+                    "rightValue": "SDR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "ab77d78e-3aa6-43df-871a-552ce0e3223a"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SDR"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "05cf8699-470d-4d86-bdb5-f41724f7f32e",
+                    "leftValue": "={{ $json.creator_sector }}",
+                    "rightValue": "Closer",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Closer"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "2c220003-41b3-4a8b-b80d-2083bacf331e",
+                    "leftValue": "={{ $json.creator_sector }}",
+                    "rightValue": "Aldeia",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Aldeia"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        384
+      ],
+      "id": "37754055-3495-434e-bd70-6accb2e77e8b",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unnichat.com.br/a/start/WkqMYM7Takkpp2uvmO3o",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "telefone",
+              "value": "={{ $node[\"Edit Fields\"].json[\"telefone\"] }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $node[\"Edit Fields\"].json[\"status\"] }}"
+            },
+            {
+              "name": "atendente",
+              "value": "={{ $node[\"Edit Fields\"].json[\"atendente\"] }}"
+            },
+            {
+              "name": "tipo",
+              "value": "={{ $node[\"Edit Fields\"].json[\"tipo\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1152,
+        560
+      ],
+      "id": "3a8ff321-24d8-49df-b283-406cd17bef1e",
+      "name": "Enviar para \"Aldeia\""
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar para \"SDR\"": {
+      "main": [
+        [
+          {
+            "node": "Enviar para \"Closer\"1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Enviar para \"Closer\"",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Social Seller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar para \"Closer\"": {
+      "main": [
+        []
+      ]
+    },
+    "Social Seller": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Enviar para \"Social Seller (WhatsApp)\"",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Enviar para \"SDR\"",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar para \"Closer\"2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar para \"Aldeia\"",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b4e66242-8e93-45f3-a9d1-ea0f23614a51",
+  "meta": {
+    "instanceId": "e4b30a8951da40e02756dbd2bb2ae05298544c5c64e487ce1a840b953177dba8"
+  },
+  "id": "aYJcIwmXGfcIRxXl",
+  "tags": []
+}
