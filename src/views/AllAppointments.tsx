@@ -119,12 +119,17 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
         // Sector restrictions
         let matchesSector = true;
-        if (user?.sector === 'Perpétuos') {
-            const linkedEvent = events.find(e => e.id === a.eventId);
-            matchesSector = !!linkedEvent && linkedEvent.sector === 'Perpétuos';
-        } else if (user?.sector === 'Tribo') {
-            const linkedAttendant = attendants.find(att => att.id === a.attendantId);
-            matchesSector = !!linkedAttendant && linkedAttendant.sector === 'Tribo';
+        const isSuperUser = user?.sector === 'TEI' || ['Dev', 'Admin', 'Qualidade'].includes(user?.role || '');
+        const isSuporte = user?.sector === 'Suporte';
+        if (!isSuperUser && !isSuporte && user?.sector) {
+            if (user.sector === 'Perpétuos') {
+                const linkedEvent = events.find(e => e.id === a.eventId);
+                matchesSector = !!linkedEvent && linkedEvent.sector === 'Perpétuos';
+            } else {
+                const linkedAttendant = attendants.find(att => att.id === a.attendantId);
+                const linkedCreator = a.createdBy ? attendants.find(att => att.id === a.createdBy) : undefined;
+                matchesSector = linkedAttendant?.sector === user.sector || linkedCreator?.sector === user.sector;
+            }
         }
 
         return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesDate && matchesSector;

@@ -17,7 +17,8 @@ const timeToMinutes = (time: string): number => {
     return h * 60 + m;
 };
 
-const getDuration = (type: string): number => {
+const getDuration = (type: string, durationMinutes?: number): number => {
+    if (typeof durationMinutes === 'number' && Number.isFinite(durationMinutes) && durationMinutes > 0) return durationMinutes;
     if (['Ligação Closer', 'Gold Call', 'Reschedule', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal'].includes(type)) {
         return 60;
     }
@@ -39,7 +40,8 @@ export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string, // YYYY-MM-DD
     timeStr: string,  // HH:MM
-    appointmentType: string // Added type to calculate duration
+    appointmentType: string, // Added type to calculate duration
+    durationMinutes?: number
 ): boolean => {
     if (!attendant.schedule) return false;
 
@@ -54,7 +56,7 @@ export const isAttendantWithinSchedule = (
     const prevDayKey = DAY_MAP[prevDate.getDay()];
 
     const apptStart = timeToMinutes(timeStr);
-    const duration = getDuration(appointmentType);
+    const duration = getDuration(appointmentType, durationMinutes);
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
@@ -118,10 +120,11 @@ export const hasConflictingAppointment = (
     timeStr: string,
     newAppointmentType: string,
     allAppointments: Appointment[],
-    excludeAppointmentId?: string
+    excludeAppointmentId?: string,
+    durationMinutes?: number
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newAppointmentType);
+    const newEnd = newStart + getDuration(newAppointmentType, durationMinutes);
 
     return allAppointments.some(appt => {
         // Exclude self if updating
@@ -150,14 +153,15 @@ export const findAvailableCloser = (
     timeStr: string,
     appointmentType: string,
     attendants: Attendant[],
-    allAppointments: Appointment[]
+    allAppointments: Appointment[],
+    durationMinutes?: number
 ): Attendant | null => {
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(appointmentType);
     const eligibleAttendants = isCloserType ? attendants.filter(a => a.sector === 'Closer') : attendants;
     if (eligibleAttendants.length === 0) return null;
 
     const attendantsWithSchedule = eligibleAttendants.filter(attendant =>
-        isAttendantWithinSchedule(attendant, dateStr, timeStr, appointmentType)
+        isAttendantWithinSchedule(attendant, dateStr, timeStr, appointmentType, durationMinutes)
     );
 
     if (attendantsWithSchedule.length === 0) return null;
@@ -179,7 +183,7 @@ export const findAvailableCloser = (
     });
 
     for (const attendant of attendantsWithLoad) {
-        if (!hasConflictingAppointment(attendant.id, dateStr, timeStr, appointmentType, allAppointments)) {
+        if (!hasConflictingAppointment(attendant.id, dateStr, timeStr, appointmentType, allAppointments, undefined, durationMinutes)) {
             return attendant;
         }
     }

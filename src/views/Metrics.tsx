@@ -121,6 +121,8 @@ export const Metrics: React.FC = () => {
     // --- DATA CALCULATION ---
     const { sdrRanking, closerRanking, chartData, totals, filteredAppointments, sdrTotal, closerTotal, chartTotal, availabilityGrid } = useMemo(() => {
         // 1. Filter Appointments by Date & Event
+        const isSuperUser = user?.sector === 'TEI' || ['Dev', 'Admin', 'Qualidade'].includes(user?.role || '');
+        const isSuporte = user?.sector === 'Suporte';
         let filtered = appointments.filter(a => {
             if (!a.date) return false;
 
@@ -133,6 +135,13 @@ export const Metrics: React.FC = () => {
 
             // Event Filter
             if (eventFilter && a.eventId !== eventFilter) return false;
+
+            if (!isSuperUser && !isSuporte && user?.sector) {
+                const creator = a.createdBy ? attendants.find(att => att.id === a.createdBy) : undefined;
+                const attendant = a.attendantId ? attendants.find(att => att.id === a.attendantId) : undefined;
+                const matchesSector = creator?.sector === user.sector || attendant?.sector === user.sector;
+                if (!matchesSector) return false;
+            }
 
             // Sector Filter (Basic filtering for chart/totals)
             if (sectorFilter !== 'all') {

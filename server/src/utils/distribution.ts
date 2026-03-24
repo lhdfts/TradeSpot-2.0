@@ -14,6 +14,7 @@ interface Appointment {
     attendant_id: string;
     date: string;
     time: string;
+    end_time?: string;
     type: string;
     status: string;
 }
@@ -43,11 +44,13 @@ const DAY_MAP: Record<number, string> = {
 
 export const timeToMinutes = (time: string): number => {
     if (!time) return 0;
-    const [h, m] = time.split(':').map(Number);
+    const safeTime = time.length >= 5 ? time.slice(0, 5) : time;
+    const [h, m] = safeTime.split(':').map(Number);
     return h * 60 + m;
 };
 
-export const getDuration = (type: string): number => {
+export const getDuration = (type: string, durationMinutes?: number): number => {
+    if (typeof durationMinutes === 'number' && Number.isFinite(durationMinutes) && durationMinutes > 0) return durationMinutes;
     if (type === 'Ligação SDR') return 30;
     return 60; // Todos os outros (Closer, Upgrade, Pessoal, etc) duram 1 hora
 };
@@ -57,7 +60,8 @@ export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string,
     timeStr: string,
-    appointmentType: string
+    appointmentType: string,
+    durationMinutes?: number
 ): boolean => {
     if (!attendant.schedule) return false;
 
@@ -81,7 +85,7 @@ export const isAttendantWithinSchedule = (
     const prevSchedule = attendant.schedule?.[prevDayKey];
 
     const apptStart = timeToMinutes(timeStr);
-    const duration = getDuration(appointmentType);
+    const duration = getDuration(appointmentType, durationMinutes);
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
@@ -137,10 +141,11 @@ export const hasConflictingAppointment = (
     timeStr: string,
     newType: string,
     appointments: Appointment[],
-    excludeId?: string
+    excludeId?: string,
+    durationMinutes?: number
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newType);
+    const newEnd = newStart + getDuration(newType, durationMinutes);
 
     return appointments.some(appt => {
         if (appt.attendant_id !== attendantId) return false;
@@ -148,7 +153,7 @@ export const hasConflictingAppointment = (
         if (excludeId && appt.id === excludeId) return false; // Exclude self if updating
 
         const existingStart = timeToMinutes(appt.time);
-        const existingEnd = existingStart + getDuration(appt.type);
+        const existingEnd = appt.end_time ? timeToMinutes(appt.end_time) : (existingStart + getDuration(appt.type));
         return newStart < existingEnd && newEnd > existingStart;
     });
 };
@@ -157,7 +162,8 @@ export const findBestAttendant = async (
     date: string,
     time: string,
     type: string,
-    eventId?: string
+    eventId?: string,
+    durationMinutes?: number
 ): Promise<string | null> => {
     let sectors = ['Closer'];
     let roleFilter: string | null = null;
@@ -204,7 +210,7 @@ export const findBestAttendant = async (
     // 2. Fetch Appointments for this day to check load/conflicts
     const { data: appointments, error: appError } = await supabase
         .from('appointments')
-        .select('id, attendant_id, date, time, type, status')
+        .select('id, attendant_id, date, time, end_time, type, status')
         .eq('date', date)
         .neq('status', 'Cancelado'); // Ignore cancelled
 
@@ -214,7 +220,7 @@ export const findBestAttendant = async (
     }
 
     // 3. Filter by Schedule
-    const available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type));
+    const available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type, durationMinutes));
     if (available.length === 0) return null;
 
     // 4. Calculate Load
@@ -235,7 +241,7 @@ export const findBestAttendant = async (
 
     // 6. Check Conflicts
     for (const attendant of withLoad) {
-        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments)) {
+        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments, undefined, durationMinutes)) {
             return attendant.id;
         }
     }
