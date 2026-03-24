@@ -126,9 +126,9 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                 const linkedEvent = events.find(e => e.id === a.eventId);
                 matchesSector = !!linkedEvent && linkedEvent.sector === 'Perpétuos';
             } else {
+                const linkedEvent = events.find(e => e.id === a.eventId);
                 const linkedAttendant = attendants.find(att => att.id === a.attendantId);
-                const linkedCreator = a.createdBy ? attendants.find(att => att.id === a.createdBy) : undefined;
-                matchesSector = linkedAttendant?.sector === user.sector || linkedCreator?.sector === user.sector;
+                matchesSector = linkedAttendant?.sector === user.sector || linkedEvent?.sector === user.sector;
             }
         }
 
@@ -138,6 +138,33 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         const dateB = new Date(`${b.date}T${b.time}`);
         return dateA.getTime() - dateB.getTime(); // Ascending for closest appointments first
     });
+
+    const eventOptions = React.useMemo(() => {
+        const isSuperUser = user?.sector === 'TEI' || ['Dev', 'Admin', 'Qualidade'].includes(user?.role || '');
+        const isSuporte = user?.sector === 'Suporte';
+        const activeEvents = events.filter(ev => ev.status === true);
+
+        if (isSuperUser || isSuporte || !user?.sector) {
+            const uniqueById = new Map(activeEvents.map(e => [e.id, e]));
+            return Array.from(uniqueById.values())
+                .sort((a, b) => a.event_name.localeCompare(b.event_name, 'pt-BR', { sensitivity: 'base' }))
+                .map(ev => ({ value: ev.id, label: ev.event_name }));
+        }
+
+        const attendantById = new Map(attendants.map(a => [a.id, a]));
+        const allowedEventIdsByAttendant = new Set(
+            appointments
+                .filter(a => attendantById.get(a.attendantId)?.sector === user.sector)
+                .map(a => a.eventId)
+                .filter(Boolean)
+        );
+
+        const filteredEvents = activeEvents.filter(ev => ev.sector === user.sector || allowedEventIdsByAttendant.has(ev.id));
+        const uniqueById = new Map(filteredEvents.map(e => [e.id, e]));
+        return Array.from(uniqueById.values())
+            .sort((a, b) => a.event_name.localeCompare(b.event_name, 'pt-BR', { sensitivity: 'base' }))
+            .map(ev => ({ value: ev.id, label: ev.event_name }));
+    }, [appointments, attendants, events, user?.role, user?.sector]);
 
     // Pagination Logic
     const totalPages = Math.ceil(filtered.length / itemsPerPage);
@@ -259,7 +286,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         onChange={(e: any) => setEventFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos' },
-                            ...events.filter(ev => ev.status === true).map(ev => ({ value: ev.id, label: ev.event_name }))
+                            ...eventOptions
                         ]}
                     />
 
