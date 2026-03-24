@@ -275,6 +275,12 @@ export const SelfScheduling = () => {
                         2. Escolha o Horário
                     </h3>
 
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+                        <p className="text-sm text-blue-900 dark:text-blue-100">
+                            <strong>Atenção:</strong> Os horários abaixo estão em <strong>BRT (Brasília)</strong>.
+                        </p>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FloatingDateInput
                             label="Data"
@@ -284,7 +290,7 @@ export const SelfScheduling = () => {
                             error={errors.date ? { message: errors.date } : undefined}
                         />
                         <TimePickerInput
-                            label={loadingTimes ? "Carregando..." : "Horário"}
+                            label={loadingTimes ? "Carregando..." : "Horário (BRT)"}
                             value={formData.time}
                             onChange={(time) => setFormData({ ...formData, time })}
                             availableTimes={availableTimes}
