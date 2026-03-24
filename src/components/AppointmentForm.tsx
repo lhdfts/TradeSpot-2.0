@@ -219,7 +219,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
                     const selectedEvent = events.find(e => e.id === formData.eventId);
                     const eventSector = selectedEvent?.sector;
-                    const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
+                    const isAdministrative = user && ['Dev', 'Admin', 'Qualidade'].includes(user.role);
 
                     if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
 
@@ -250,7 +250,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             // Special case for On The Road 2.0 and Aldeia
             // if (e.id === ON_THE_ROAD_EVENT_ID && user?.sector === 'Aldeia') return true;
 
-            return !e.sector || (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role) || user.sector === e.sector));
+            const isPrivileged = user && (user.sector === 'TEI' || ['Dev', 'Admin', 'Qualidade'].includes(user.role));
+            return !!user && (isPrivileged || user.sector === e.sector);
         });
 
         // If we are editing and the current event is not in the list, add it
@@ -261,7 +262,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
         }
 
-        return filtered.map(e => ({ value: e.id, label: e.event_name }));
+        return filtered
+            .sort((a, b) => a.event_name.localeCompare(b.event_name, 'pt-BR', { sensitivity: 'base' }))
+            .map(e => ({ value: e.id, label: e.event_name }));
     }, [events, user, initialData]);
 
     useEffect(() => {
