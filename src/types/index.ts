@@ -21,6 +21,7 @@ export interface Event {
     created_at?: string;
     sector?: string;
     self_scheduling_link?: string;
+    duration_minutes?: number;
 }
 
 export interface Attendant {
