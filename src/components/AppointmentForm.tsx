@@ -231,6 +231,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 .map(a => ({ value: a.id, label: a.name }))
         ];
 
+        // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call, mostrar apenas Distribuição Automática
         if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call')) {
             return options.filter(opt => opt.value === 'distribuicao_automatica');
         }
@@ -243,6 +244,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         const filtered = events.filter(e => {
             if (e.status !== true) return false;
             if (user?.sector === 'Perpétuos') return e.sector === 'Perpétuos';
+
+            // Special case for On The Road 2.0 and Aldeia
+            // if (e.id === ON_THE_ROAD_EVENT_ID && user?.sector === 'Aldeia') return true;
 
             return !e.sector || (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role) || user.sector === e.sector));
         });

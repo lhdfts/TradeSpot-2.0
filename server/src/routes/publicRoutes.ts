@@ -284,7 +284,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
 
         const { data: eventData, error: eventError } = await supabase
             .from('events')
-            .select('event_name, sector')
+            .select('event_name, sector, duration_minutes')
             .eq('id', eventId)
             .single();
 
@@ -420,10 +420,13 @@ router.post('/appointments', async (req: Request, res: Response) => {
         if (!clientId) throw new Error("Falha ao processar o cadastro do cliente.");
 
         // 6. Create Appointment
-        // Calculate End Time (1 hour duration)
+        // Calculate End Time based on event duration_minutes
         const [hours, minutes] = data.time.split(':').map(Number);
-        const endHours = (hours + 1) % 24;
-        const endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        const durationMinutes = eventData.duration_minutes || 60;
+        const totalMinutes = hours * 60 + minutes + durationMinutes;
+        const endHours = Math.floor(totalMinutes / 60) % 24;
+        const endMinutes = totalMinutes % 60;
+        const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
 
         // Dynamic created_by Attribution
         const senderId = req.body.attendantId;
