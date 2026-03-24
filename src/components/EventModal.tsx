@@ -29,7 +29,8 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
     const [formData, setFormData] = useState<Partial<Event>>({
         event_name: '',
         status: true,
-        sector: ''
+        sector: '',
+        duration_minutes: 60
     });
 
     const isSuperUser = user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.sector === 'TEI';
@@ -43,7 +44,8 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
             setFormData({
                 event_name: '',
                 status: true,
-                sector: canEditSector ? '' : (user?.sector || '')
+                sector: canEditSector ? '' : (user?.sector || ''),
+                duration_minutes: 60
             });
         }
     }, [event, isOpen, user, isSuperUser, isSuporte, canEditSector]);
@@ -54,7 +56,8 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
             const dataToSubmit = {
                 ...formData,
                 // Ensure restricted users can't override sector
-                sector: canEditSector ? formData.sector : user?.sector
+                sector: canEditSector ? formData.sector : user?.sector,
+                duration_minutes: formData.duration_minutes ?? 60
             };
 
             if (event) {
@@ -113,6 +116,17 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                     options={[
                         { value: 'true', label: 'Ativo' },
                         { value: 'false', label: 'Arquivado' }
+                    ]}
+                />
+
+                <Select
+                    label="Duração (min)"
+                    value={String(formData.duration_minutes ?? 60)}
+                    onChange={(e: any) => setFormData({ ...formData, duration_minutes: Number(e.target.value) })}
+                    options={[
+                        { value: '30', label: '30 minutos' },
+                        { value: '60', label: '60 minutos' },
+                        { value: '120', label: '120 minutos' }
                     ]}
                 />
 
