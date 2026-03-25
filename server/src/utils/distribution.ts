@@ -14,6 +14,7 @@ interface Appointment {
     attendant_id: string;
     date: string;
     time: string;
+    end_time?: string;
     type: string;
     status: string;
 }
@@ -41,13 +42,50 @@ const DAY_MAP: Record<number, string> = {
     1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat', 0: 'sun'
 };
 
+const normalizeKey = (key: string) =>
+    key
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\s_-]/g, '');
+
+const pickByAliases = <T extends Record<string, any>>(obj: T | undefined, aliases: string[]) => {
+    if (!obj) return undefined;
+    for (const alias of aliases) {
+        if (alias in obj) return obj[alias as keyof T];
+    }
+    const normalizedAliases = aliases.map(normalizeKey);
+    for (const [k, v] of Object.entries(obj)) {
+        const nk = normalizeKey(k);
+        for (const na of normalizedAliases) {
+            if (nk === na || nk.startsWith(na)) return v;
+        }
+    }
+    return undefined;
+};
+
+const dayKeyAliases = (dayIndex: number) => {
+    switch (dayIndex) {
+        case 0: return ['sun', 'dom', 'domingo'];
+        case 1: return ['mon', 'seg', 'segunda', 'monday'];
+        case 2: return ['tue', 'ter', 'terca', 'terça', 'tuesday'];
+        case 3: return ['wed', 'qua', 'quarta', 'wednesday'];
+        case 4: return ['thu', 'qui', 'quinta', 'thursday'];
+        case 5: return ['fri', 'sex', 'sexta', 'friday'];
+        case 6: return ['sat', 'sab', 'sáb', 'sabado', 'sábado', 'saturday'];
+        default: return [DAY_MAP[dayIndex]];
+    }
+};
+
 export const timeToMinutes = (time: string): number => {
     if (!time) return 0;
-    const [h, m] = time.split(':').map(Number);
+    const safeTime = time.length >= 5 ? time.slice(0, 5) : time;
+    const [h, m] = safeTime.split(':').map(Number);
     return h * 60 + m;
 };
 
-export const getDuration = (type: string): number => {
+export const getDuration = (type: string, durationMinutes?: number): number => {
+    if (typeof durationMinutes === 'number' && Number.isFinite(durationMinutes) && durationMinutes > 0) return durationMinutes;
     if (type === 'Ligação SDR') return 30;
     return 60; // Todos os outros (Closer, Upgrade, Pessoal, etc) duram 1 hora
 };
@@ -57,7 +95,8 @@ export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string,
     timeStr: string,
-    appointmentType: string
+    appointmentType: string,
+    durationMinutes?: number
 ): boolean => {
     if (!attendant.schedule) return false;
 
@@ -70,18 +109,19 @@ export const isAttendantWithinSchedule = (
 
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    const dayKey = DAY_MAP[date.getDay()];
+    const dayIndex = date.getDay();
+    const dayAliases = dayKeyAliases(dayIndex);
 
     // Check Previous Day for Overnight Spillover
     const prevDate = new Date(date);
     prevDate.setDate(date.getDate() - 1);
-    const prevDayKey = DAY_MAP[prevDate.getDay()];
+    const prevDayAliases = dayKeyAliases(prevDate.getDay());
 
-    const schedule = attendant.schedule?.[dayKey];
-    const prevSchedule = attendant.schedule?.[prevDayKey];
+    const schedule = pickByAliases(attendant.schedule, dayAliases);
+    const prevSchedule = pickByAliases(attendant.schedule, prevDayAliases);
 
     const apptStart = timeToMinutes(timeStr);
-    const duration = getDuration(appointmentType);
+    const duration = getDuration(appointmentType, durationMinutes);
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
@@ -137,10 +177,11 @@ export const hasConflictingAppointment = (
     timeStr: string,
     newType: string,
     appointments: Appointment[],
-    excludeId?: string
+    excludeId?: string,
+    durationMinutes?: number
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newType);
+    const newEnd = newStart + getDuration(newType, durationMinutes);
 
     return appointments.some(appt => {
         if (appt.attendant_id !== attendantId) return false;
@@ -148,7 +189,7 @@ export const hasConflictingAppointment = (
         if (excludeId && appt.id === excludeId) return false; // Exclude self if updating
 
         const existingStart = timeToMinutes(appt.time);
-        const existingEnd = existingStart + getDuration(appt.type);
+        const existingEnd = appt.end_time ? timeToMinutes(appt.end_time) : (existingStart + getDuration(appt.type));
         return newStart < existingEnd && newEnd > existingStart;
     });
 };
@@ -157,7 +198,8 @@ export const findBestAttendant = async (
     date: string,
     time: string,
     type: string,
-    eventId?: string
+    eventId?: string,
+    durationMinutes?: number
 ): Promise<string | null> => {
     let sectors = ['Closer'];
     let roleFilter: string | null = null;
@@ -204,7 +246,7 @@ export const findBestAttendant = async (
     // 2. Fetch Appointments for this day to check load/conflicts
     const { data: appointments, error: appError } = await supabase
         .from('appointments')
-        .select('id, attendant_id, date, time, type, status')
+        .select('id, attendant_id, date, time, end_time, type, status')
         .eq('date', date)
         .eq('status', 'Pendente');
 
@@ -214,7 +256,7 @@ export const findBestAttendant = async (
     }
 
     // 3. Filter by Schedule
-    const available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type));
+    const available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type, durationMinutes));
     if (available.length === 0) return null;
 
     // 4. Calculate Load
@@ -235,7 +277,7 @@ export const findBestAttendant = async (
 
     // 6. Check Conflicts
     for (const attendant of withLoad) {
-        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments)) {
+        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments, undefined, durationMinutes)) {
             return attendant.id;
         }
     }

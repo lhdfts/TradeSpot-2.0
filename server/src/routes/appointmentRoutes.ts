@@ -22,11 +22,9 @@ const supabase = createClient(supabaseUrl!, supabaseKey!);
 
 // --- Helper Logic ---
 
-const calculateEndTime = (startTime: string, type: string): string => {
-    let duration = 60;
-    if (type === 'Ligação SDR') {
-        duration = 30;
-    }
+const calculateEndTime = (startTime: string, type: string, durationMinutes?: number): string => {
+    let duration = durationMinutes ?? 60;
+    if (type === 'Ligação SDR' && durationMinutes == null) duration = 30;
     const [hours, minutes] = startTime.split(':').map(Number);
     const totalMinutes = hours * 60 + minutes + duration;
     const endHours = Math.floor(totalMinutes / 60) % 24;
@@ -49,6 +47,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         const data = validation.data;
+
+        const { data: eventInfo } = await supabase
+            .from('events')
+            .select('duration_minutes')
+            .eq('id', data.eventId)
+            .maybeSingle();
+        const durationMinutes = eventInfo?.duration_minutes ?? undefined;
+
         // 0. Buffer Check (10 minutes)
         const now = new Date();
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Brasilia time is UTC-3
@@ -63,7 +69,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         // Agent Logic
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId);
+            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId, durationMinutes);
             if (!availableId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
             }
@@ -102,7 +108,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
 
             if (data.type !== 'Fora da agenda') {
-                const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type);
+                const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type, durationMinutes);
                 if (!isWithinSchedule) {
                     return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
                 }
@@ -116,19 +122,19 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             });
         }
 
-        const endTime = calculateEndTime(data.time, data.type);
+        const endTime = calculateEndTime(data.time, data.type, durationMinutes);
 
         // 3. Conflict Check (Range Based)
         const { data: existingAppts } = await supabase
             .from('appointments')
-            .select('id, attendant_id, date, time, type, status')
+            .select('id, attendant_id, date, time, end_time, type, status')
             .eq('date', data.date)
             .eq('attendant_id', finalAttendantId)
             .neq('status', 'Cancelado');
 
         if (data.type !== 'Fora da agenda' && existingAppts) {
             // @ts-ignore
-            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts);
+            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts, undefined, durationMinutes);
             if (hasConflict) {
                 return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
             }
@@ -336,6 +342,16 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (fetchError || !currentApp) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
         const merged = { ...currentApp, ...updates };
+        const mergedEventId = (updates as any).eventId || (merged as any).event_id || (merged as any).eventId;
+        let durationMinutes: number | undefined = undefined;
+        if (mergedEventId) {
+            const { data: eventInfo } = await supabase
+                .from('events')
+                .select('duration_minutes')
+                .eq('id', mergedEventId)
+                .maybeSingle();
+            durationMinutes = eventInfo?.duration_minutes ?? undefined;
+        }
 
         // Event-specific blocklist for assignment changes only
         const isAttendantChangeRequested = typeof (updates as any).attendantId === 'string' && (updates as any).attendantId.length > 0;
@@ -350,7 +366,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         if (updates.time || updates.type) {
-            merged.end_time = calculateEndTime(merged.time, merged.type);
+            merged.end_time = calculateEndTime(merged.time, merged.type, durationMinutes);
         }
 
         // Logic Check
@@ -362,7 +378,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
                 if (merged.type !== 'Fora da agenda') {
-                    const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type);
+                    const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type, durationMinutes);
                     console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
 
                     if (!isWithin) {
@@ -377,20 +393,20 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             if (merged.attendant_id && merged.attendant_id !== 'distribuicao_automatica') {
                 const { data: existingAppts } = await supabase
                     .from('appointments')
-                    .select('id, attendant_id, date, time, type, status')
+                    .select('id, attendant_id, date, time, end_time, type, status')
                     .eq('date', merged.date)
                     .eq('attendant_id', merged.attendant_id)
                     .neq('status', 'Cancelado');
 
                 if (merged.type !== 'Fora da agenda' && existingAppts) {
                     // Pass 'id' as the 6th argument to exclude current appointment from conflict check
-                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id);
+                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id, durationMinutes);
                     console.log(`[DEBUG] hasConflict result: ${hasConflict}`);
 
                     if (hasConflict) {
                         // Find specific conflicting appointment for logging
                         const newStart = timeToMinutes(merged.time);
-                        const newEnd = newStart + getDuration(merged.type);
+                        const newEnd = newStart + getDuration(merged.type, durationMinutes);
 
                         const collidingAppt = existingAppts.find(appt => {
                             if (appt.attendant_id !== merged.attendant_id) return false;
@@ -398,7 +414,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                             if (appt.id === id) return false; // Exclude self
 
                             const existingStart = timeToMinutes(appt.time);
-                            const existingEnd = existingStart + getDuration(appt.type);
+                            const existingEnd = appt.end_time ? timeToMinutes(appt.end_time) : (existingStart + getDuration(appt.type));
                             return newStart < existingEnd && newEnd > existingStart;
                         });
 
