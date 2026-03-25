@@ -158,8 +158,9 @@ export const isAttendantWithinSchedule = (
         if (apptStart < startMinutes) return false;
     }
 
-    if (attendant.pauses && attendant.pauses[dayKey]) {
-        for (const pause of attendant.pauses[dayKey]) {
+    const pausesForDay = pickByAliases(attendant.pauses, dayAliases);
+    if (Array.isArray(pausesForDay) && pausesForDay.length > 0) {
+        for (const pause of pausesForDay) {
             const pauseStart = timeToMinutes(pause.start);
             const pauseEnd = timeToMinutes(pause.end);
 
