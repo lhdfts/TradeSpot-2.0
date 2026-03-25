@@ -11,6 +11,41 @@ const DAY_MAP: Record<number, string> = {
     0: 'sun'
 };
 
+const normalizeKey = (key: string) =>
+    key
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\s_-]/g, '');
+
+const pickByAliases = <T extends Record<string, any>>(obj: T | undefined, aliases: string[]) => {
+    if (!obj) return undefined;
+    for (const alias of aliases) {
+        if (alias in obj) return obj[alias as keyof T];
+    }
+    const normalizedAliases = aliases.map(normalizeKey);
+    for (const [k, v] of Object.entries(obj)) {
+        const nk = normalizeKey(k);
+        for (const na of normalizedAliases) {
+            if (nk === na || nk.startsWith(na)) return v;
+        }
+    }
+    return undefined;
+};
+
+const dayKeyAliases = (dayIndex: number) => {
+    switch (dayIndex) {
+        case 0: return ['sun', 'dom', 'domingo'];
+        case 1: return ['mon', 'seg', 'segunda', 'monday'];
+        case 2: return ['tue', 'ter', 'terca', 'terça', 'tuesday'];
+        case 3: return ['wed', 'qua', 'quarta', 'wednesday'];
+        case 4: return ['thu', 'qui', 'quinta', 'thursday'];
+        case 5: return ['fri', 'sex', 'sexta', 'friday'];
+        case 6: return ['sat', 'sab', 'sáb', 'sabado', 'sábado', 'saturday'];
+        default: return [DAY_MAP[dayIndex]];
+    }
+};
+
 const timeToMinutes = (time: string): number => {
     if (!time) return 0;
     const [h, m] = time.split(':').map(Number);
@@ -48,19 +83,20 @@ export const isAttendantWithinSchedule = (
     // Parse date to get day of week safely
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    const dayKey = DAY_MAP[date.getDay()];
+    const dayIndex = date.getDay();
+    const dayAliases = dayKeyAliases(dayIndex);
 
     // Check Previous Day for Overnight Spillover
     const prevDate = new Date(date);
     prevDate.setDate(date.getDate() - 1);
-    const prevDayKey = DAY_MAP[prevDate.getDay()];
+    const prevDayAliases = dayKeyAliases(prevDate.getDay());
 
     const apptStart = timeToMinutes(timeStr);
     const duration = getDuration(appointmentType, durationMinutes);
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
-    const prevSchedule = attendant.schedule?.[prevDayKey];
+    const prevSchedule = pickByAliases(attendant.schedule, prevDayAliases);
     if (prevSchedule) {
         const prevStart = timeToMinutes(prevSchedule.start);
         let prevEnd = timeToMinutes(prevSchedule.end);
@@ -76,7 +112,7 @@ export const isAttendantWithinSchedule = (
     }
 
     // 2. Check Current Day
-    const schedule = attendant.schedule?.[dayKey];
+    const schedule = pickByAliases(attendant.schedule, dayAliases);
     if (!schedule || !schedule.start || !schedule.end) return false;
 
     const startMinutes = timeToMinutes(schedule.start);
@@ -99,8 +135,9 @@ export const isAttendantWithinSchedule = (
 
     // Check pauses
     // Interval [apptStart, apptEnd) must not overlap with any pause [pauseStart, pauseEnd)
-    if (attendant.pauses && attendant.pauses[dayKey] && attendant.pauses[dayKey].length > 0) {
-        for (const pause of attendant.pauses[dayKey]) {
+    const pausesForDay = pickByAliases(attendant.pauses, dayAliases);
+    if (Array.isArray(pausesForDay) && pausesForDay.length > 0) {
+        for (const pause of pausesForDay) {
             const pauseStart = timeToMinutes(pause.start);
             const pauseEnd = timeToMinutes(pause.end);
 
