@@ -96,20 +96,16 @@ router.get('/available-times', async (req: Request, res: Response) => {
                 if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
                     APPOINTMENT_TYPE = 'Gold Call';
                 }
-
-                const isCloserType = ['Ligação Closer', 'Gold Call'].includes(APPOINTMENT_TYPE);
-                if (!isCloserType) {
-                    if (eventData.sector === 'Perpétuos') {
-                        sectors = ['Perpétuos'];
-                    } else if (eventData.sector === 'CEO') {
-                        sectors = ['CEO'];
-                        APPOINTMENT_TYPE = 'Agendamento Pessoal';
-                    } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
-                        sectors = [eventData.sector];
-                        APPOINTMENT_TYPE = 'Onboarding';
-                    } else {
-                        sectors = [eventData.sector];
-                    }
+                if (eventData.sector === 'Perpétuos') {
+                    sectors = ['Perpétuos'];
+                } else if (eventData.sector === 'CEO') {
+                    sectors = ['CEO'];
+                    APPOINTMENT_TYPE = 'Agendamento Pessoal';
+                } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+                    sectors = [eventData.sector];
+                    APPOINTMENT_TYPE = 'Onboarding';
+                } else if (eventData.sector) {
+                    sectors = [eventData.sector];
                 }
             }
         } else {

@@ -474,10 +474,10 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (updates.notes) updatePayload.notes = updates.notes;
 
         if (updates.studentProfile) {
-            updatePayload.interest_level = updates.studentProfile.interest;
-            updatePayload.knowledge_level = updates.studentProfile.knowledge;
-            updatePayload.financial_currency = updates.studentProfile.financial.currency;
-            updatePayload.financial_amount = updates.studentProfile.financial.amount;
+            if (updates.studentProfile.interest != null) updatePayload.interest_level = updates.studentProfile.interest;
+            if (updates.studentProfile.knowledge != null) updatePayload.knowledge_level = updates.studentProfile.knowledge;
+            if (updates.studentProfile.financial?.currency != null) updatePayload.financial_currency = updates.studentProfile.financial.currency;
+            if (updates.studentProfile.financial?.amount != null) updatePayload.financial_amount = updates.studentProfile.financial.amount;
         }
 
         if (req.body.updatedBy) updatePayload.updatedBy = req.body.updatedBy;
