@@ -46,6 +46,7 @@ export interface Appointment {
     email?: string;
     date: string;
     time: string;
+    end_time?: string;
     type: AppointmentType;
     status: AppointmentStatus;
     attendantId: string;
