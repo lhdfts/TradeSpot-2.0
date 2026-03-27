@@ -34,15 +34,16 @@ const pickByAliases = <T extends Record<string, any>>(obj: T | undefined, aliase
 };
 
 const dayKeyAliases = (dayIndex: number) => {
+    const isoDay = dayIndex === 0 ? 7 : dayIndex;
     switch (dayIndex) {
-        case 0: return ['sun', 'dom', 'domingo'];
-        case 1: return ['mon', 'seg', 'segunda', 'monday'];
-        case 2: return ['tue', 'ter', 'terca', 'terça', 'tuesday'];
-        case 3: return ['wed', 'qua', 'quarta', 'wednesday'];
-        case 4: return ['thu', 'qui', 'quinta', 'thursday'];
-        case 5: return ['fri', 'sex', 'sexta', 'friday'];
-        case 6: return ['sat', 'sab', 'sáb', 'sabado', 'sábado', 'saturday'];
-        default: return [DAY_MAP[dayIndex]];
+        case 0: return ['sun', 'dom', 'domingo', String(dayIndex), String(isoDay)];
+        case 1: return ['mon', 'seg', 'segunda', 'monday', String(dayIndex), String(isoDay)];
+        case 2: return ['tue', 'ter', 'terca', 'terça', 'tuesday', String(dayIndex), String(isoDay)];
+        case 3: return ['wed', 'qua', 'quarta', 'wednesday', String(dayIndex), String(isoDay)];
+        case 4: return ['thu', 'qui', 'quinta', 'thursday', String(dayIndex), String(isoDay)];
+        case 5: return ['fri', 'sex', 'sexta', 'friday', String(dayIndex), String(isoDay)];
+        case 6: return ['sat', 'sab', 'sáb', 'sabado', 'sábado', 'saturday', String(dayIndex), String(isoDay)];
+        default: return [DAY_MAP[dayIndex], String(dayIndex), String(isoDay)];
     }
 };
 
