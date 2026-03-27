@@ -503,7 +503,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (!formData.lead) { toastManager.add({ title: "Erro", description: "Nome é obrigatório", type: 'error' }); return; }
         if (!formData.phone) { toastManager.add({ title: "Erro", description: "Telefone é obrigatório", type: 'error' }); return; }
         if (!formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
-        if (String(formData.studentProfile.financial.amount) === '') {
+        const selectedEventForValidation = events.find(ev => ev.id === formData.eventId);
+        const isTriboAldeiaEvent = selectedEventForValidation?.sector === 'Tribo' || selectedEventForValidation?.sector === 'Aldeia';
+        if (!isTriboAldeiaEvent && String(formData.studentProfile.financial.amount) === '') {
             toastManager.add({ title: "Erro", description: "Valor do Perfil Financeiro é obrigatório", type: 'error' });
             return;
         }
@@ -1110,7 +1112,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                             if (errors.amount) setErrors(prev => ({ ...prev, amount: '' }));
                                         }}
                                         onBlur={() => {
-                                            if (!formData.studentProfile.financial.amount) {
+                                            const selectedEvent = events.find(ev => ev.id === formData.eventId);
+                                            const isTriboAldeiaEvent = selectedEvent?.sector === 'Tribo' || selectedEvent?.sector === 'Aldeia';
+                                            if (!isTriboAldeiaEvent && !formData.studentProfile.financial.amount) {
                                                 setErrors(prev => ({ ...prev, amount: 'Valor do Perfil Financeiro é obrigatório' }));
                                             }
                                         }}

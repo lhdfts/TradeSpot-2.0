@@ -33,16 +33,30 @@ const pickByAliases = <T extends Record<string, any>>(obj: T | undefined, aliase
     return undefined;
 };
 
+const coerceJsonObject = (value: any): Record<string, any> | undefined => {
+    if (!value) return undefined;
+    if (typeof value === 'object') return value as Record<string, any>;
+    if (typeof value !== 'string') return undefined;
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object') return parsed as Record<string, any>;
+    } catch {
+        return undefined;
+    }
+    return undefined;
+};
+
 const dayKeyAliases = (dayIndex: number) => {
+    const isoDay = dayIndex === 0 ? 7 : dayIndex;
     switch (dayIndex) {
-        case 0: return ['sun', 'dom', 'domingo'];
-        case 1: return ['mon', 'seg', 'segunda', 'monday'];
-        case 2: return ['tue', 'ter', 'terca', 'terça', 'tuesday'];
-        case 3: return ['wed', 'qua', 'quarta', 'wednesday'];
-        case 4: return ['thu', 'qui', 'quinta', 'thursday'];
-        case 5: return ['fri', 'sex', 'sexta', 'friday'];
-        case 6: return ['sat', 'sab', 'sáb', 'sabado', 'sábado', 'saturday'];
-        default: return [DAY_MAP[dayIndex]];
+        case 0: return ['sun', 'dom', 'domingo', String(dayIndex), String(isoDay)];
+        case 1: return ['mon', 'seg', 'segunda', 'monday', String(dayIndex), String(isoDay)];
+        case 2: return ['tue', 'ter', 'terca', 'terça', 'tuesday', String(dayIndex), String(isoDay)];
+        case 3: return ['wed', 'qua', 'quarta', 'wednesday', String(dayIndex), String(isoDay)];
+        case 4: return ['thu', 'qui', 'quinta', 'thursday', String(dayIndex), String(isoDay)];
+        case 5: return ['fri', 'sex', 'sexta', 'friday', String(dayIndex), String(isoDay)];
+        case 6: return ['sat', 'sab', 'sáb', 'sabado', 'sábado', 'saturday', String(dayIndex), String(isoDay)];
+        default: return [DAY_MAP[dayIndex], String(dayIndex), String(isoDay)];
     }
 };
 
@@ -78,7 +92,8 @@ export const isAttendantWithinSchedule = (
     appointmentType: string, // Added type to calculate duration
     durationMinutes?: number
 ): boolean => {
-    if (!attendant.schedule) return false;
+    const scheduleObj = coerceJsonObject(attendant.schedule);
+    if (!scheduleObj) return false;
 
     // Parse date to get day of week safely
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -96,7 +111,7 @@ export const isAttendantWithinSchedule = (
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
-    const prevSchedule = pickByAliases(attendant.schedule, prevDayAliases);
+    const prevSchedule = pickByAliases(scheduleObj, prevDayAliases);
     if (prevSchedule) {
         const prevStart = timeToMinutes(prevSchedule.start);
         let prevEnd = timeToMinutes(prevSchedule.end);
@@ -112,34 +127,37 @@ export const isAttendantWithinSchedule = (
     }
 
     // 2. Check Current Day
-    const schedule = pickByAliases(attendant.schedule, dayAliases);
+    const schedule = pickByAliases(scheduleObj, dayAliases);
     if (!schedule || !schedule.start || !schedule.end) return false;
 
     const startMinutes = timeToMinutes(schedule.start);
     let endMinutes = timeToMinutes(schedule.end);
-    if (endMinutes === 0) endMinutes = 1440;
 
-    // Normal Shift
-    if (startMinutes < endMinutes) {
-        if (apptStart < startMinutes || apptEnd > endMinutes) {
-            return false;
-        }
+    // Apply logic: treat as "crossed midnight" if end <= start
+    if (endMinutes <= startMinutes && endMinutes !== 0) {
+        endMinutes += 1440;
+    } else if (endMinutes === 0) {
+        endMinutes = 1440;
     }
-    // Overnight Shift (starts today, ends tomorrow)
-    else {
-        // Valid if starts after shift start (e.g. 23:00 >= 22:00)
-        if (apptStart < startMinutes) {
-            return false;
-        }
-    }
+
+    // Normal or Overnight Shift (now unified range)
+    if (apptStart < startMinutes || apptEnd > endMinutes) return false;
 
     // Check pauses
     // Interval [apptStart, apptEnd) must not overlap with any pause [pauseStart, pauseEnd)
-    const pausesForDay = pickByAliases(attendant.pauses, dayAliases);
+    const pausesObj = coerceJsonObject(attendant.pauses);
+    const pausesForDay = pausesObj ? pickByAliases(pausesObj, dayAliases) : undefined;
     if (Array.isArray(pausesForDay) && pausesForDay.length > 0) {
         for (const pause of pausesForDay) {
             const pauseStart = timeToMinutes(pause.start);
-            const pauseEnd = timeToMinutes(pause.end);
+            let pauseEnd = timeToMinutes(pause.end);
+
+            // Apply same midnight logic for pauses
+            if (pauseEnd <= pauseStart && pauseEnd !== 0) {
+                pauseEnd += 1440;
+            } else if (pauseEnd === 0) {
+                pauseEnd = 1440;
+            }
 
             // Check for overlap: (StartA < EndB) and (EndA > StartB)
             if (apptStart < pauseEnd && apptEnd > pauseStart) {
@@ -178,7 +196,20 @@ export const hasConflictingAppointment = (
 
         // Check overlap
         const existingStart = timeToMinutes(appt.time);
-        const existingEnd = existingStart + getDuration(appt.type);
+        
+        // Use end_time from DB if available, otherwise calculate it
+        let existingEnd: number;
+        if (appt.end_time) {
+            existingEnd = timeToMinutes(appt.end_time);
+            // APPLY USER LOGIC: if end_time <= start_time, it crossed midnight
+            if (existingEnd <= existingStart && existingEnd !== 0) {
+                existingEnd += 1440;
+            } else if (existingEnd === 0 && existingStart > 0) {
+                existingEnd = 1440;
+            }
+        } else {
+            existingEnd = existingStart + getDuration(appt.type);
+        }
 
         // Conflict if overlap exists
         return newStart < existingEnd && newEnd > existingStart;

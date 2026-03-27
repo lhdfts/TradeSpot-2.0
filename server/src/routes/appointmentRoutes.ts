@@ -50,10 +50,43 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         const { data: eventInfo } = await supabase
             .from('events')
-            .select('duration_minutes')
+            .select('duration_minutes, sector')
             .eq('id', data.eventId)
             .maybeSingle();
         const durationMinutes = eventInfo?.duration_minutes ?? undefined;
+        const eventSector = eventInfo?.sector ?? undefined;
+        const isTriboAldeiaEvent = eventSector === 'Tribo' || eventSector === 'Aldeia';
+
+        const studentProfile = isTriboAldeiaEvent
+            ? {
+                interest: data.studentProfile?.interest ?? 'Desconhecido',
+                knowledge: data.studentProfile?.knowledge ?? 'Iniciante',
+                financial: {
+                    currency: data.studentProfile?.financial?.currency ?? 'BRL',
+                    amount: data.studentProfile?.financial?.amount ?? 0
+                }
+            }
+            : data.studentProfile;
+
+        if (!isTriboAldeiaEvent) {
+            const hasProfile =
+                !!studentProfile &&
+                !!studentProfile.financial &&
+                !!studentProfile.financial.currency &&
+                studentProfile.financial.amount != null &&
+                String(studentProfile.financial.amount) !== '' &&
+                !!studentProfile.interest &&
+                !!studentProfile.knowledge;
+
+            if (!hasProfile) {
+                return res.status(400).json({
+                    error: 'Erro de Validação',
+                    details: {
+                        studentProfile: 'Perfil do aluno é obrigatório (interesse, conhecimento e perfil financeiro).'
+                    }
+                });
+            }
+        }
 
         // 0. Buffer Check (10 minutes)
         const now = new Date();
@@ -130,7 +163,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             .select('id, attendant_id, date, time, end_time, type, status')
             .eq('date', data.date)
             .eq('attendant_id', finalAttendantId)
-            .neq('status', 'Cancelado');
+            .neq('status', 'Cancelado')
+            .neq('status', 'Reagendado');
 
         if (data.type !== 'Fora da agenda' && existingAppts) {
             // @ts-ignore
@@ -144,7 +178,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         let clientId: string | null = null;
         const { data: existingClient } = await supabase.from('clients').select('id').eq('phone', cleanPhone).single();
 
-        let financialAmount = data.studentProfile.financial.amount;
+        let financialAmount = studentProfile?.financial?.amount ?? 0;
         if (typeof financialAmount === 'string') {
             const clean = financialAmount.replace(/\./g, '').replace(',', '.');
             const parsed = parseFloat(clean);
@@ -157,9 +191,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             name: data.lead,
             phone: cleanPhone,
             email: data.email,
-            interest_level: data.studentProfile.interest,
-            knowledge_level: data.studentProfile.knowledge,
-            financial_currency: data.studentProfile.financial.currency,
+            interest_level: studentProfile?.interest ?? 'Desconhecido',
+            knowledge_level: studentProfile?.knowledge ?? 'Iniciante',
+            financial_currency: studentProfile?.financial?.currency ?? 'BRL',
             financial_amount: financialAmount
         };
 
@@ -227,9 +261,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             notes: data.notes,
             additional_info: data.additionalInfo,
             google_event_id: googleEventId,
-            interest_level: data.studentProfile.interest,
-            knowledge_level: data.studentProfile.knowledge,
-            financial_currency: data.studentProfile.financial.currency,
+            interest_level: clientPayload.interest_level,
+            knowledge_level: clientPayload.knowledge_level,
+            financial_currency: clientPayload.financial_currency,
             financial_amount: financialAmount,
             created_at: new Date().toISOString(),
             // created_by logic
@@ -414,7 +448,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                             if (appt.id === id) return false; // Exclude self
 
                             const existingStart = timeToMinutes(appt.time);
-                            const existingEnd = appt.end_time ? timeToMinutes(appt.end_time) : (existingStart + getDuration(appt.type));
+                            let existingEnd = appt.end_time ? timeToMinutes(appt.end_time) : (existingStart + getDuration(appt.type));
+                            if (existingEnd <= existingStart) existingEnd += 1440;
                             return newStart < existingEnd && newEnd > existingStart;
                         });
 
@@ -441,10 +476,10 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (updates.notes) updatePayload.notes = updates.notes;
 
         if (updates.studentProfile) {
-            updatePayload.interest_level = updates.studentProfile.interest;
-            updatePayload.knowledge_level = updates.studentProfile.knowledge;
-            updatePayload.financial_currency = updates.studentProfile.financial.currency;
-            updatePayload.financial_amount = updates.studentProfile.financial.amount;
+            if (updates.studentProfile.interest != null) updatePayload.interest_level = updates.studentProfile.interest;
+            if (updates.studentProfile.knowledge != null) updatePayload.knowledge_level = updates.studentProfile.knowledge;
+            if (updates.studentProfile.financial?.currency != null) updatePayload.financial_currency = updates.studentProfile.financial.currency;
+            if (updates.studentProfile.financial?.amount != null) updatePayload.financial_amount = updates.studentProfile.financial.amount;
         }
 
         if (req.body.updatedBy) updatePayload.updatedBy = req.body.updatedBy;

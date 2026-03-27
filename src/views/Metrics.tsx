@@ -66,14 +66,22 @@ export const Metrics: React.FC = () => {
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-    const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
-    const [endDate, setEndDate] = useState(lastDay.toISOString().split('T')[0]);
+    // Format safely using local timezone to avoid UTC shifts
+    const formatLocalDate = (date: Date) => {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const [startDate, setStartDate] = useState(formatLocalDate(firstDay));
+    const [endDate, setEndDate] = useState(formatLocalDate(lastDay));
 
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
     const [uniqueClients, setUniqueClients] = useState('no'); // 'yes' or 'no'
 
-    const [availabilityDate, setAvailabilityDate] = useState(new Date().toISOString().split('T')[0]);
+    const [availabilityDate, setAvailabilityDate] = useState(formatLocalDate(today));
     const [availabilityAttendant, setAvailabilityAttendant] = useState('');
     const [availabilitySector, setAvailabilitySector] = useState('all');
 

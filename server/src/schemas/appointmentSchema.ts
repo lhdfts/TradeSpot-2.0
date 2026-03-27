@@ -29,28 +29,27 @@ export const createAppointmentSchema = z.object({
     // IDs (Validate UUID format or similar)
     eventId: z.string().min(1, "Evento é obrigatório"),
 
-    // Strict Enums
     studentProfile: z.object({
         financial: z.object({
             currency: z.enum(VALID_CURRENCIES, {
                 message: 'Selecione uma moeda válida'
-            }),
-            amount: z.union([z.string(), z.number()]).refine((val) => {
+            }).optional(),
+            amount: z.union([z.string(), z.number()]).optional().refine((val) => {
+                if (val == null) return true;
                 if (typeof val === 'number') return val <= 1000000;
-                if (!val) return true; // Empty string might be allowed or caught by min? Assuming required handled elsewhere or here.
-                // Brazil format: 1.000.000,00 -> 1000000.00
+                if (!val) return true;
                 const clean = val.replace(/\./g, '').replace(',', '.');
                 const num = parseFloat(clean);
                 return !isNaN(num) && num <= 1000000;
             }, { message: "O valor máximo permitido é 1.000.000,00" })
-        }),
+        }).optional(),
         interest: z.enum(VALID_INTEREST_LEVELS, {
             message: 'Nível de interesse inválido'
-        }),
+        }).optional(),
         knowledge: z.enum(VALID_KNOWLEDGE_LEVELS, {
             message: 'Nível de conhecimento inválido'
-        })
-    }),
+        }).optional()
+    }).optional(),
 
     type: z.enum(VALID_TYPES, {
         message: 'Tipo de agendamento inválido'

@@ -39,7 +39,14 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const [attendantFilter, setAttendantFilter] = useState('all');
     const [creatorFilter, setCreatorFilter] = useState('all');
     const [eventFilter, setEventFilter] = useState('all');
-    const [dateRange, setDateRange] = useState({ start: new Date().toISOString().split('T')[0], end: '' });
+
+    // Safe initial date using local timezone
+    const initialDate = new Date();
+    const yyyy = initialDate.getFullYear();
+    const mm = String(initialDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(initialDate.getDate()).padStart(2, '0');
+    const [dateRange, setDateRange] = useState({ start: `${yyyy}-${mm}-${dd}`, end: '' });
+
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
