@@ -163,7 +163,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             .select('id, attendant_id, date, time, end_time, type, status')
             .eq('date', data.date)
             .eq('attendant_id', finalAttendantId)
-            .neq('status', 'Cancelado');
+            .neq('status', 'Cancelado')
+            .neq('status', 'Reagendado');
 
         if (data.type !== 'Fora da agenda' && existingAppts) {
             // @ts-ignore
@@ -447,7 +448,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                             if (appt.id === id) return false; // Exclude self
 
                             const existingStart = timeToMinutes(appt.time);
-                            const existingEnd = appt.end_time ? timeToMinutes(appt.end_time) : (existingStart + getDuration(appt.type));
+                            let existingEnd = appt.end_time ? timeToMinutes(appt.end_time) : (existingStart + getDuration(appt.type));
+                            if (existingEnd <= existingStart) existingEnd += 1440;
                             return newStart < existingEnd && newEnd > existingStart;
                         });
 

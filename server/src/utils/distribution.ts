@@ -64,6 +64,19 @@ const pickByAliases = <T extends Record<string, any>>(obj: T | undefined, aliase
     return undefined;
 };
 
+const coerceJsonObject = (value: any): Record<string, any> | undefined => {
+    if (!value) return undefined;
+    if (typeof value === 'object') return value as Record<string, any>;
+    if (typeof value !== 'string') return undefined;
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object') return parsed as Record<string, any>;
+    } catch {
+        return undefined;
+    }
+    return undefined;
+};
+
 const dayKeyAliases = (dayIndex: number) => {
     const isoDay = dayIndex === 0 ? 7 : dayIndex;
     switch (dayIndex) {
@@ -99,10 +112,11 @@ export const isAttendantWithinSchedule = (
     appointmentType: string,
     durationMinutes?: number
 ): boolean => {
-    if (!attendant.schedule) return false;
+    const scheduleObj = coerceJsonObject(attendant.schedule);
+    if (!scheduleObj) return false;
 
     if (attendant.sector === 'CEO') {
-        const customDates = attendant.schedule.custom_dates || {};
+        const customDates = scheduleObj.custom_dates || {};
         const timesForDate = customDates[dateStr];
         // For CEO, they are only available if the exact time is listed in their custom_dates for that day
         return Array.isArray(timesForDate) && timesForDate.includes(timeStr);
@@ -118,8 +132,8 @@ export const isAttendantWithinSchedule = (
     prevDate.setDate(date.getDate() - 1);
     const prevDayAliases = dayKeyAliases(prevDate.getDay());
 
-    const schedule = pickByAliases(attendant.schedule, dayAliases);
-    const prevSchedule = pickByAliases(attendant.schedule, prevDayAliases);
+    const schedule = pickByAliases(scheduleObj, dayAliases);
+    const prevSchedule = pickByAliases(scheduleObj, prevDayAliases);
 
     const apptStart = timeToMinutes(timeStr);
     const duration = getDuration(appointmentType, durationMinutes);
@@ -146,24 +160,30 @@ export const isAttendantWithinSchedule = (
 
     const startMinutes = timeToMinutes(schedule.start);
     let endMinutes = timeToMinutes(schedule.end);
-    if (endMinutes === 0) endMinutes = 1440;
 
-    // Normal Shift
-    if (startMinutes < endMinutes) {
-        if (apptStart < startMinutes || apptEnd > endMinutes) return false;
-    }
-    // Overnight Shift (starts today, ends tomorrow)
-    else {
-        // Valid if starts after shift start (e.g. 23:00 >= 22:00)
-        // Ends can go into next day, so we just check start time boundary for today
-        if (apptStart < startMinutes) return false;
+    // Apply logic: treat as "crossed midnight" if end <= start
+    if (endMinutes <= startMinutes && endMinutes !== 0) {
+        endMinutes += 1440;
+    } else if (endMinutes === 0) {
+        endMinutes = 1440;
     }
 
-    const pausesForDay = pickByAliases(attendant.pauses, dayAliases);
+    // Normal or Overnight Shift (now unified range)
+    if (apptStart < startMinutes || apptEnd > endMinutes) return false;
+
+    const pausesObj = coerceJsonObject(attendant.pauses);
+    const pausesForDay = pausesObj ? pickByAliases(pausesObj, dayAliases) : undefined;
     if (Array.isArray(pausesForDay) && pausesForDay.length > 0) {
         for (const pause of pausesForDay) {
             const pauseStart = timeToMinutes(pause.start);
-            const pauseEnd = timeToMinutes(pause.end);
+            let pauseEnd = timeToMinutes(pause.end);
+
+            // Apply same midnight logic for pauses
+            if (pauseEnd <= pauseStart && pauseEnd !== 0) {
+                pauseEnd += 1440;
+            } else if (pauseEnd === 0) {
+                pauseEnd = 1440;
+            }
 
             // Check for overlap: (StartA < EndB) and (EndA > StartB)
             if (apptStart < pauseEnd && apptEnd > pauseStart) return false;
@@ -191,7 +211,21 @@ export const hasConflictingAppointment = (
         if (excludeId && appt.id === excludeId) return false; // Exclude self if updating
 
         const existingStart = timeToMinutes(appt.time);
-        const existingEnd = appt.end_time ? timeToMinutes(appt.end_time) : (existingStart + getDuration(appt.type));
+        
+        // Use end_time from DB if available, otherwise calculate it
+        let existingEnd: number;
+        if (appt.end_time) {
+            existingEnd = timeToMinutes(appt.end_time);
+            // APPLY USER LOGIC: if end_time <= start_time, it crossed midnight
+            if (existingEnd <= existingStart && existingEnd !== 0) {
+                existingEnd += 1440;
+            } else if (existingEnd === 0 && existingStart > 0) {
+                existingEnd = 1440;
+            }
+        } else {
+            existingEnd = existingStart + getDuration(appt.type);
+        }
+
         return newStart < existingEnd && newEnd > existingStart;
     });
 };

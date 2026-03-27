@@ -114,35 +114,38 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
         console.log('[AVAILABLE-TIMES] Using sectors:', sectors, '| Type:', APPOINTMENT_TYPE);
 
-        // 1. Fetch Attendants based on sector
-        let attendantsQuery = supabase.from('user').select('*');
-        
-        if (attendantId && typeof attendantId === 'string') {
-            // If specific attendant ID is provided, fetch that attendant regardless of sector
-            attendantsQuery = attendantsQuery.eq('id', attendantId);
-        } else {
-            // Otherwise, fetch by sectors
-            attendantsQuery = attendantsQuery.in('sector', sectors);
-        }
-        
-        const { data: attendants, error: attError } = await attendantsQuery;
+        const requestedAttendantId =
+            attendantId && typeof attendantId === 'string' && attendantId !== 'distribuicao_automatica'
+                ? attendantId
+                : null;
 
-        console.log('[AVAILABLE-TIMES] Attendants found:', attendants?.length || 0, attendants?.map(a => ({ name: a.name, sector: a.sector, hasSchedule: !!a.schedule })));
+        const fetchBySectors = async () => supabase.from('user').select('*').in('sector', sectors);
 
-        if (attError || !attendants) {
-            console.error("Error fetching attendants:", attError);
+        const { data: attendants, error: attError } = requestedAttendantId
+            ? await supabase.from('user').select('*').eq('id', requestedAttendantId)
+            : await fetchBySectors();
+
+        const shouldFallbackToSectors = requestedAttendantId && (!attendants || attendants.length === 0) && !attError;
+        const { data: attendantsFinal, error: attErrorFinal } = shouldFallbackToSectors
+            ? await fetchBySectors()
+            : { data: attendants, error: attError };
+
+        console.log('[AVAILABLE-TIMES] Attendants found:', attendantsFinal?.length || 0, attendantsFinal?.map(a => ({ name: a.name, sector: a.sector, hasSchedule: !!a.schedule })));
+
+        if (attErrorFinal || !attendantsFinal) {
+            console.error("Error fetching attendants:", attErrorFinal);
             return res.status(500).json({ error: 'Erro ao buscar atendentes' });
         }
 
         // Use attendants directly - already filtered by query above
         const filteredAttendants = eventIdStr
-            ? attendants.filter(a => !isAttendantBlockedForEvent(a.id, eventIdStr))
-            : attendants;
+            ? attendantsFinal.filter(a => !isAttendantBlockedForEvent(a.id, eventIdStr))
+            : attendantsFinal;
 
         // 2. Fetch Appointments for this date
         const { data: appointments, error: appError } = await supabase
             .from('appointments')
-            .select('id, attendant_id, date, time, type, status')
+            .select('id, attendant_id, date, time, end_time, type, status')
             .eq('date', date)
             .neq('status', 'Cancelado');
 
@@ -374,7 +377,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // VALIDAÇÃO FINAL DE CONFLITO (Double Booking)
         const { data: conflicts } = await supabase
             .from('appointments')
-            .select('id, attendant_id, date, time, type, status')
+            .select('id, attendant_id, date, time, end_time, type, status')
             .eq('date', data.date)
             .eq('attendant_id', finalAttendantId)
             .neq('status', 'Cancelado');
