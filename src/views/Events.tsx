@@ -20,6 +20,7 @@ export const Events: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
     const [activeTab, setActiveTab] = useState<'meus' | 'feeds'>('meus');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
 
     useEffect(() => {
         setPortalContainer(document.getElementById('header-actions'));
@@ -124,7 +125,13 @@ export const Events: React.FC = () => {
     const canExportEvents = user?.role === 'Dev' || user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Qualidade';
     const canManageEvents = canEditEvents || canExportEvents;
 
-    const displayEvents = activeTab === 'meus' ? events : feedEvents;
+    const displayEvents = activeTab === 'meus' 
+        ? events.filter(e => {
+            if (statusFilter === 'active') return e.status === true;
+            if (statusFilter === 'archived') return e.status === false;
+            return true;
+        })
+        : feedEvents.filter(e => e.status === true);
 
     return (
         <div className="space-y-6">
@@ -136,22 +143,50 @@ export const Events: React.FC = () => {
                 portalContainer
             )}
 
-            {(user?.sector === 'Closer' || user?.role === 'Admin' || user?.role === 'Dev') && (
-                <div className="flex gap-2 p-1 bg-muted/30 rounded-lg w-fit">
-                    <button
-                        onClick={() => setActiveTab('meus')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'meus' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                        Meus Eventos
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('feeds')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'feeds' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                        Eventos Recebidos ({feedEvents.length})
-                    </button>
-                </div>
-            )}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {(user?.sector === 'Closer' || user?.role === 'Admin' || user?.role === 'Dev') && (
+                    <div className="flex gap-2 p-1 bg-muted/30 rounded-lg w-fit">
+                        <button
+                            onClick={() => setActiveTab('meus')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'meus' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Meus Eventos
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('feeds')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'feeds' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Eventos Recebidos ({feedEvents.filter(e => e.status === true).length})
+                        </button>
+                    </div>
+                )}
+
+                {activeTab === 'meus' && (
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status:</span>
+                        <div className="flex gap-1 p-1 bg-muted/30 rounded-lg">
+                            <button
+                                onClick={() => setStatusFilter('all')}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                                Todos
+                            </button>
+                            <button
+                                onClick={() => setStatusFilter('active')}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'active' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                                Ativos
+                            </button>
+                            <button
+                                onClick={() => setStatusFilter('archived')}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'archived' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                                Arquivados
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
 
             <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
                 <table className="w-full text-left">
