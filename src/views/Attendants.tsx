@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import type { Attendant } from '../types';
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Trash2, Filter } from 'lucide-react';
 import { AttendantModal } from '../components/AttendantModal';
-import { FloatingSelect } from '../components/FloatingSelect';
+import { CustomSelect } from '../components/CustomSelect';
 
 import { useAuth } from '../context/AuthContext';
 import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
@@ -68,13 +68,14 @@ export const Attendants: React.FC = () => {
         <div className="space-y-6">
 
             {(canViewAllSectors(user) || isMedinaUser(user)) && (
-                <div className="flex items-center gap-2">
-                    <FloatingSelect
+                <div className="flex items-center gap-2 bg-surface p-2 rounded-xl border border-border w-fit">
+                    <Filter size={16} className="text-secondary" />
+                    <CustomSelect
                         label="Setor"
                         value={sectorFilter}
                         onChange={(e: any) => setSectorFilter(e.target.value)}
                         options={[
-                            { value: 'all', label: 'Todos' },
+                            { value: 'all', label: 'Todos os Setores' },
                             ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
                         ]}
                         className="w-40"
