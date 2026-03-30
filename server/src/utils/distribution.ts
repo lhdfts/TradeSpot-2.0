@@ -8,6 +8,7 @@ interface Attendant {
     sector: string;
     schedule: any;
     pauses: any;
+    denied_events?: string[]; // Array of event IDs (UUIDs)
 }
 interface Appointment {
     id: string;
@@ -25,81 +26,35 @@ const supabase = createClient(supabaseUrl!, supabaseKey!);
 
 // Event-specific blocklist: prevent specific closer(s) from receiving appointments
 // for a given event, even if they have schedule availability.
-const BLOCKED_ATTENDANTS_BY_EVENT: Record<string, string[]> = {
-    // event_id: df5f53c4-d659-4fa5-b779-627f6ec4f064
-    // closer user_id: 5b2553e4-6c1a-434d-909d-ae479f74faee
-    'df5f53c4-d659-4fa5-b779-627f6ec4f064': ['5b2553e4-6c1a-434d-909d-ae479f74faee']
-};
+// MOVED TO DYNAMIC CHECK via user.denied_events
 
-export const isAttendantBlockedForEvent = (attendantId?: string | null, eventId?: string | null): boolean => {
-    if (!attendantId || !eventId) return false;
-    const blockedIds = BLOCKED_ATTENDANTS_BY_EVENT[eventId];
-    if (!blockedIds || blockedIds.length === 0) return false;
-    return blockedIds.includes(attendantId);
+export const isAttendantBlockedForEvent = (
+    attendant: Attendant | null | undefined,
+    eventId?: string | null,
+    appointmentType?: string
+): boolean => {
+    if (!attendant || !eventId) return false;
+
+    // Exception: 'Upgrade' type is NEVER blocked, even if event is in denied_events
+    if (appointmentType === 'Upgrade') return false;
+
+    const deniedEvents = attendant.denied_events;
+    if (!deniedEvents || !Array.isArray(deniedEvents)) return false;
+
+    return deniedEvents.includes(eventId);
 };
 
 const DAY_MAP: Record<number, string> = {
     1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat', 0: 'sun'
 };
 
-const normalizeKey = (key: string) =>
-    key
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[\s_-]/g, '');
-
-const pickByAliases = <T extends Record<string, any>>(obj: T | undefined, aliases: string[]) => {
-    if (!obj) return undefined;
-    for (const alias of aliases) {
-        if (alias in obj) return obj[alias as keyof T];
-    }
-    const normalizedAliases = aliases.map(normalizeKey);
-    for (const [k, v] of Object.entries(obj)) {
-        const nk = normalizeKey(k);
-        for (const na of normalizedAliases) {
-            if (nk === na || nk.startsWith(na)) return v;
-        }
-    }
-    return undefined;
-};
-
-const coerceJsonObject = (value: any): Record<string, any> | undefined => {
-    if (!value) return undefined;
-    if (typeof value === 'object') return value as Record<string, any>;
-    if (typeof value !== 'string') return undefined;
-    try {
-        const parsed = JSON.parse(value);
-        if (parsed && typeof parsed === 'object') return parsed as Record<string, any>;
-    } catch {
-        return undefined;
-    }
-    return undefined;
-};
-
-const dayKeyAliases = (dayIndex: number) => {
-    const isoDay = dayIndex === 0 ? 7 : dayIndex;
-    switch (dayIndex) {
-        case 0: return ['sun', 'dom', 'domingo', String(dayIndex), String(isoDay)];
-        case 1: return ['mon', 'seg', 'segunda', 'monday', String(dayIndex), String(isoDay)];
-        case 2: return ['tue', 'ter', 'terca', 'terça', 'tuesday', String(dayIndex), String(isoDay)];
-        case 3: return ['wed', 'qua', 'quarta', 'wednesday', String(dayIndex), String(isoDay)];
-        case 4: return ['thu', 'qui', 'quinta', 'thursday', String(dayIndex), String(isoDay)];
-        case 5: return ['fri', 'sex', 'sexta', 'friday', String(dayIndex), String(isoDay)];
-        case 6: return ['sat', 'sab', 'sáb', 'sabado', 'sábado', 'saturday', String(dayIndex), String(isoDay)];
-        default: return [DAY_MAP[dayIndex], String(dayIndex), String(isoDay)];
-    }
-};
-
 export const timeToMinutes = (time: string): number => {
     if (!time) return 0;
-    const safeTime = time.length >= 5 ? time.slice(0, 5) : time;
-    const [h, m] = safeTime.split(':').map(Number);
+    const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
 };
 
-export const getDuration = (type: string, durationMinutes?: number): number => {
-    if (typeof durationMinutes === 'number' && Number.isFinite(durationMinutes) && durationMinutes > 0) return durationMinutes;
+export const getDuration = (type: string): number => {
     if (type === 'Ligação SDR') return 30;
     return 60; // Todos os outros (Closer, Upgrade, Pessoal, etc) duram 1 hora
 };
@@ -109,14 +64,12 @@ export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string,
     timeStr: string,
-    appointmentType: string,
-    durationMinutes?: number
+    appointmentType: string
 ): boolean => {
-    const scheduleObj = coerceJsonObject(attendant.schedule);
-    if (!scheduleObj) return false;
+    if (!attendant.schedule) return false;
 
     if (attendant.sector === 'CEO') {
-        const customDates = scheduleObj.custom_dates || {};
+        const customDates = attendant.schedule.custom_dates || {};
         const timesForDate = customDates[dateStr];
         // For CEO, they are only available if the exact time is listed in their custom_dates for that day
         return Array.isArray(timesForDate) && timesForDate.includes(timeStr);
@@ -124,19 +77,18 @@ export const isAttendantWithinSchedule = (
 
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    const dayIndex = date.getDay();
-    const dayAliases = dayKeyAliases(dayIndex);
+    const dayKey = DAY_MAP[date.getDay()];
 
     // Check Previous Day for Overnight Spillover
     const prevDate = new Date(date);
     prevDate.setDate(date.getDate() - 1);
-    const prevDayAliases = dayKeyAliases(prevDate.getDay());
+    const prevDayKey = DAY_MAP[prevDate.getDay()];
 
-    const schedule = pickByAliases(scheduleObj, dayAliases);
-    const prevSchedule = pickByAliases(scheduleObj, prevDayAliases);
+    const schedule = attendant.schedule?.[dayKey];
+    const prevSchedule = attendant.schedule?.[prevDayKey];
 
     const apptStart = timeToMinutes(timeStr);
-    const duration = getDuration(appointmentType, durationMinutes);
+    const duration = getDuration(appointmentType);
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
@@ -171,10 +123,8 @@ export const isAttendantWithinSchedule = (
     // Normal or Overnight Shift (now unified range)
     if (apptStart < startMinutes || apptEnd > endMinutes) return false;
 
-    const pausesObj = coerceJsonObject(attendant.pauses);
-    const pausesForDay = pausesObj ? pickByAliases(pausesObj, dayAliases) : undefined;
-    if (Array.isArray(pausesForDay) && pausesForDay.length > 0) {
-        for (const pause of pausesForDay) {
+    if (attendant.pauses && attendant.pauses[dayKey]) {
+        for (const pause of attendant.pauses[dayKey]) {
             const pauseStart = timeToMinutes(pause.start);
             let pauseEnd = timeToMinutes(pause.end);
 
@@ -199,11 +149,10 @@ export const hasConflictingAppointment = (
     timeStr: string,
     newType: string,
     appointments: Appointment[],
-    excludeId?: string,
-    durationMinutes?: number
+    excludeId?: string
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newType, durationMinutes);
+    const newEnd = newStart + getDuration(newType);
 
     return appointments.some(appt => {
         if (appt.attendant_id !== attendantId) return false;
@@ -234,8 +183,7 @@ export const findBestAttendant = async (
     date: string,
     time: string,
     type: string,
-    eventId?: string,
-    durationMinutes?: number
+    eventId?: string
 ): Promise<string | null> => {
     let sectors = ['Closer'];
     let roleFilter: string | null = null;
@@ -274,17 +222,14 @@ export const findBestAttendant = async (
     }
 
     // 2.5. Apply event-specific blocklist to prevent assigning blocked closers
-    const blockedIds = eventId ? (BLOCKED_ATTENDANTS_BY_EVENT[eventId] ?? []) : [];
-    const attendantsForEvent = blockedIds.length > 0
-        ? attendants.filter(a => !blockedIds.includes(a.id))
-        : attendants;
+    const attendantsForEvent = attendants.filter(a => !isAttendantBlockedForEvent(a, eventId, type));
 
     // 2. Fetch Appointments for this day to check load/conflicts
     const { data: appointments, error: appError } = await supabase
         .from('appointments')
         .select('id, attendant_id, date, time, end_time, type, status')
         .eq('date', date)
-        .eq('status', 'Pendente');
+        .neq('status', 'Cancelado'); // Ignore cancelled
 
     if (appError || !appointments) {
         console.error("Error fetching appointments:", appError);
@@ -292,7 +237,7 @@ export const findBestAttendant = async (
     }
 
     // 3. Filter by Schedule
-    const available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type, durationMinutes));
+    const available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type));
     if (available.length === 0) return null;
 
     // 4. Calculate Load
@@ -300,7 +245,7 @@ export const findBestAttendant = async (
         const load = appointments.filter(appt =>
             appt.attendant_id === a.id &&
             appt.status === 'Pendente' &&
-            appt.type !== 'Personal Appointment'
+            !['Agendamento Pessoal', 'Personal Appointment'].includes(appt.type)
         ).length;
         return { ...a, load };
     });
@@ -313,7 +258,7 @@ export const findBestAttendant = async (
 
     // 6. Check Conflicts
     for (const attendant of withLoad) {
-        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments, undefined, durationMinutes)) {
+        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments)) {
             return attendant.id;
         }
     }

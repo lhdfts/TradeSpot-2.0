@@ -16,6 +16,7 @@ export interface ApiService {
     };
     events: {
         list: () => Promise<Event[]>;
+        listFeeds: (sector: string) => Promise<Event[]>;
         create: (data: Omit<Event, 'id'>) => Promise<Event>;
         update: (id: string, data: Partial<Event>) => Promise<Event>;
         delete: (id: string) => Promise<void>;

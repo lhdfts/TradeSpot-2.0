@@ -37,6 +37,7 @@ export interface Attendant {
     pauses: {
         [key: string]: { start: string; end: string }[];
     };
+    denied_events?: string[]; // Array of event IDs
 }
 
 export interface Appointment {

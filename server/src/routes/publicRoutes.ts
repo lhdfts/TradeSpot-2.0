@@ -25,6 +25,64 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl!, supabaseKey!);
 
+router.get('/events/feeds', async (req: Request, res: Response) => {
+    const { sector } = req.query;
+    if (!sector || typeof sector !== 'string') {
+        return res.status(400).json({ error: 'Setor é obrigatório' });
+    }
+
+    try {
+        // 1. Get events from the same sector
+        const { data: sectorEvents, error: sectorError } = await supabase
+            .from('events')
+            .select('*')
+            .eq('sector', sector);
+
+        if (sectorError) throw sectorError;
+
+        // 2. Get events that generated appointments for this sector in the last 30 days
+        // Closer types: ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade']
+        const closerTypes = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'];
+        
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+        const { data: apptEvents, error: apptError } = await supabase
+            .from('appointments')
+            .select('event_id')
+            .in('type', closerTypes)
+            .gte('date', dateStr)
+            .not('event_id', 'is', null);
+
+        if (apptError) throw apptError;
+
+        const uniqueEventIds = Array.from(new Set(apptEvents.map(a => a.event_id)));
+        
+        // Fetch those extra events if not already in sectorEvents
+        const existingIds = sectorEvents.map(e => e.id);
+        const extraIds = uniqueEventIds.filter(id => !existingIds.includes(id));
+
+        let allEvents = [...sectorEvents];
+
+        if (extraIds.length > 0) {
+            const { data: extraEvents, error: extraError } = await supabase
+                .from('events')
+                .select('*')
+                .in('id', extraIds);
+            
+            if (!extraError && extraEvents) {
+                allEvents = [...allEvents, ...extraEvents];
+            }
+        }
+
+        res.json(allEvents);
+    } catch (err: any) {
+        console.error("Feeds Fetch Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
 // --- GET Event by Link ---
 router.get('/events/:link', async (req: Request, res: Response) => {
     const { link } = req.params;
@@ -96,16 +154,20 @@ router.get('/available-times', async (req: Request, res: Response) => {
                 if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
                     APPOINTMENT_TYPE = 'Gold Call';
                 }
-                if (eventData.sector === 'Perpétuos') {
-                    sectors = ['Perpétuos'];
-                } else if (eventData.sector === 'CEO') {
-                    sectors = ['CEO'];
-                    APPOINTMENT_TYPE = 'Agendamento Pessoal';
-                } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
-                    sectors = [eventData.sector];
-                    APPOINTMENT_TYPE = 'Onboarding';
-                } else if (eventData.sector) {
-                    sectors = [eventData.sector];
+
+                const isCloserType = ['Ligação Closer', 'Gold Call'].includes(APPOINTMENT_TYPE);
+                if (!isCloserType) {
+                    if (eventData.sector === 'Perpétuos') {
+                        sectors = ['Perpétuos'];
+                    } else if (eventData.sector === 'CEO') {
+                        sectors = ['CEO'];
+                        APPOINTMENT_TYPE = 'Agendamento Pessoal';
+                    } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+                        sectors = [eventData.sector];
+                        APPOINTMENT_TYPE = 'Onboarding';
+                    } else {
+                        sectors = [eventData.sector];
+                    }
                 }
             }
         } else {
@@ -114,40 +176,37 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
         console.log('[AVAILABLE-TIMES] Using sectors:', sectors, '| Type:', APPOINTMENT_TYPE);
 
-        const requestedAttendantId =
-            attendantId && typeof attendantId === 'string' && attendantId !== 'distribuicao_automatica'
-                ? attendantId
-                : null;
+        // 1. Fetch Attendants based on sector
+        let attendantsQuery = supabase.from('user').select('*');
+        
+        if (attendantId && typeof attendantId === 'string') {
+            // If specific attendant ID is provided, fetch that attendant regardless of sector
+            attendantsQuery = attendantsQuery.eq('id', attendantId);
+        } else {
+            // Otherwise, fetch by sectors
+            attendantsQuery = attendantsQuery.in('sector', sectors);
+        }
+        
+        const { data: attendants, error: attError } = await attendantsQuery;
 
-        const fetchBySectors = async () => supabase.from('user').select('*').in('sector', sectors);
+        console.log('[AVAILABLE-TIMES] Attendants found:', attendants?.length || 0, attendants?.map(a => ({ name: a.name, sector: a.sector, hasSchedule: !!a.schedule })));
 
-        const { data: attendants, error: attError } = requestedAttendantId
-            ? await supabase.from('user').select('*').eq('id', requestedAttendantId)
-            : await fetchBySectors();
-
-        const shouldFallbackToSectors = requestedAttendantId && (!attendants || attendants.length === 0) && !attError;
-        const { data: attendantsFinal, error: attErrorFinal } = shouldFallbackToSectors
-            ? await fetchBySectors()
-            : { data: attendants, error: attError };
-
-        console.log('[AVAILABLE-TIMES] Attendants found:', attendantsFinal?.length || 0, attendantsFinal?.map(a => ({ name: a.name, sector: a.sector, hasSchedule: !!a.schedule })));
-
-        if (attErrorFinal || !attendantsFinal) {
-            console.error("Error fetching attendants:", attErrorFinal);
+        if (attError || !attendants) {
+            console.error("Error fetching attendants:", attError);
             return res.status(500).json({ error: 'Erro ao buscar atendentes' });
         }
 
         // Use attendants directly - already filtered by query above
         const filteredAttendants = eventIdStr
-            ? attendantsFinal.filter(a => !isAttendantBlockedForEvent(a.id, eventIdStr))
-            : attendantsFinal;
+            ? attendants.filter(a => !isAttendantBlockedForEvent(a, eventIdStr, APPOINTMENT_TYPE))
+            : attendants;
 
         // 2. Fetch Appointments for this date
         const { data: appointments, error: appError } = await supabase
             .from('appointments')
-            .select('id, attendant_id, date, time, end_time, type, status')
+            .select('id, attendant_id, date, time, type, status')
             .eq('date', date)
-            .eq('status', 'Pendente');
+            .neq('status', 'Cancelado');
 
         if (appError) {
             console.error("Error fetching appointments:", appError);

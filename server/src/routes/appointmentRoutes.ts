@@ -22,9 +22,11 @@ const supabase = createClient(supabaseUrl!, supabaseKey!);
 
 // --- Helper Logic ---
 
-const calculateEndTime = (startTime: string, type: string, durationMinutes?: number): string => {
-    let duration = durationMinutes ?? 60;
-    if (type === 'Ligação SDR' && durationMinutes == null) duration = 30;
+const calculateEndTime = (startTime: string, type: string): string => {
+    let duration = 60;
+    if (type === 'Ligação SDR') {
+        duration = 30;
+    }
     const [hours, minutes] = startTime.split(':').map(Number);
     const totalMinutes = hours * 60 + minutes + duration;
     const endHours = Math.floor(totalMinutes / 60) % 24;
@@ -47,47 +49,6 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         const data = validation.data;
-
-        const { data: eventInfo } = await supabase
-            .from('events')
-            .select('duration_minutes, sector')
-            .eq('id', data.eventId)
-            .maybeSingle();
-        const durationMinutes = eventInfo?.duration_minutes ?? undefined;
-        const eventSector = eventInfo?.sector ?? undefined;
-        const isTriboAldeiaEvent = eventSector === 'Tribo' || eventSector === 'Aldeia';
-
-        const studentProfile = isTriboAldeiaEvent
-            ? {
-                interest: data.studentProfile?.interest ?? 'Desconhecido',
-                knowledge: data.studentProfile?.knowledge ?? 'Iniciante',
-                financial: {
-                    currency: data.studentProfile?.financial?.currency ?? 'BRL',
-                    amount: data.studentProfile?.financial?.amount ?? 0
-                }
-            }
-            : data.studentProfile;
-
-        if (!isTriboAldeiaEvent) {
-            const hasProfile =
-                !!studentProfile &&
-                !!studentProfile.financial &&
-                !!studentProfile.financial.currency &&
-                studentProfile.financial.amount != null &&
-                String(studentProfile.financial.amount) !== '' &&
-                !!studentProfile.interest &&
-                !!studentProfile.knowledge;
-
-            if (!hasProfile) {
-                return res.status(400).json({
-                    error: 'Erro de Validação',
-                    details: {
-                        studentProfile: 'Perfil do aluno é obrigatório (interesse, conhecimento e perfil financeiro).'
-                    }
-                });
-            }
-        }
-
         // 0. Buffer Check (10 minutes)
         const now = new Date();
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Brasilia time is UTC-3
@@ -102,13 +63,12 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         // Agent Logic
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId, durationMinutes);
+            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId);
             if (!availableId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
             }
             finalAttendantId = availableId;
         } else {
-            // Manual/Pre-resolved Selection - Verify Schedule & Conflicts Strictly
             const { data: attendant, error: attError } = await supabase
                 .from('user')
                 .select('*')
@@ -117,6 +77,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
             if (attError || !attendant) {
                 return res.status(400).json({ error: 'Atendente não encontrado.' });
+            }
+
+            // BLOCKED EVENTS CHECK
+            if (isAttendantBlockedForEvent(attendant, data.eventId, data.type)) {
+                return res.status(409).json({
+                    error: `O atendente ${attendant.name} está bloqueado para este evento.`
+                });
             }
 
             // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
@@ -141,7 +108,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
 
             if (data.type !== 'Fora da agenda') {
-                const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type, durationMinutes);
+                const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type);
                 if (!isWithinSchedule) {
                     return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
                 }
@@ -155,7 +122,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             });
         }
 
-        const endTime = calculateEndTime(data.time, data.type, durationMinutes);
+        const endTime = calculateEndTime(data.time, data.type);
 
         // 3. Conflict Check (Range Based)
         const { data: existingAppts } = await supabase
@@ -163,12 +130,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             .select('id, attendant_id, date, time, end_time, type, status')
             .eq('date', data.date)
             .eq('attendant_id', finalAttendantId)
-            .neq('status', 'Cancelado')
-            .neq('status', 'Reagendado');
+            .neq('status', 'Cancelado');
 
         if (data.type !== 'Fora da agenda' && existingAppts) {
             // @ts-ignore
-            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts, undefined, durationMinutes);
+            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts);
             if (hasConflict) {
                 return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
             }
@@ -178,7 +144,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         let clientId: string | null = null;
         const { data: existingClient } = await supabase.from('clients').select('id').eq('phone', cleanPhone).single();
 
-        let financialAmount = studentProfile?.financial?.amount ?? 0;
+        let financialAmount = data.studentProfile.financial.amount;
         if (typeof financialAmount === 'string') {
             const clean = financialAmount.replace(/\./g, '').replace(',', '.');
             const parsed = parseFloat(clean);
@@ -191,9 +157,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             name: data.lead,
             phone: cleanPhone,
             email: data.email,
-            interest_level: studentProfile?.interest ?? 'Desconhecido',
-            knowledge_level: studentProfile?.knowledge ?? 'Iniciante',
-            financial_currency: studentProfile?.financial?.currency ?? 'BRL',
+            interest_level: data.studentProfile.interest,
+            knowledge_level: data.studentProfile.knowledge,
+            financial_currency: data.studentProfile.financial.currency,
             financial_amount: financialAmount
         };
 
@@ -261,9 +227,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             notes: data.notes,
             additional_info: data.additionalInfo,
             google_event_id: googleEventId,
-            interest_level: clientPayload.interest_level,
-            knowledge_level: clientPayload.knowledge_level,
-            financial_currency: clientPayload.financial_currency,
+            interest_level: data.studentProfile.interest,
+            knowledge_level: data.studentProfile.knowledge,
+            financial_currency: data.studentProfile.financial.currency,
             financial_amount: financialAmount,
             created_at: new Date().toISOString(),
             // created_by logic
@@ -376,16 +342,6 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (fetchError || !currentApp) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
         const merged = { ...currentApp, ...updates };
-        const mergedEventId = (updates as any).eventId || (merged as any).event_id || (merged as any).eventId;
-        let durationMinutes: number | undefined = undefined;
-        if (mergedEventId) {
-            const { data: eventInfo } = await supabase
-                .from('events')
-                .select('duration_minutes')
-                .eq('id', mergedEventId)
-                .maybeSingle();
-            durationMinutes = eventInfo?.duration_minutes ?? undefined;
-        }
 
         // Event-specific blocklist for assignment changes only
         const isAttendantChangeRequested = typeof (updates as any).attendantId === 'string' && (updates as any).attendantId.length > 0;
@@ -393,14 +349,17 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         const targetEventId = isEventChangeRequested ? (updates as any).eventId : (currentApp as any).event_id;
         const targetAttendantId = isAttendantChangeRequested ? (updates as any).attendantId : (currentApp as any).attendant_id;
 
-        if ((isAttendantChangeRequested || isEventChangeRequested) && isAttendantBlockedForEvent(targetAttendantId, targetEventId)) {
-            return res.status(409).json({
-                error: 'Este atendente está bloqueado para este evento.'
-            });
+        if (isAttendantChangeRequested || isEventChangeRequested) {
+            const { data: targetAttendant } = await supabase.from('user').select('*').eq('id', targetAttendantId).single();
+            if (targetAttendant && isAttendantBlockedForEvent(targetAttendant, targetEventId, updates.type || currentApp.type)) {
+                return res.status(409).json({
+                    error: 'Este atendente está bloqueado para este evento.'
+                });
+            }
         }
 
         if (updates.time || updates.type) {
-            merged.end_time = calculateEndTime(merged.time, merged.type, durationMinutes);
+            merged.end_time = calculateEndTime(merged.time, merged.type);
         }
 
         // Logic Check
@@ -412,7 +371,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
                 if (merged.type !== 'Fora da agenda') {
-                    const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type, durationMinutes);
+                    const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type);
                     console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
 
                     if (!isWithin) {
@@ -434,13 +393,13 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
                 if (merged.type !== 'Fora da agenda' && existingAppts) {
                     // Pass 'id' as the 6th argument to exclude current appointment from conflict check
-                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id, durationMinutes);
+                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id);
                     console.log(`[DEBUG] hasConflict result: ${hasConflict}`);
 
                     if (hasConflict) {
                         // Find specific conflicting appointment for logging
                         const newStart = timeToMinutes(merged.time);
-                        const newEnd = newStart + getDuration(merged.type, durationMinutes);
+                        const newEnd = newStart + getDuration(merged.type);
 
                         const collidingAppt = existingAppts.find(appt => {
                             if (appt.attendant_id !== merged.attendant_id) return false;
@@ -448,8 +407,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                             if (appt.id === id) return false; // Exclude self
 
                             const existingStart = timeToMinutes(appt.time);
-                            let existingEnd = appt.end_time ? timeToMinutes(appt.end_time) : (existingStart + getDuration(appt.type));
-                            if (existingEnd <= existingStart) existingEnd += 1440;
+                            const existingEnd = existingStart + getDuration(appt.type);
                             return newStart < existingEnd && newEnd > existingStart;
                         });
 
@@ -476,10 +434,10 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (updates.notes) updatePayload.notes = updates.notes;
 
         if (updates.studentProfile) {
-            if (updates.studentProfile.interest != null) updatePayload.interest_level = updates.studentProfile.interest;
-            if (updates.studentProfile.knowledge != null) updatePayload.knowledge_level = updates.studentProfile.knowledge;
-            if (updates.studentProfile.financial?.currency != null) updatePayload.financial_currency = updates.studentProfile.financial.currency;
-            if (updates.studentProfile.financial?.amount != null) updatePayload.financial_amount = updates.studentProfile.financial.amount;
+            updatePayload.interest_level = updates.studentProfile.interest;
+            updatePayload.knowledge_level = updates.studentProfile.knowledge;
+            updatePayload.financial_currency = updates.studentProfile.financial.currency;
+            updatePayload.financial_amount = updates.studentProfile.financial.amount;
         }
 
         if (req.body.updatedBy) updatePayload.updatedBy = req.body.updatedBy;

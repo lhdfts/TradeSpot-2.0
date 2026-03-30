@@ -14,10 +14,12 @@ export const Events: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const [events, setEvents] = useState<Event[]>([]);
+    const [feedEvents, setFeedEvents] = useState<Event[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
     const [loading, setLoading] = useState(true);
     const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
+    const [activeTab, setActiveTab] = useState<'meus' | 'feeds'>('meus');
 
     useEffect(() => {
         setPortalContainer(document.getElementById('header-actions'));
@@ -38,6 +40,14 @@ export const Events: React.FC = () => {
                     : data.filter(event => event.sector === user?.sector);
 
             setEvents(filteredData);
+
+            // If Closer, also fetch feeds
+            if (user?.sector === 'Closer' || isSuperUser) {
+                const feeds = await api.events.listFeeds(user?.sector === 'Closer' ? 'Closer' : 'Closer');
+                // Only show feeds that are NOT in the regular list to avoid duplicates
+                const regularIds = filteredData.map(e => e.id);
+                setFeedEvents(feeds.filter(f => !regularIds.includes(f.id)));
+            }
         } catch (error) {
             console.error('Failed to fetch events', error);
         } finally {
@@ -114,6 +124,8 @@ export const Events: React.FC = () => {
     const canExportEvents = user?.role === 'Dev' || user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Qualidade';
     const canManageEvents = canEditEvents || canExportEvents;
 
+    const displayEvents = activeTab === 'meus' ? events : feedEvents;
+
     return (
         <div className="space-y-6">
 
@@ -122,6 +134,23 @@ export const Events: React.FC = () => {
                     <Plus size={18} className="mr-2" /> Novo Evento
                 </Button>,
                 portalContainer
+            )}
+
+            {(user?.sector === 'Closer' || user?.role === 'Admin' || user?.role === 'Dev') && (
+                <div className="flex gap-2 p-1 bg-muted/30 rounded-lg w-fit">
+                    <button
+                        onClick={() => setActiveTab('meus')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'meus' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                        Meus Eventos
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('feeds')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'feeds' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                        Feeds de Agendamento ({feedEvents.length})
+                    </button>
+                </div>
             )}
 
             <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
@@ -137,7 +166,7 @@ export const Events: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {events.map(event => (
+                        {displayEvents.map(event => (
                             <tr key={event.id} className="hover:bg-background/50 transition-colors">
                                 <td className="px-6 py-4 text-foreground font-medium">
                                     <span
