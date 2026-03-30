@@ -13,11 +13,21 @@ import { FloatingSelect } from '../components/FloatingSelect';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { CalendarView } from '../components/CalendarView';
 import { toastManager } from '../components/ui/toast';
-import { sanitizeInput } from '../utils/security';
+import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
 
 interface AllAppointmentsProps {
     onEdit: (appt: Appointment) => void;
 }
+
+const getBrazilTodayISO = () => {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    });
+    return formatter.format(new Date()); // YYYY-MM-DD no fuso de Brasília
+};
 
 export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const { appointments } = useAppointments();
@@ -39,14 +49,8 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const [attendantFilter, setAttendantFilter] = useState('all');
     const [creatorFilter, setCreatorFilter] = useState('all');
     const [eventFilter, setEventFilter] = useState('all');
-
-    // Safe initial date using local timezone
-    const initialDate = new Date();
-    const yyyy = initialDate.getFullYear();
-    const mm = String(initialDate.getMonth() + 1).padStart(2, '0');
-    const dd = String(initialDate.getDate()).padStart(2, '0');
-    const [dateRange, setDateRange] = useState({ start: `${yyyy}-${mm}-${dd}`, end: '' });
-
+    const [sectorFilter, setSectorFilter] = useState('all');
+    const [dateRange, setDateRange] = useState({ start: getBrazilTodayISO(), end: '' });
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
@@ -85,7 +89,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     // Reset pagination when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, statusFilter, attendantFilter, creatorFilter, eventFilter, dateRange]);
+    }, [search, statusFilter, attendantFilter, creatorFilter, eventFilter, sectorFilter, dateRange]);
 
     // Filter Logic
     const filtered = appointments.filter(a => {
@@ -102,6 +106,11 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         const matchesCreator = creatorFilter === 'all' || (a.createdBy && a.createdBy === creatorFilter);
 
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
+
+        const matchesSectorFilter = sectorFilter === 'all' || (() => {
+            const linkedAttendant = attendants.find(att => att.id === a.attendantId);
+            return linkedAttendant?.sector === sectorFilter;
+        })();
 
         // Updated: If searching, IGNORE date filter (Global Search)
         let matchesDate = true;
@@ -124,54 +133,31 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             }
         }
 
-        // Sector restrictions
+        // Sector restrictions (Fixed for Medina and TEI)
+        const allowedSectors = getAllowedSectors(user);
         let matchesSector = true;
-        const isSuperUser = user?.sector === 'TEI' || ['Dev', 'Admin', 'Qualidade'].includes(user?.role || '');
-        const isSuporte = user?.sector === 'Suporte';
-        if (!isSuperUser && !isSuporte && user?.sector) {
-            if (user.sector === 'Perpétuos') {
+        
+        // If not a global viewer (TEI or Medina with limited list), enforce restricted view
+        if (!canViewAllSectors(user) && !isMedinaUser(user)) {
+            if (user?.sector === 'Perpétuos') {
                 const linkedEvent = events.find(e => e.id === a.eventId);
                 matchesSector = !!linkedEvent && linkedEvent.sector === 'Perpétuos';
-            } else {
-                const linkedEvent = events.find(e => e.id === a.eventId);
+            } else if (user?.sector === 'Tribo') {
                 const linkedAttendant = attendants.find(att => att.id === a.attendantId);
-                matchesSector = linkedAttendant?.sector === user.sector || linkedEvent?.sector === user.sector;
+                matchesSector = !!linkedAttendant && linkedAttendant.sector === 'Tribo';
             }
+        } else {
+            // For TEI and Medina, we filter by their allowed sectors
+            const linkedAttendant = attendants.find(att => att.id === a.attendantId);
+            matchesSector = !!linkedAttendant && allowedSectors.includes(linkedAttendant.sector);
         }
 
-        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesDate && matchesSector;
+        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesSectorFilter && matchesDate && matchesSector;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
         return dateA.getTime() - dateB.getTime(); // Ascending for closest appointments first
     });
-
-    const eventOptions = React.useMemo(() => {
-        const isSuperUser = user?.sector === 'TEI' || ['Dev', 'Admin', 'Qualidade'].includes(user?.role || '');
-        const isSuporte = user?.sector === 'Suporte';
-        const activeEvents = events.filter(ev => ev.status === true);
-
-        if (isSuperUser || isSuporte || !user?.sector) {
-            const uniqueById = new Map(activeEvents.map(e => [e.id, e]));
-            return Array.from(uniqueById.values())
-                .sort((a, b) => a.event_name.localeCompare(b.event_name, 'pt-BR', { sensitivity: 'base' }))
-                .map(ev => ({ value: ev.id, label: ev.event_name }));
-        }
-
-        const attendantById = new Map(attendants.map(a => [a.id, a]));
-        const allowedEventIdsByAttendant = new Set(
-            appointments
-                .filter(a => attendantById.get(a.attendantId)?.sector === user.sector)
-                .map(a => a.eventId)
-                .filter(Boolean)
-        );
-
-        const filteredEvents = activeEvents.filter(ev => ev.sector === user.sector || allowedEventIdsByAttendant.has(ev.id));
-        const uniqueById = new Map(filteredEvents.map(e => [e.id, e]));
-        return Array.from(uniqueById.values())
-            .sort((a, b) => a.event_name.localeCompare(b.event_name, 'pt-BR', { sensitivity: 'base' }))
-            .map(ev => ({ value: ev.id, label: ev.event_name }));
-    }, [appointments, attendants, events, user?.role, user?.sector]);
 
     // Pagination Logic
     const totalPages = Math.ceil(filtered.length / itemsPerPage);
@@ -277,6 +263,18 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         ]}
                     />
 
+                    {(canViewAllSectors(user) || isMedinaUser(user)) && (
+                        <FloatingSelect
+                            label="Setor"
+                            value={sectorFilter}
+                            onChange={(e: any) => setSectorFilter(e.target.value)}
+                            options={[
+                                { value: 'all', label: 'Todos' },
+                                ...getAllowedSectors(user).map(s => ({ value: s, label: s }))
+                            ]}
+                        />
+                    )}
+
                     <FloatingSelect
                         label="Atendente"
                         value={attendantFilter}
@@ -293,7 +291,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         onChange={(e: any) => setEventFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos' },
-                            ...eventOptions
+                            ...events.filter(ev => ev.status === true).map(ev => ({ value: ev.id, label: ev.event_name }))
                         ]}
                     />
 

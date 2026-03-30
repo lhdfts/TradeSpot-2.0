@@ -9,6 +9,7 @@ import { EventModal } from '../components/EventModal';
 import { ExportIcon } from '../components/ExportIcon';
 
 import { useAuth } from '../context/AuthContext';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
 
 export const Events: React.FC = () => {
     const navigate = useNavigate();
@@ -21,6 +22,7 @@ export const Events: React.FC = () => {
     const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
     const [activeTab, setActiveTab] = useState<'meus' | 'feeds'>('meus');
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
+    const [sectorFilter, setSectorFilter] = useState<string>('all');
 
     useEffect(() => {
         setPortalContainer(document.getElementById('header-actions'));
@@ -31,19 +33,20 @@ export const Events: React.FC = () => {
         try {
             const data = await api.events.list();
 
-            // Filter events based on role/sector
-            const isSuperUser = user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.sector === 'TEI';
+            // Filter events based on role/sector (Medina and TEI logic)
+            const allowedSectors = getAllowedSectors(user);
+            const isSuperUser = canViewAllSectors(user) || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade';
 
-            const filteredData = isSuperUser
-                ? data
+            const filteredData = isSuperUser || isMedinaUser(user)
+                ? data.filter(event => allowedSectors.includes(event.sector || ''))
                 : user?.sector === 'Suporte'
                     ? data.filter(event => ['Tribo', 'Aldeia', 'SDR', 'Closer'].includes(event.sector || ''))
                     : data.filter(event => event.sector === user?.sector);
 
             setEvents(filteredData);
 
-            // If Closer, also fetch feeds
-            if (user?.sector === 'Closer' || isSuperUser) {
+            // If Closer or Medina or TEI, also fetch feeds
+            if (user?.sector === 'Closer' || isSuperUser || isMedinaUser(user)) {
                 const feeds = await api.events.listFeeds(user?.sector === 'Closer' ? 'Closer' : 'Closer');
                 // Only show feeds that are NOT in the regular list to avoid duplicates
                 const regularIds = filteredData.map(e => e.id);
@@ -125,13 +128,14 @@ export const Events: React.FC = () => {
     const canExportEvents = user?.role === 'Dev' || user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Qualidade';
     const canManageEvents = canEditEvents || canExportEvents;
 
-    const displayEvents = activeTab === 'meus' 
+    const displayEvents = (activeTab === 'meus' 
         ? events.filter(e => {
-            if (statusFilter === 'active') return e.status === true;
-            if (statusFilter === 'archived') return e.status === false;
-            return true;
+            const matchesStatus = statusFilter === 'active' ? e.status === true : (statusFilter === 'archived' ? e.status === false : true);
+            const matchesSector = sectorFilter === 'all' || e.sector === sectorFilter;
+            return matchesStatus && matchesSector;
         })
-        : feedEvents.filter(e => e.status === true);
+        : feedEvents.filter(e => e.status === true && (sectorFilter === 'all' || e.sector === sectorFilter))
+    );
 
     return (
         <div className="space-y-6">
@@ -144,7 +148,7 @@ export const Events: React.FC = () => {
             )}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                {(user?.sector === 'Closer' || user?.role === 'Admin' || user?.role === 'Dev') && (
+                {(user?.sector === 'Closer' || canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev') && (
                     <div className="flex gap-2 p-1 bg-muted/30 rounded-lg w-fit">
                         <button
                             onClick={() => setActiveTab('meus')}
@@ -161,31 +165,56 @@ export const Events: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'meus' && (
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status:</span>
-                        <div className="flex gap-1 p-1 bg-muted/30 rounded-lg">
-                            <button
-                                onClick={() => setStatusFilter('all')}
-                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                            >
-                                Todos
-                            </button>
-                            <button
-                                onClick={() => setStatusFilter('active')}
-                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'active' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                            >
-                                Ativos
-                            </button>
-                            <button
-                                onClick={() => setStatusFilter('archived')}
-                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'archived' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                            >
-                                Arquivados
-                            </button>
+                <div className="flex flex-wrap items-center gap-4">
+                    {(canViewAllSectors(user) || isMedinaUser(user)) && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Setor:</span>
+                            <div className="flex gap-1 p-1 bg-muted/30 rounded-lg overflow-x-auto max-w-[300px] no-scrollbar">
+                                <button
+                                    onClick={() => setSectorFilter('all')}
+                                    className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all ${sectorFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                >
+                                    Todos
+                                </button>
+                                {getAllowedSectors(user).map(sector => (
+                                    <button
+                                        key={sector}
+                                        onClick={() => setSectorFilter(sector)}
+                                        className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all ${sectorFilter === sector ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                    >
+                                        {sector}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
+
+                    {activeTab === 'meus' && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status:</span>
+                            <div className="flex gap-1 p-1 bg-muted/30 rounded-lg">
+                                <button
+                                    onClick={() => setStatusFilter('all')}
+                                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                >
+                                    Todos
+                                </button>
+                                <button
+                                    onClick={() => setStatusFilter('active')}
+                                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'active' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                >
+                                    Ativos
+                                </button>
+                                <button
+                                    onClick={() => setStatusFilter('archived')}
+                                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'archived' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                >
+                                    Arquivados
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">

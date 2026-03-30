@@ -39,3 +39,20 @@ export const sanitizeInput = {
         return number.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 };
+
+export const canViewAllSectors = (user: { email?: string; sector?: string; id?: string } | null | undefined) => {
+    if (!user) return false;
+    return user.sector === 'TEI';
+};
+
+export const isMedinaUser = (user: { email?: string; id?: string } | null | undefined) => {
+    if (!user) return false;
+    return user.email === 'medina@tradestars.com.br' || user.id === '216557f7-03be-447c-ab6a-094460504da1';
+};
+
+export const getAllowedSectors = (user: { email?: string; sector?: string; id?: string } | null | undefined) => {
+    if (!user) return [];
+    if (canViewAllSectors(user)) return ['Aldeia', 'Closer', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller'];
+    if (isMedinaUser(user)) return ['SDR', 'Aldeia', 'Tribo'];
+    return user.sector ? [user.sector] : [];
+};

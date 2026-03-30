@@ -6,6 +6,7 @@ import { Edit, Trash2 } from 'lucide-react';
 import { AttendantModal } from '../components/AttendantModal';
 
 import { useAuth } from '../context/AuthContext';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
 
 export const Attendants: React.FC = () => {
     const { user } = useAuth();
@@ -14,21 +15,19 @@ export const Attendants: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAttendant, setSelectedAttendant] = useState<Attendant | null>(null);
     const [loading, setLoading] = useState(true);
+    const [sectorFilter, setSectorFilter] = useState<string>('all');
 
     const fetchAttendants = async () => {
         setLoading(true);
         try {
             const data = await api.attendants.list();
-            if (user?.role === 'Dev' || user?.sector === 'TEI') {
-                setAttendants(data);
+            const allowedSectors = getAllowedSectors(user);
+
+            if (canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev') {
+                setAttendants(data.filter(a => allowedSectors.includes(a.sector)));
             } else if (user?.sector) {
                 setAttendants(data.filter(a => a.sector === user.sector));
             } else {
-                // Fallback: If no sector defined on user, maybe show none or all? 
-                // Let's assume strict privacy: show none, or maybe just their own if ID matches (but Attendants page is usually for managers).
-                // However, the rule "Colaborador: metrics, attendants and events -> SHOULDNT have access" handles the page access.
-                // The users reaching here are Lider/Admin. Admin usually has no sector or global.
-                // Let's safe default to data for Admin/Lider if they managed to get here.
                 setAttendants(data);
             }
         } catch (error) {
@@ -40,7 +39,7 @@ export const Attendants: React.FC = () => {
 
     useEffect(() => {
         fetchAttendants();
-    }, []);
+    }, [user]);
 
     const handleEdit = (attendant: Attendant) => {
         setSelectedAttendant(attendant);
@@ -60,9 +59,35 @@ export const Attendants: React.FC = () => {
 
     if (loading) return <div>Carregando...</div>;
 
+    const displayAttendants = sectorFilter === 'all' 
+        ? attendants 
+        : attendants.filter(a => a.sector === sectorFilter);
+
     return (
         <div className="space-y-6">
 
+            {(canViewAllSectors(user) || isMedinaUser(user)) && (
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Setor:</span>
+                    <div className="flex gap-1 p-1 bg-muted/30 rounded-lg overflow-x-auto max-w-full no-scrollbar">
+                        <button
+                            onClick={() => setSectorFilter('all')}
+                            className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all ${sectorFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Todos
+                        </button>
+                        {getAllowedSectors(user).map(sector => (
+                            <button
+                                key={sector}
+                                onClick={() => setSectorFilter(sector)}
+                                className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all ${sectorFilter === sector ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                                {sector}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
                 <table className="w-full text-left">
@@ -76,7 +101,7 @@ export const Attendants: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {attendants.map(attendant => (
+                        {displayAttendants.map(attendant => (
                             <tr key={attendant.id} className="hover:bg-background/50 transition-colors">
                                 <td className="px-6 py-4 text-foreground font-medium">
                                     <span

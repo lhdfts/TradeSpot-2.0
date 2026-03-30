@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
 import { ExportIcon } from '../components/ExportIcon';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
 import {
     ComposedChart,
     Bar,
@@ -66,22 +67,14 @@ export const Metrics: React.FC = () => {
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-    // Format safely using local timezone to avoid UTC shifts
-    const formatLocalDate = (date: Date) => {
-        const yyyy = date.getFullYear();
-        const mm = String(date.getMonth() + 1).padStart(2, '0');
-        const dd = String(date.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-    };
-
-    const [startDate, setStartDate] = useState(formatLocalDate(firstDay));
-    const [endDate, setEndDate] = useState(formatLocalDate(lastDay));
+    const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(lastDay.toISOString().split('T')[0]);
 
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
     const [uniqueClients, setUniqueClients] = useState('no'); // 'yes' or 'no'
 
-    const [availabilityDate, setAvailabilityDate] = useState(formatLocalDate(today));
+    const [availabilityDate, setAvailabilityDate] = useState(new Date().toISOString().split('T')[0]);
     const [availabilityAttendant, setAvailabilityAttendant] = useState('');
     const [availabilitySector, setAvailabilitySector] = useState('all');
 
@@ -129,8 +122,6 @@ export const Metrics: React.FC = () => {
     // --- DATA CALCULATION ---
     const { sdrRanking, closerRanking, chartData, totals, filteredAppointments, sdrTotal, closerTotal, chartTotal, availabilityGrid } = useMemo(() => {
         // 1. Filter Appointments by Date & Event
-        const isSuperUser = user?.sector === 'TEI' || ['Dev', 'Admin', 'Qualidade'].includes(user?.role || '');
-        const isSuporte = user?.sector === 'Suporte';
         let filtered = appointments.filter(a => {
             if (!a.date) return false;
 
@@ -143,13 +134,6 @@ export const Metrics: React.FC = () => {
 
             // Event Filter
             if (eventFilter && a.eventId !== eventFilter) return false;
-
-            if (!isSuperUser && !isSuporte && user?.sector) {
-                const creator = a.createdBy ? attendants.find(att => att.id === a.createdBy) : undefined;
-                const attendant = a.attendantId ? attendants.find(att => att.id === a.attendantId) : undefined;
-                const matchesSector = creator?.sector === user.sector || attendant?.sector === user.sector;
-                if (!matchesSector) return false;
-            }
 
             // Sector Filter (Basic filtering for chart/totals)
             if (sectorFilter !== 'all') {
@@ -495,17 +479,15 @@ export const Metrics: React.FC = () => {
                         />
                     </div>
 
-                    {/* Sector Filter for Admin/Dev/Qualidade */}
-                    {(user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
+                    {/* Sector Filter for Admin/Dev/Qualidade/TEI/Medina */}
+                    {(canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
                         <FloatingSelect
                             label="Setor"
                             value={sectorFilter}
                             onChange={(e: any) => setSectorFilter(e.target.value)}
                             options={[
                                 { value: 'all', label: 'Todos os Setores' },
-                                { value: 'SDR', label: 'SDR' },
-                                { value: 'Closer', label: 'Closer' },
-                                { value: 'Perpétuos', label: 'Perpétuos' }
+                                ...getAllowedSectors(user).map(s => ({ value: s, label: s }))
                             ]}
                             className="w-40"
                         />
