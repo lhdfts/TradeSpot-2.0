@@ -191,12 +191,12 @@ export class SupabaseApiService implements ApiService {
         },
         update: async (id: string, data: Partial<Attendant>): Promise<Attendant> => {
             const updateData: any = {};
-            if (data.name) updateData.name = data.name;
-            if (data.role) updateData.role = data.role;
-            if (data.sector) updateData.sector = data.sector;
-            if (data.schedule) updateData.schedule = data.schedule;
-            if (data.pauses) updateData.pauses = data.pauses;
-            if (data.denied_events) updateData.denied_events = data.denied_events;
+            if (data.name !== undefined) updateData.name = data.name;
+            if (data.role !== undefined) updateData.role = data.role;
+            if (data.sector !== undefined) updateData.sector = data.sector;
+            if (data.schedule !== undefined) updateData.schedule = data.schedule;
+            if (data.pauses !== undefined) updateData.pauses = data.pauses;
+            if (data.denied_events !== undefined) updateData.denied_events = data.denied_events;
 
             const { data: userData, error } = await supabase
                 .from('user')

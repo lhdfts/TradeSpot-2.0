@@ -38,6 +38,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
     const [attendants, setAttendants] = useState<Attendant[]>([]);
     const [allowedAttendants, setAllowedAttendants] = useState<string[]>([]);
     const [loadingAttendants, setLoadingAttendants] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     const isSuperUser = user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.sector === 'TEI';
     const isSuporte = user?.sector === 'Suporte';
@@ -63,9 +64,18 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
         setLoadingAttendants(true);
         try {
             const allAttendants = await api.attendants.list();
-            // Filter only Closers (or relevant sectors that could receive this event)
-            // For now, let's show Closers if it's a closer-related event or all from sector
-            const sectorAttendants = allAttendants.filter(a => a.sector === 'Closer' || a.sector === formData.sector);
+            
+            // If the current user is a Closer (leader/etc), they should ONLY manage Closers
+            // regardless of the event sector (could be an SDR event feeding into Closer).
+            // For other sectors, show the event's sector attendants.
+            let sectorAttendants: Attendant[] = [];
+            
+            if (user?.sector === 'Closer') {
+                sectorAttendants = allAttendants.filter(a => a.sector === 'Closer');
+            } else {
+                sectorAttendants = allAttendants.filter(a => a.sector === formData.sector);
+            }
+            
             setAttendants(sectorAttendants);
 
             if (event) {
@@ -84,6 +94,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setSaving(true);
         try {
             const dataToSubmit = {
                 ...formData,
@@ -113,7 +124,8 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
             if (savedEventId) {
                 const updatePromises = attendants.map(att => {
                     const isAllowed = allowedAttendants.includes(att.id);
-                    let newDeniedEvents = [...(att.denied_events || [])];
+                    let currentDenied = att.denied_events || [];
+                    let newDeniedEvents = [...currentDenied];
 
                     if (isAllowed) {
                         // Remove from denied if it was there
@@ -125,8 +137,9 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                         }
                     }
 
-                    // Only update if changed
-                    const hasChanged = JSON.stringify(newDeniedEvents) !== JSON.stringify(att.denied_events || []);
+                    // Only update if changed (compare strings for simple array equality)
+                    const hasChanged = JSON.stringify([...newDeniedEvents].sort()) !== JSON.stringify([...currentDenied].sort());
+                    
                     if (hasChanged) {
                         return api.attendants.update(att.id, { denied_events: newDeniedEvents });
                     }
@@ -140,6 +153,9 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
             onClose();
         } catch (error) {
             console.error('Failed to save event', error);
+            alert('Erro ao salvar evento ou permissões de atendentes.');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -261,8 +277,10 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                 </Tabs>
 
                 <div className="flex justify-end gap-2 pt-4 border-t">
-                    <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-                    <Button type="submit">Salvar</Button>
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+                    <Button type="submit" disabled={saving}>
+                        {saving ? 'Salvando...' : 'Salvar'}
+                    </Button>
                 </div>
             </form>
         </Modal>
