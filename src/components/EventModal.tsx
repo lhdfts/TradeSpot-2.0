@@ -47,24 +47,31 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
     useEffect(() => {
         if (event) {
             setFormData(event);
-            fetchAttendants();
+            fetchAttendants(event.sector);
         } else {
+            const initialSector = canEditSector ? '' : (user?.sector || '');
             setFormData({
                 event_name: '',
                 status: true,
-                sector: canEditSector ? '' : (user?.sector || ''),
+                sector: initialSector,
                 duration_minutes: 60
             });
             setAttendants([]);
             setAllowedAttendants([]);
+            if (initialSector) {
+                fetchAttendants(initialSector);
+            }
         }
     }, [event, isOpen, user, isSuperUser, isSuporte, canEditSector]);
 
-    const fetchAttendants = async () => {
+    const fetchAttendants = async (targetSector?: string) => {
         setLoadingAttendants(true);
         try {
             const allAttendants = await api.attendants.list();
             
+            // Use the passed sector or fallback to user sector/formData
+            const sectorToUse = targetSector || formData.sector;
+
             // If the current user is a Closer (leader/etc), they should ONLY manage Closers
             // regardless of the event sector (could be an SDR event feeding into Closer).
             // For other sectors, show the event's sector attendants.
@@ -72,8 +79,8 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
             
             if (user?.sector === 'Closer') {
                 sectorAttendants = allAttendants.filter(a => a.sector === 'Closer');
-            } else {
-                sectorAttendants = allAttendants.filter(a => a.sector === formData.sector);
+            } else if (sectorToUse) {
+                sectorAttendants = allAttendants.filter(a => a.sector === sectorToUse);
             }
             
             setAttendants(sectorAttendants);
@@ -199,7 +206,11 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                         <Select
                             label="Setor"
                             value={formData.sector || ''}
-                            onChange={(e: any) => setFormData({ ...formData, sector: e.target.value })}
+                            onChange={(e: any) => {
+                                const newSector = e.target.value;
+                                setFormData({ ...formData, sector: newSector });
+                                fetchAttendants(newSector);
+                            }}
                             options={[
                                 { value: 'Aldeia', label: 'Aldeia' },
                                 { value: 'Closer', label: 'Closer' },
