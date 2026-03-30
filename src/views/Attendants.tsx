@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import type { Attendant } from '../types';
 import { Edit, Trash2 } from 'lucide-react';
 import { AttendantModal } from '../components/AttendantModal';
+import { FloatingSelect } from '../components/FloatingSelect';
 
 import { useAuth } from '../context/AuthContext';
 import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
@@ -68,24 +69,16 @@ export const Attendants: React.FC = () => {
 
             {(canViewAllSectors(user) || isMedinaUser(user)) && (
                 <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Setor:</span>
-                    <div className="flex gap-1 p-1 bg-muted/30 rounded-lg overflow-x-auto max-w-full no-scrollbar">
-                        <button
-                            onClick={() => setSectorFilter('all')}
-                            className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all ${sectorFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                        >
-                            Todos
-                        </button>
-                        {getAllowedSectors(user).map(sector => (
-                            <button
-                                key={sector}
-                                onClick={() => setSectorFilter(sector)}
-                                className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all ${sectorFilter === sector ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                            >
-                                {sector}
-                            </button>
-                        ))}
-                    </div>
+                    <FloatingSelect
+                        label="Setor"
+                        value={sectorFilter}
+                        onChange={(e: any) => setSectorFilter(e.target.value)}
+                        options={[
+                            { value: 'all', label: 'Todos' },
+                            ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
+                        ]}
+                        className="w-40"
+                    />
                 </div>
             )}
 
