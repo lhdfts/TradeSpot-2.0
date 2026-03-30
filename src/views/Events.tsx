@@ -148,7 +148,7 @@ export const Events: React.FC = () => {
                         onClick={() => setActiveTab('feeds')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'feeds' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                     >
-                        Feeds de Agendamento ({feedEvents.length})
+                        Eventos Recebidos ({feedEvents.length})
                     </button>
                 </div>
             )}
