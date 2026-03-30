@@ -169,9 +169,21 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
         <Modal isOpen={isOpen} onClose={onClose} title={event ? 'Editar Evento' : 'Novo Evento'}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Tabs defaultValue="geral">
-                    <TabsList className="mb-4">
-                        <TabsTrigger value="geral">Geral</TabsTrigger>
-                        {event && <TabsTrigger value="atendentes">Recebimento</TabsTrigger>}
+                    <TabsList className="mb-6 bg-muted/30 p-1 gap-2 rounded-lg w-fit">
+                        <TabsTrigger 
+                            value="geral"
+                            className="px-4 py-2 rounded-md data-[active]:bg-background data-[active]:text-foreground data-[active]:shadow-sm text-muted-foreground hover:text-foreground transition-all"
+                        >
+                            Geral
+                        </TabsTrigger>
+                        {event && (
+                            <TabsTrigger 
+                                value="atendentes"
+                                className="px-4 py-2 rounded-md data-[active]:bg-background data-[active]:text-foreground data-[active]:shadow-sm text-muted-foreground hover:text-foreground transition-all"
+                            >
+                                Recebimento
+                            </TabsTrigger>
+                        )}
                     </TabsList>
 
                     <TabsContent value="geral" className="space-y-4">
