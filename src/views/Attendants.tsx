@@ -4,7 +4,7 @@ import { api } from '../services/api';
 import type { Attendant } from '../types';
 import { Edit, Trash2 } from 'lucide-react';
 import { AttendantModal } from '../components/AttendantModal';
-import { CustomSelect } from '../components/CustomSelect';
+import { FloatingSelect } from '../components/FloatingSelect';
 
 import { useAuth } from '../context/AuthContext';
 import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
@@ -68,7 +68,7 @@ export const Attendants: React.FC = () => {
         <div className="space-y-6">
 
             {(canViewAllSectors(user) || isMedinaUser(user)) && (
-                <CustomSelect
+                <FloatingSelect
                     label="Setor"
                     value={sectorFilter}
                     onChange={(e: any) => setSectorFilter(e.target.value)}

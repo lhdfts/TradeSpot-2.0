@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import type { Event } from '../types';
 import { Button } from '../components/ui/button';
-import { CustomSelect } from '../components/CustomSelect';
+import { FloatingSelect } from '../components/FloatingSelect';
 import { Plus, Edit } from 'lucide-react';
 import { EventModal } from '../components/EventModal';
 import { ExportIcon } from '../components/ExportIcon';
@@ -168,7 +168,7 @@ export const Events: React.FC = () => {
 
                 <div className="flex flex-wrap items-center gap-4">
                     {(canViewAllSectors(user) || isMedinaUser(user)) && (
-                        <CustomSelect
+                        <FloatingSelect
                             label="Setor"
                             value={sectorFilter}
                             onChange={(e: any) => setSectorFilter(e.target.value)}
@@ -181,29 +181,17 @@ export const Events: React.FC = () => {
                     )}
 
                     {activeTab === 'meus' && (
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status:</span>
-                            <div className="flex gap-1 p-1 bg-muted/30 rounded-lg">
-                                <button
-                                    onClick={() => setStatusFilter('all')}
-                                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                                >
-                                    Todos
-                                </button>
-                                <button
-                                    onClick={() => setStatusFilter('active')}
-                                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'active' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                                >
-                                    Ativos
-                                </button>
-                                <button
-                                    onClick={() => setStatusFilter('archived')}
-                                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${statusFilter === 'archived' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                                >
-                                    Arquivados
-                                </button>
-                            </div>
-                        </div>
+                        <FloatingSelect
+                            label="Status"
+                            value={statusFilter}
+                            onChange={(e: any) => setStatusFilter(e.target.value as any)}
+                            options={[
+                                { value: 'all', label: 'Todos' },
+                                { value: 'active', label: 'Ativos' },
+                                { value: 'archived', label: 'Arquivados' }
+                            ]}
+                            className="w-40"
+                        />
                     )}
                 </div>
             </div>
