@@ -151,30 +151,26 @@ router.get('/available-times', async (req: Request, res: Response) => {
             const { data: eventData, error: eventError } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
             console.log('[AVAILABLE-TIMES] Event lookup:', { eventId, eventData, eventError });
             if (eventData) {
+                // 1. Determine base Appointment Type
                 if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
                     APPOINTMENT_TYPE = 'Gold Call';
                 }
 
-                const isCloserType = ['Ligação Closer', 'Gold Call'].includes(APPOINTMENT_TYPE);
-                if (!isCloserType) {
-                    if (eventData.sector === 'Perpétuos') {
-                        sectors = ['Perpétuos'];
-                    } else if (eventData.sector === 'CEO') {
-                        sectors = ['CEO'];
-                        APPOINTMENT_TYPE = 'Agendamento Pessoal';
-                    } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
-                        sectors = [eventData.sector];
-                        APPOINTMENT_TYPE = 'Onboarding';
-                    } else {
-                        sectors = [eventData.sector];
-                    }
-                } else if (eventData.sector === 'Closer') {
-                    // Force Closer sector for Closer/Gold Call types if event sector is Closer
+                // 2. Sector-specific overrides for Availability
+                if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+                    sectors = [eventData.sector];
+                    APPOINTMENT_TYPE = 'Onboarding';
+                } else if (eventData.sector === 'CEO') {
+                    sectors = ['CEO'];
+                    APPOINTMENT_TYPE = 'Agendamento Pessoal';
+                } else if (eventData.sector === 'Perpétuos') {
+                    sectors = ['Perpétuos'];
+                } else if (eventData.sector === 'SDR' || eventData.sector === 'Closer') {
+                    // SDR events feed into Closer availability
                     sectors = ['Closer'];
-                } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
-                    // Special case: if it's a closer type but event is from Aldeia/Tribo (SDR event feeding closer)
-                    // We still need to find a Closer, but the sectors query should be 'Closer'
-                    sectors = ['Closer'];
+                } else {
+                    // Default fallback
+                    sectors = [eventData.sector];
                 }
             }
         } else {

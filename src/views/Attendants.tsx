@@ -114,16 +114,23 @@ export const Attendants: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 text-foreground">{attendant.role}</td>
                                 <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
-                                        <button
-                                            onClick={() => handleEdit(attendant)}
-                                            className="p-1 text-secondary hover:text-foreground transition-colors"
-                                            title="Editar Atendente"
-                                        >
-                                            <Edit size={18} />
-                                        </button>
-                                    </div>
-                                </td>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={() => handleEdit(attendant)}
+                                        className="p-1 text-secondary hover:text-foreground transition-colors"
+                                        title="Editar Atendente"
+                                    >
+                                        <Edit size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(attendant.id)}
+                                        className="p-1 text-secondary hover:text-destructive transition-colors"
+                                        title="Excluir Atendente"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            </td>
                             </tr>
                         ))}
                     </tbody>
