@@ -21,7 +21,7 @@ export const publicRateLimiter = rateLimit({
  */
 export const strictPublicRateLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 20, // Increased to 20 appointment creations per hour per IP
+    max: 6, // Limit each IP to 6 appointment creations per hour
     message: {
         error: 'Limite de agendamentos atingido para este período. Por favor, aguarde um momento ou tente de outro dispositivo.'
     },
