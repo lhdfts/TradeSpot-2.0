@@ -176,7 +176,7 @@ export const Events: React.FC = () => {
                                 { value: 'all', label: 'Todos os Setores' },
                                 ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
                             ]}
-                            className="w-44"
+                            className="w-48"
                         />
                     )}
 
