@@ -7,7 +7,7 @@ import type { Request } from 'express';
  */
 export const publicRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // Limit each IP to 10 requests per window
+    max: 100, // Increased to 100 requests per window
     message: {
         error: 'Muitas requisições. Por favor, aguarde alguns minutos antes de tentar novamente.'
     },
@@ -17,13 +17,13 @@ export const publicRateLimiter = rateLimit({
 
 /**
  * Stricter rate limiter for appointment creation via public link
- * Only 2 appointments per hour per IP to prevent spam
+ * Prevents spam while allowing legitimate business usage
  */
 export const strictPublicRateLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 2, // Limit each IP to 2 appointment creations per hour
+    max: 20, // Increased to 20 appointment creations per hour per IP
     message: {
-        error: 'Limite de agendamentos atingido. Por favor, aguarde uma hora antes de tentar novamente.'
+        error: 'Limite de agendamentos atingido para este período. Por favor, aguarde um momento ou tente de outro dispositivo.'
     },
     standardHeaders: true,
     legacyHeaders: false,
