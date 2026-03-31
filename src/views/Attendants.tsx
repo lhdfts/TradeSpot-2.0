@@ -68,19 +68,16 @@ export const Attendants: React.FC = () => {
         <div className="space-y-6">
 
             {(canViewAllSectors(user) || isMedinaUser(user)) && (
-                <div className="flex items-center gap-2 bg-surface p-2 rounded-xl border border-border w-fit">
-                    <Filter size={16} className="text-secondary" />
-                    <CustomSelect
-                        label="Setor"
-                        value={sectorFilter}
-                        onChange={(e: any) => setSectorFilter(e.target.value)}
-                        options={[
-                            { value: 'all', label: 'Todos os Setores' },
-                            ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
-                        ]}
-                        className="w-40"
-                    />
-                </div>
+                <CustomSelect
+                    label="Setor"
+                    value={sectorFilter}
+                    onChange={(e: any) => setSectorFilter(e.target.value)}
+                    options={[
+                        { value: 'all', label: 'Todos os Setores' },
+                        ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
+                    ]}
+                    className="w-44"
+                />
             )}
 
             <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">

@@ -168,19 +168,16 @@ export const Events: React.FC = () => {
 
                 <div className="flex flex-wrap items-center gap-4">
                     {(canViewAllSectors(user) || isMedinaUser(user)) && (
-                        <div className="flex items-center gap-2 bg-surface p-2 rounded-xl border border-border">
-                            <Filter size={16} className="text-secondary" />
-                            <CustomSelect
-                                label="Setor"
-                                value={sectorFilter}
-                                onChange={(e: any) => setSectorFilter(e.target.value)}
-                                options={[
-                                    { value: 'all', label: 'Todos os Setores' },
-                                    ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
-                                ]}
-                                className="w-40"
-                            />
-                        </div>
+                        <CustomSelect
+                            label="Setor"
+                            value={sectorFilter}
+                            onChange={(e: any) => setSectorFilter(e.target.value)}
+                            options={[
+                                { value: 'all', label: 'Todos os Setores' },
+                                ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
+                            ]}
+                            className="w-44"
+                        />
                     )}
 
                     {activeTab === 'meus' && (
