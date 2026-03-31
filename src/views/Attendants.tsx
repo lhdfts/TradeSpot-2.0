@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import type { Attendant } from '../types';
-import { Edit, Trash2, Filter } from 'lucide-react';
+import { Edit, Trash2 } from 'lucide-react';
 import { AttendantModal } from '../components/AttendantModal';
 import { CustomSelect } from '../components/CustomSelect';
 

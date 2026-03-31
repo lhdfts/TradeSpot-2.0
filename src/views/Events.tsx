@@ -5,7 +5,7 @@ import { api } from '../services/api';
 import type { Event } from '../types';
 import { Button } from '../components/ui/button';
 import { CustomSelect } from '../components/CustomSelect';
-import { Plus, Edit, Filter } from 'lucide-react';
+import { Plus, Edit } from 'lucide-react';
 import { EventModal } from '../components/EventModal';
 import { ExportIcon } from '../components/ExportIcon';
 
