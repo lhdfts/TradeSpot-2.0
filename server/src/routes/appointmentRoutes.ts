@@ -285,8 +285,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
         }
         if (data.eventId) {
-            const { data: ev } = await supabase.from('events').select('event_name').eq('id', data.eventId).single();
-            if (ev) names.event_name = ev.event_name;
+            const { data: ev } = await supabase.from('events').select('event_name, sector').eq('id', data.eventId).single();
+            if (ev) {
+                names.event_name = ev.event_name;
+                names.event_sector = ev.sector;
+            }
         }
 
         const webhookResponse = {
@@ -296,6 +299,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             created_by_name: names.created_by_name,
             creator_sector: names.creator_sector,
             event_name: names.event_name,
+            event_sector: names.event_sector,
             attendant_id: undefined, created_by: undefined, event_id: undefined
         };
 
@@ -524,14 +528,17 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                     if (att) enrichedPayload.attendant_name = att.name;
                 }
 
-                // 3. Fetch Event Name
+                // 3. Fetch Event Details (name and sector)
                 if (updated.event_id) {
                     const { data: ev } = await supabase
                         .from('events')
-                        .select('event_name')
+                        .select('event_name, sector')
                         .eq('id', updated.event_id)
                         .single();
-                    if (ev) enrichedPayload.event_name = ev.event_name;
+                    if (ev) {
+                        enrichedPayload.event_name = ev.event_name;
+                        enrichedPayload.event_sector = ev.sector;
+                    }
                 }
 
                 // 4. Fetch Creator Details (name and sector)

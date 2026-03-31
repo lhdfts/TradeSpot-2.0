@@ -612,6 +612,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 },
                 attendant_name: attendantName,
                 event_name: eventData.event_name,
+                event_sector: eventData.sector,
                 created_by_name: creatorName
             };
 
