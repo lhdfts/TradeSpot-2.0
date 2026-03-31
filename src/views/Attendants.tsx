@@ -113,21 +113,16 @@ export const Attendants: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-foreground">{attendant.role}</td>
-                                <td className="px-6 py-4 text-center space-x-2">
-                                    <button
-                                        onClick={() => handleEdit(attendant)}
-                                        className="text-foreground hover:text-primary transition-colors"
-                                        title="Editar"
-                                    >
-                                        <Edit size={18} />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(attendant.id)}
-                                        className="text-foreground hover:text-danger transition-colors"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+                                <td className="px-6 py-4">
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => handleEdit(attendant)}
+                                            className="p-1 text-secondary hover:text-foreground transition-colors"
+                                            title="Editar Atendente"
+                                        >
+                                            <Edit size={18} />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}

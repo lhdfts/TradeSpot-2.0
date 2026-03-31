@@ -168,6 +168,13 @@ router.get('/available-times', async (req: Request, res: Response) => {
                     } else {
                         sectors = [eventData.sector];
                     }
+                } else if (eventData.sector === 'Closer') {
+                    // Force Closer sector for Closer/Gold Call types if event sector is Closer
+                    sectors = ['Closer'];
+                } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+                    // Special case: if it's a closer type but event is from Aldeia/Tribo (SDR event feeding closer)
+                    // We still need to find a Closer, but the sectors query should be 'Closer'
+                    sectors = ['Closer'];
                 }
             }
         } else {
