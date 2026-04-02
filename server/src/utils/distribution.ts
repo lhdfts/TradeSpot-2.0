@@ -92,7 +92,7 @@ export const isAttendantWithinSchedule = (
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
-    if (prevSchedule) {
+    if (prevSchedule && prevSchedule.start && prevSchedule.end) {
         const prevStart = timeToMinutes(prevSchedule.start);
         let prevEnd = timeToMinutes(prevSchedule.end);
         if (prevEnd === 0) prevEnd = 1440; // Treat 00:00 as 24:00
@@ -108,7 +108,7 @@ export const isAttendantWithinSchedule = (
     }
 
     // 2. Check Current Day
-    if (!schedule) return false;
+    if (!schedule || !schedule.start || !schedule.end) return false;
 
     const startMinutes = timeToMinutes(schedule.start);
     let endMinutes = timeToMinutes(schedule.end);
