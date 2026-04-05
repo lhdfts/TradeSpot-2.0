@@ -183,7 +183,8 @@ export const findBestAttendant = async (
     date: string,
     time: string,
     type: string,
-    eventId?: string
+    eventId?: string,
+    options: { ignoreSchedule?: boolean } = {}
 ): Promise<string | null> => {
     let sectors = ['Closer'];
     let roleFilter: string | null = null;
@@ -237,7 +238,10 @@ export const findBestAttendant = async (
     }
 
     // 3. Filter by Schedule
-    const available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type));
+    let available = attendantsForEvent;
+    if (!options.ignoreSchedule) {
+        available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type));
+    }
     if (available.length === 0) return null;
 
     // 4. Calculate Load

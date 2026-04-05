@@ -98,7 +98,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         const allTimes = generateAllTimes();
         const selectedEvent = events.find(e => e.id === formData.eventId);
-        const durationMinutes = selectedEvent?.duration_minutes;
+        const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
+
         const filtered = allTimes.filter(time => {
             const isEditing = !!initialData;
             const isSameExistingAssignment = isEditing &&
@@ -112,8 +113,12 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
                 const attendant = attendants.find(a => a.id === formData.attendantId);
                 if (!attendant) return false;
-                return isAttendantWithinSchedule(attendant, formData.date, time, formData.type, durationMinutes) &&
-                    !hasConflictingAppointment(attendant.id, formData.date, time, formData.type, appointments, initialData?.id, durationMinutes);
+
+                // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo
+                const skipScheduleCheck = isAldeiaOrTribo;
+
+                return (skipScheduleCheck || isAttendantWithinSchedule(attendant, formData.date, time, formData.type)) &&
+                    !hasConflictingAppointment(attendant.id, formData.date, time, formData.type, appointments, initialData?.id);
             }
 
             // 2. Automatic Distribution (or nothing selected yet)
@@ -121,12 +126,14 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const attendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
                 ? attendants.filter(a => a.id !== BLOCKED_CLOSER_ID)
                 : attendants;
-            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, durationMinutes);
+            
+            // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo
+            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule: isAldeiaOrTribo });
             return !!available;
         });
 
         setAvailableTimes(filtered);
-    }, [formData.date, formData.type, formData.attendantId, formData.eventId, attendants, appointments, initialData, events]);
+    }, [formData.date, formData.type, formData.attendantId, formData.eventId, attendants, appointments, initialData]);
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
@@ -219,7 +226,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
                     const selectedEvent = events.find(e => e.id === formData.eventId);
                     const eventSector = selectedEvent?.sector;
-                    const isAdministrative = user && ['Dev', 'Admin', 'Qualidade'].includes(user.role);
+                    const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
                     if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
 
@@ -250,8 +257,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             // Special case for On The Road 2.0 and Aldeia
             // if (e.id === ON_THE_ROAD_EVENT_ID && user?.sector === 'Aldeia') return true;
 
-            const isPrivileged = user && (user.sector === 'TEI' || ['Dev', 'Admin', 'Qualidade'].includes(user.role));
-            return !!user && (isPrivileged || user.sector === e.sector);
+            return !e.sector || (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role) || user.sector === e.sector));
         });
 
         // If we are editing and the current event is not in the list, add it
@@ -262,9 +268,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
         }
 
-        return filtered
-            .sort((a, b) => a.event_name.localeCompare(b.event_name, 'pt-BR', { sensitivity: 'base' }))
-            .map(e => ({ value: e.id, label: e.event_name }));
+        return filtered.map(e => ({ value: e.id, label: e.event_name }));
     }, [events, user, initialData]);
 
     useEffect(() => {
@@ -503,9 +507,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (!formData.lead) { toastManager.add({ title: "Erro", description: "Nome é obrigatório", type: 'error' }); return; }
         if (!formData.phone) { toastManager.add({ title: "Erro", description: "Telefone é obrigatório", type: 'error' }); return; }
         if (!formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
-        const selectedEventForValidation = events.find(ev => ev.id === formData.eventId);
-        const isTriboAldeiaEvent = selectedEventForValidation?.sector === 'Tribo' || selectedEventForValidation?.sector === 'Aldeia';
-        if (!isTriboAldeiaEvent && String(formData.studentProfile.financial.amount) === '') {
+        if (String(formData.studentProfile.financial.amount) === '') {
             toastManager.add({ title: "Erro", description: "Valor do Perfil Financeiro é obrigatório", type: 'error' });
             return;
         }
@@ -525,8 +527,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         // Helper to check availability
         const checkAvailability = (attendantId: string) => {
             if (formData.type === 'Fora da agenda') return true;
-            const selectedEvent = events.find(e => e.id === formData.eventId);
-            const durationMinutes = selectedEvent?.duration_minutes;
 
             // Blocked closer cannot be assigned for this event (except when editing the existing assignment)
             const isEditingMode = !!initialData;
@@ -545,8 +545,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const selectedAttendant = attendants.find(a => a.id === attendantId);
             if (!selectedAttendant) return true; // Can't validate if not found
 
+            const selectedEvent = events.find(e => e.id === formData.eventId);
+            const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
+
             // 1. Check Schedule (Work hours + Pauses)
-            if (!isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time, formData.type, durationMinutes)) {
+            if (!isAldeiaOrTribo && !isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time, formData.type)) {
                 toastManager.add({
                     title: "Indisponibilidade",
                     description: `${selectedAttendant.name} não está disponível neste horário (Fora de expediente ou Pausa).`,
@@ -556,7 +559,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
 
             // 2. Check Conflicts (Overlapping appointments)
-            if (hasConflictingAppointment(attendantId, formData.date, formData.time, formData.type, appointments, initialData?.id, durationMinutes)) {
+            if (hasConflictingAppointment(attendantId, formData.date, formData.time, formData.type, appointments, initialData?.id)) {
                 toastManager.add({
                     title: "Conflito de Agenda",
                     description: `${selectedAttendant.name} já possui um agendamento conflitante neste horário.`,
@@ -606,9 +609,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
             // Resolve Automatic Distribution on Submit
             if (formData.attendantId === 'distribuicao_automatica') {
-                const selectedEvent = events.find(e => e.id === formData.eventId);
-                const durationMinutes = selectedEvent?.duration_minutes;
-
                 // FRESH DATA: Refresh attendants before distribution to avoid stale sector/schedule data
                 const freshAttendants = await refreshAttendants();
                 console.log('[DISTRIBUTION] Refreshed attendants before submit:', freshAttendants.length, 'total');
@@ -617,13 +617,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     ? freshAttendants.filter(a => a.id !== BLOCKED_CLOSER_ID)
                     : freshAttendants;
 
+                const selectedEvent = events.find(e => e.id === formData.eventId);
+                const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
+
                 const bestCloser = findAvailableCloser(
                     formData.date,
                     formData.time,
                     formData.type,
                     freshAttendantsForEvent,
                     appointments,
-                    durationMinutes
+                    { ignoreSchedule: isAldeiaOrTribo }
                 );
                 if (bestCloser) {
                     console.log(`[DISTRIBUTION] Assigned: ${bestCloser.name} (sector: ${bestCloser.sector}, id: ${bestCloser.id})`);
@@ -746,9 +749,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (!startTime) return '';
         const [hours, minutes] = startTime.split(':').map(Number);
 
-        const selectedEvent = events.find(e => e.id === formData.eventId);
-        let duration = selectedEvent?.duration_minutes ?? 60;
-        if (formData.type === 'Ligação SDR' && selectedEvent?.duration_minutes == null) duration = 30;
+        let duration = 60; // Default for most types
+
+        if (formData.type === 'Ligação SDR') {
+            duration = 30;
+        }
 
         const totalMinutes = hours * 60 + minutes + duration;
         const endHours = Math.floor(totalMinutes / 60) % 24;
@@ -1112,9 +1117,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                             if (errors.amount) setErrors(prev => ({ ...prev, amount: '' }));
                                         }}
                                         onBlur={() => {
-                                            const selectedEvent = events.find(ev => ev.id === formData.eventId);
-                                            const isTriboAldeiaEvent = selectedEvent?.sector === 'Tribo' || selectedEvent?.sector === 'Aldeia';
-                                            if (!isTriboAldeiaEvent && !formData.studentProfile.financial.amount) {
+                                            if (!formData.studentProfile.financial.amount) {
                                                 setErrors(prev => ({ ...prev, amount: 'Valor do Perfil Financeiro é obrigatório' }));
                                             }
                                         }}

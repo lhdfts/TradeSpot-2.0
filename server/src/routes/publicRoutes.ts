@@ -240,16 +240,31 @@ router.get('/available-times', async (req: Request, res: Response) => {
                     availableTimes.push(timeSlot);
                 }
             }
-        } else {
-            // Standard Closer Logic
-            const allTimes: string[] = [];
-            for (let hour = 0; hour < 24; hour++) {
-                for (const minute of [0, 15, 30, 45]) {
-                    allTimes.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
-                }
-            }
+        // Standard Closer Logic
+        const allTimes: string[] = [];
+        const isAldeiaOrTribo = sectors.includes('Aldeia') || sectors.includes('Tribo');
+        const allowedMinutes = isAldeiaOrTribo ? [0, 30] : [0, 15, 30, 45];
 
-            for (const timeSlot of allTimes) {
+        for (let hour = 0; hour < 24; hour++) {
+            for (const minute of allowedMinutes) {
+                const timeSlot = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+                // Adjustment 1: 12h lead time for Aldeia/Tribo (External Link)
+                if (isAldeiaOrTribo) {
+                    const now = new Date();
+                    const slotDateTime = new Date(`${date}T${timeSlot}:00-03:00`);
+                    const diffMinutes = (slotDateTime.getTime() - now.getTime()) / 60000;
+
+                    if (diffMinutes < 12 * 60) {
+                        continue; // Skip slots with less than 12h lead time
+                    }
+                }
+
+                allTimes.push(timeSlot);
+            }
+        }
+
+        for (const timeSlot of allTimes) {
                 const hasAvailableCloser = await checkIfAnyCloserAvailable(
                     filteredAttendants,
                     existingAppointments,
@@ -362,13 +377,27 @@ router.post('/appointments', async (req: Request, res: Response) => {
             APPOINTMENT_TYPE = 'Onboarding';
         }
 
-        // 2. Buffer Check (30 minutes)
+        // 2. Buffer Check (30 minutes or 12 hours)
         const now = new Date();
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`);
         const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
-        if (diffMinutes < 30) {
-            return res.status(400).json({ error: 'O agendamento deve ter pelo menos 30 minutos de antecedência.' });
+        const isAldeiaOrTribo = eventData.sector === 'Aldeia' || eventData.sector === 'Tribo';
+        const minLeadMinutes = isAldeiaOrTribo ? 12 * 60 : 30;
+
+        if (diffMinutes < minLeadMinutes) {
+            const errorMsg = isAldeiaOrTribo 
+                ? 'O agendamento para este setor deve ter pelo menos 12 horas de antecedência.'
+                : 'O agendamento deve ter pelo menos 30 minutos de antecedência.';
+            return res.status(400).json({ error: errorMsg });
+        }
+
+        // 2.5 Time Slot Restriction (only :00 and :30 for Aldeia/Tribo)
+        if (isAldeiaOrTribo) {
+            const minutes = parseInt(data.time.split(':')[1]);
+            if (minutes !== 0 && minutes !== 30) {
+                return res.status(400).json({ error: 'Para este setor, os agendamentos são permitidos apenas nos horários cheios (:00) ou meias horas (:30).' });
+            }
         }
 
         // 3. Client Validation (1 Pending Rule)

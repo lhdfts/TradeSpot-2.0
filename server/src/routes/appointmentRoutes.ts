@@ -49,6 +49,15 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         const data = validation.data;
+
+        // 1.5 Fetch Event to check sector for Aldeia/Tribo specific rules (Internal Link)
+        let eventSector = '';
+        if (data.eventId) {
+            const { data: ev } = await supabase.from('events').select('sector').eq('id', data.eventId).single();
+            if (ev) eventSector = ev.sector;
+        }
+        const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+
         // 0. Buffer Check (10 minutes)
         const now = new Date();
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Brasilia time is UTC-3
@@ -63,7 +72,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         // Agent Logic
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId);
+            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId, { ignoreSchedule: isAldeiaOrTribo });
             if (!availableId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
             }
@@ -107,7 +116,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
-            if (data.type !== 'Fora da agenda') {
+            if (data.type !== 'Fora da agenda' && !isAldeiaOrTribo) {
                 const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type);
                 if (!isWithinSchedule) {
                     return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
@@ -347,6 +356,15 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
         const merged = { ...currentApp, ...updates };
 
+        // 1.5 Fetch Event sector for Aldeia/Tribo rules (Internal Link)
+        let eventSector = '';
+        const eventIdToCheck = merged.event_id;
+        if (eventIdToCheck) {
+            const { data: ev } = await supabase.from('events').select('sector').eq('id', eventIdToCheck).single();
+            if (ev) eventSector = ev.sector;
+        }
+        const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+
         // Event-specific blocklist for assignment changes only
         const isAttendantChangeRequested = typeof (updates as any).attendantId === 'string' && (updates as any).attendantId.length > 0;
         const isEventChangeRequested = typeof (updates as any).eventId === 'string' && (updates as any).eventId.length > 0;
@@ -374,7 +392,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 console.log(`[DEBUG] Checking Schedule for ${attendant.name} (${attendant.id})`);
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
-                if (merged.type !== 'Fora da agenda') {
+                if (merged.type !== 'Fora da agenda' && !isAldeiaOrTribo) {
                     const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type);
                     console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
 

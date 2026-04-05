@@ -11,63 +11,13 @@ const DAY_MAP: Record<number, string> = {
     0: 'sun'
 };
 
-const normalizeKey = (key: string) =>
-    key
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[\s_-]/g, '');
-
-const pickByAliases = <T extends Record<string, any>>(obj: T | undefined, aliases: string[]) => {
-    if (!obj) return undefined;
-    for (const alias of aliases) {
-        if (alias in obj) return obj[alias as keyof T];
-    }
-    const normalizedAliases = aliases.map(normalizeKey);
-    for (const [k, v] of Object.entries(obj)) {
-        const nk = normalizeKey(k);
-        for (const na of normalizedAliases) {
-            if (nk === na || nk.startsWith(na)) return v;
-        }
-    }
-    return undefined;
-};
-
-const coerceJsonObject = (value: any): Record<string, any> | undefined => {
-    if (!value) return undefined;
-    if (typeof value === 'object') return value as Record<string, any>;
-    if (typeof value !== 'string') return undefined;
-    try {
-        const parsed = JSON.parse(value);
-        if (parsed && typeof parsed === 'object') return parsed as Record<string, any>;
-    } catch {
-        return undefined;
-    }
-    return undefined;
-};
-
-const dayKeyAliases = (dayIndex: number) => {
-    const isoDay = dayIndex === 0 ? 7 : dayIndex;
-    switch (dayIndex) {
-        case 0: return ['sun', 'dom', 'domingo', String(dayIndex), String(isoDay)];
-        case 1: return ['mon', 'seg', 'segunda', 'monday', String(dayIndex), String(isoDay)];
-        case 2: return ['tue', 'ter', 'terca', 'terça', 'tuesday', String(dayIndex), String(isoDay)];
-        case 3: return ['wed', 'qua', 'quarta', 'wednesday', String(dayIndex), String(isoDay)];
-        case 4: return ['thu', 'qui', 'quinta', 'thursday', String(dayIndex), String(isoDay)];
-        case 5: return ['fri', 'sex', 'sexta', 'friday', String(dayIndex), String(isoDay)];
-        case 6: return ['sat', 'sab', 'sáb', 'sabado', 'sábado', 'saturday', String(dayIndex), String(isoDay)];
-        default: return [DAY_MAP[dayIndex], String(dayIndex), String(isoDay)];
-    }
-};
-
 const timeToMinutes = (time: string): number => {
     if (!time) return 0;
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
 };
 
-const getDuration = (type: string, durationMinutes?: number): number => {
-    if (typeof durationMinutes === 'number' && Number.isFinite(durationMinutes) && durationMinutes > 0) return durationMinutes;
+const getDuration = (type: string): number => {
     if (['Ligação Closer', 'Gold Call', 'Reschedule', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal'].includes(type)) {
         return 60;
     }
@@ -89,29 +39,26 @@ export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string, // YYYY-MM-DD
     timeStr: string,  // HH:MM
-    appointmentType: string, // Added type to calculate duration
-    durationMinutes?: number
+    appointmentType: string // Added type to calculate duration
 ): boolean => {
-    const scheduleObj = coerceJsonObject(attendant.schedule);
-    if (!scheduleObj) return false;
+    if (!attendant.schedule) return false;
 
     // Parse date to get day of week safely
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    const dayIndex = date.getDay();
-    const dayAliases = dayKeyAliases(dayIndex);
+    const dayKey = DAY_MAP[date.getDay()];
 
     // Check Previous Day for Overnight Spillover
     const prevDate = new Date(date);
     prevDate.setDate(date.getDate() - 1);
-    const prevDayAliases = dayKeyAliases(prevDate.getDay());
+    const prevDayKey = DAY_MAP[prevDate.getDay()];
 
     const apptStart = timeToMinutes(timeStr);
-    const duration = getDuration(appointmentType, durationMinutes);
+    const duration = getDuration(appointmentType);
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
-    const prevSchedule = pickByAliases(scheduleObj, prevDayAliases);
+    const prevSchedule = attendant.schedule?.[prevDayKey];
     if (prevSchedule && prevSchedule.start && prevSchedule.end) {
         const prevStart = timeToMinutes(prevSchedule.start);
         let prevEnd = timeToMinutes(prevSchedule.end);
@@ -127,7 +74,7 @@ export const isAttendantWithinSchedule = (
     }
 
     // 2. Check Current Day
-    const schedule = pickByAliases(scheduleObj, dayAliases);
+    const schedule = attendant.schedule?.[dayKey];
     if (!schedule || !schedule.start || !schedule.end) return false;
 
     const startMinutes = timeToMinutes(schedule.start);
@@ -144,11 +91,8 @@ export const isAttendantWithinSchedule = (
     if (apptStart < startMinutes || apptEnd > endMinutes) return false;
 
     // Check pauses
-    // Interval [apptStart, apptEnd) must not overlap with any pause [pauseStart, pauseEnd)
-    const pausesObj = coerceJsonObject(attendant.pauses);
-    const pausesForDay = pausesObj ? pickByAliases(pausesObj, dayAliases) : undefined;
-    if (Array.isArray(pausesForDay) && pausesForDay.length > 0) {
-        for (const pause of pausesForDay) {
+    if (attendant.pauses && attendant.pauses[dayKey] && attendant.pauses[dayKey].length > 0) {
+        for (const pause of attendant.pauses[dayKey]) {
             const pauseStart = timeToMinutes(pause.start);
             let pauseEnd = timeToMinutes(pause.end);
 
@@ -175,11 +119,10 @@ export const hasConflictingAppointment = (
     timeStr: string,
     newAppointmentType: string,
     allAppointments: Appointment[],
-    excludeAppointmentId?: string,
-    durationMinutes?: number
+    excludeAppointmentId?: string
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newAppointmentType, durationMinutes);
+    const newEnd = newStart + getDuration(newAppointmentType);
 
     return allAppointments.some(appt => {
         // Exclude self if updating
@@ -222,15 +165,17 @@ export const findAvailableCloser = (
     appointmentType: string,
     attendants: Attendant[],
     allAppointments: Appointment[],
-    durationMinutes?: number
+    options: { ignoreSchedule?: boolean } = {}
 ): Attendant | null => {
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(appointmentType);
     const eligibleAttendants = isCloserType ? attendants.filter(a => a.sector === 'Closer') : attendants;
     if (eligibleAttendants.length === 0) return null;
 
-    const attendantsWithSchedule = eligibleAttendants.filter(attendant =>
-        isAttendantWithinSchedule(attendant, dateStr, timeStr, appointmentType, durationMinutes)
-    );
+    const attendantsWithSchedule = options.ignoreSchedule
+        ? eligibleAttendants
+        : eligibleAttendants.filter(attendant =>
+            isAttendantWithinSchedule(attendant, dateStr, timeStr, appointmentType)
+        );
 
     if (attendantsWithSchedule.length === 0) return null;
 
@@ -251,7 +196,7 @@ export const findAvailableCloser = (
     });
 
     for (const attendant of attendantsWithLoad) {
-        if (!hasConflictingAppointment(attendant.id, dateStr, timeStr, appointmentType, allAppointments, undefined, durationMinutes)) {
+        if (!hasConflictingAppointment(attendant.id, dateStr, timeStr, appointmentType, allAppointments)) {
             return attendant;
         }
     }
