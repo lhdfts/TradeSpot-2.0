@@ -159,14 +159,62 @@ export const hasConflictingAppointment = (
     });
 };
 
+export const hasSectorTimeLimit = (
+    sector: string,
+    dateStr: string,
+    timeStr: string,
+    appointmentType: string,
+    allAppointments: Appointment[],
+    attendants: Attendant[],
+    excludeAppointmentId?: string
+): boolean => {
+    if (sector !== 'Aldeia' && sector !== 'Tribo') return false;
+    if (appointmentType === 'Agendamento Pessoal') return false;
+
+    const sectorAttendants = new Set(attendants.filter(a => a.sector === sector).map(a => a.id));
+    
+    const newStart = timeToMinutes(timeStr);
+    const newEnd = newStart + getDuration(appointmentType);
+
+    let concurrentCount = 0;
+
+    for (const appt of allAppointments) {
+        if (excludeAppointmentId && appt.id === excludeAppointmentId) continue;
+        if (appt.status !== 'Pendente') continue;
+        if (appt.type === 'Agendamento Pessoal') continue;
+        if (appt.date !== dateStr) continue;
+        if (!sectorAttendants.has(appt.attendantId)) continue; 
+
+        const existingStart = timeToMinutes(appt.time);
+        let existingEnd: number;
+        if (appt.end_time) {
+            existingEnd = timeToMinutes(appt.end_time);
+            if (existingEnd <= existingStart && existingEnd !== 0) existingEnd += 1440;
+            else if (existingEnd === 0 && existingStart > 0) existingEnd = 1440;
+        } else {
+            existingEnd = existingStart + getDuration(appt.type);
+        }
+
+        if (newStart < existingEnd && newEnd > existingStart) {
+            concurrentCount++;
+        }
+    }
+
+    return concurrentCount >= 2;
+};
+
 export const findAvailableCloser = (
     dateStr: string,
     timeStr: string,
     appointmentType: string,
     attendants: Attendant[],
     allAppointments: Appointment[],
-    options: { ignoreSchedule?: boolean } = {}
+    options: { ignoreSchedule?: boolean, sectorLimit?: string } = {}
 ): Attendant | null => {
+    if (options.sectorLimit && hasSectorTimeLimit(options.sectorLimit, dateStr, timeStr, appointmentType, allAppointments, attendants)) {
+        return null;
+    }
+
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(appointmentType);
     const eligibleAttendants = isCloserType ? attendants.filter(a => a.sector === 'Closer') : attendants;
     if (eligibleAttendants.length === 0) return null;

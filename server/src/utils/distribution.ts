@@ -175,8 +175,54 @@ export const hasConflictingAppointment = (
             existingEnd = existingStart + getDuration(appt.type);
         }
 
-        return newStart < existingEnd && newEnd > existingStart;
     });
+};
+
+export const hasSectorTimeLimit = (
+    sector: string,
+    dateStr: string,
+    timeStr: string,
+    newAppointmentType: string,
+    allAppointments: any[],
+    attendants: any[],
+    excludeAppointmentId?: string
+): boolean => {
+    if (sector !== 'Aldeia' && sector !== 'Tribo') return false;
+    if (newAppointmentType === 'Agendamento Pessoal' || newAppointmentType === 'Personal Appointment') return false;
+
+    const sectorAttendants = new Set(attendants.filter(a => a.sector === sector).map(a => a.id));
+    
+    const newStart = timeToMinutes(timeStr);
+    const newEnd = newStart + getDuration(newAppointmentType);
+
+    let concurrentCount = 0;
+
+    for (const appt of allAppointments) {
+        if (excludeAppointmentId && appt.id === excludeAppointmentId) continue;
+        if (appt.status !== 'Pendente') continue;
+        if (appt.type === 'Agendamento Pessoal' || appt.type === 'Personal Appointment') continue;
+        if (appt.date !== dateStr) continue;
+        
+        // Handle both frontend (attendantId) and backend (attendant_id) keys
+        const attId = appt.attendant_id || appt.attendantId;
+        if (!sectorAttendants.has(attId)) continue;
+
+        const existingStart = timeToMinutes(appt.time);
+        let existingEnd: number;
+        if (appt.end_time) {
+            existingEnd = timeToMinutes(appt.end_time);
+            if (existingEnd <= existingStart && existingEnd !== 0) existingEnd += 1440;
+            else if (existingEnd === 0 && existingStart > 0) existingEnd = 1440;
+        } else {
+            existingEnd = existingStart + getDuration(appt.type);
+        }
+
+        if (newStart < existingEnd && newEnd > existingStart) {
+            concurrentCount++;
+        }
+    }
+
+    return concurrentCount >= 2;
 };
 
 export const findBestAttendant = async (
@@ -188,6 +234,7 @@ export const findBestAttendant = async (
 ): Promise<string | null> => {
     let sectors = ['Closer'];
     let roleFilter: string | null = null;
+    let sectorLimitCheck: string | null = null;
 
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
 
@@ -201,9 +248,11 @@ export const findBestAttendant = async (
             } else if (eventData.sector === 'Tribo') {
                 sectors = ['Tribo'];
                 roleFilter = 'Colaborador';
+                sectorLimitCheck = 'Tribo';
             } else if (eventData.sector === 'Aldeia') {
                 sectors = ['Aldeia'];
                 roleFilter = 'Colaborador';
+                sectorLimitCheck = 'Aldeia';
             } else {
                 sectors = [eventData.sector];
             }
@@ -243,6 +292,13 @@ export const findBestAttendant = async (
         available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type));
     }
     if (available.length === 0) return null;
+
+    // Sector limits check
+    if (sectorLimitCheck) {
+        if (hasSectorTimeLimit(sectorLimitCheck, date, time, type, appointments, attendants)) {
+            return null;
+        }
+    }
 
     // 4. Calculate Load
     const withLoad = available.map(a => {

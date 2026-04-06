@@ -10,7 +10,7 @@ import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
 import { APPOINTMENT_STATUSES } from '../types';
 import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, AppointmentStatus } from '../types';
-import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment, generateAllTimes } from '../utils/distribution';
+import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment, generateAllTimes, hasSectorTimeLimit } from '../utils/distribution';
 import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
 import { useAuth } from '../context/AuthContext';
@@ -107,6 +107,12 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 initialData?.eventId === formData.eventId;
             const isBlockedForThisEvent = isCloserBlockedForSelectedEvent(formData.eventId, formData.attendantId);
 
+            if (isAldeiaOrTribo && formData.type !== 'Agendamento Pessoal') {
+                if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, time, formData.type, appointments, attendants, initialData?.id)) {
+                    return false;
+                }
+            }
+
             // 1. Manually Selected Attendant
             if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
                 if (isBlockedForThisEvent && !isSameExistingAssignment) return false;
@@ -128,7 +134,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 : attendants;
             
             // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo
-            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule: isAldeiaOrTribo });
+            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule: isAldeiaOrTribo, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined });
             return !!available;
         });
 
@@ -573,13 +579,25 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const apptDateTime = new Date(`${formData.date}T${formData.time}:00-03:00`);
             const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
-            if (diffMinutes < 10) {
+            if (diffMinutes < 10 && (formData.type as string) !== 'Fora da agenda') {
                 toastManager.add({
                     title: "Horário Inválido",
                     description: "Os agendamentos devem ser marcados com pelo menos 10 minutos de antecedência.",
                     type: 'error'
                 });
                 return false;
+            }
+
+            // 4. Sector Check
+            if (isAldeiaOrTribo && formData.type !== 'Agendamento Pessoal') {
+                if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, formData.time, formData.type, appointments, attendants, initialData?.id)) {
+                    toastManager.add({
+                        title: "Limite de Agendamentos",
+                        description: `O setor ${selectedEvent!.sector} atingiu o limite máximo de agendamentos para este horário.`,
+                        type: 'error'
+                    });
+                    return false;
+                }
             }
 
             return true;
@@ -626,7 +644,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     formData.type,
                     freshAttendantsForEvent,
                     appointments,
-                    { ignoreSchedule: isAldeiaOrTribo }
+                    { ignoreSchedule: isAldeiaOrTribo, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined }
                 );
                 if (bestCloser) {
                     console.log(`[DISTRIBUTION] Assigned: ${bestCloser.name} (sector: ${bestCloser.sector}, id: ${bestCloser.id})`);

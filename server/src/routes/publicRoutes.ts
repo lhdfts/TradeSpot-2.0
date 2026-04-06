@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent } from '../utils/distribution.js';
+import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
 import { getAppointmentWebhooks } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 
@@ -265,6 +265,13 @@ router.get('/available-times', async (req: Request, res: Response) => {
         }
 
         for (const timeSlot of allTimes) {
+                if (isAldeiaOrTribo) {
+                    const sectorLimitCheck = sectors.includes('Aldeia') ? 'Aldeia' : 'Tribo';
+                    if (hasSectorTimeLimit(sectorLimitCheck, date, timeSlot, APPOINTMENT_TYPE, existingAppointments, attendants)) {
+                        continue;
+                    }
+                }
+
                 const hasAvailableCloser = await checkIfAnyCloserAvailable(
                     filteredAttendants,
                     existingAppointments,
