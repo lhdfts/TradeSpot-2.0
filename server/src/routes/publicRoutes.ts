@@ -252,6 +252,11 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
                 // Adjustment 1: 12h lead time for Aldeia/Tribo (External Link)
                 if (isAldeiaOrTribo) {
+                    // Time window between 09:00 and 21:00 (last slot at 21:00)
+                    if (hour < 9 || hour > 21 || (hour === 21 && minute > 0)) {
+                        continue;
+                    }
+
                     const now = new Date();
                     const slotDateTime = new Date(`${date}T${timeSlot}:00-03:00`);
                     const diffMinutes = (slotDateTime.getTime() - now.getTime()) / 60000;
