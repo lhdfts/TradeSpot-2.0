@@ -240,6 +240,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
                     availableTimes.push(timeSlot);
                 }
             }
+        } else {
         // Standard Closer Logic
         const allTimes: string[] = [];
         const isAldeiaOrTribo = sectors.includes('Aldeia') || sectors.includes('Tribo');
