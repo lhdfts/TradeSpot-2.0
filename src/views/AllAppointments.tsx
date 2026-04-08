@@ -142,9 +142,9 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         const creatorUser = attendants.find(att => att.id === a.createdBy);
 
         const matchesSector = isGlobalViewer ||
-            (linkedAttendant && allowedSectors.includes(linkedAttendant.sector)) ||
-            (linkedEvent && allowedSectors.includes(linkedEvent.sector)) ||
-            (creatorUser && allowedSectors.includes(creatorUser.sector)) ||
+            (linkedAttendant && linkedAttendant.sector && allowedSectors.includes(linkedAttendant.sector)) ||
+            (linkedEvent && linkedEvent.sector && allowedSectors.includes(linkedEvent.sector)) ||
+            (creatorUser && creatorUser.sector && allowedSectors.includes(creatorUser.sector)) ||
             (a.attendantId === user?.id) ||
             (a.createdBy === user?.id);
 

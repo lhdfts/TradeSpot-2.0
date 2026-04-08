@@ -145,15 +145,15 @@ export const Metrics: React.FC = () => {
             if (!isGlobalViewer) {
                 // Non-global users can only see metrics for their allowed sectors
                 const matchesAllowedSector = 
-                    (creator && allowedSectors.includes(creator.sector)) ||
-                    (attendant && allowedSectors.includes(attendant.sector));
+                    (creator && creator.sector && allowedSectors.includes(creator.sector)) ||
+                    (attendant && attendant.sector && allowedSectors.includes(attendant.sector));
                 
                 if (!matchesAllowedSector) return false;
 
                 // Further refine by the active dropdown filter if available
                 if (sectorFilter !== 'all') {
                     const activeAtt = sectorFilter === 'SDR' ? creator : attendant;
-                    if (!activeAtt) return false;
+                    if (!activeAtt || !activeAtt.sector) return false;
                     const isMatch = sectorFilter === 'SDR'
                         ? (activeAtt.sector === 'SDR' || activeAtt.sector === 'Leads')
                         : activeAtt.sector === sectorFilter;
@@ -162,7 +162,7 @@ export const Metrics: React.FC = () => {
             } else if (sectorFilter !== 'all') {
                 // Global viewers respect the dropdown
                 const activeAtt = sectorFilter === 'SDR' ? creator : attendant;
-                if (!activeAtt) return false;
+                if (!activeAtt || !activeAtt.sector) return false;
                 const isMatch = sectorFilter === 'SDR'
                     ? (activeAtt.sector === 'SDR' || activeAtt.sector === 'Leads')
                     : activeAtt.sector === sectorFilter;
