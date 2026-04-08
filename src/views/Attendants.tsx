@@ -122,13 +122,15 @@ export const Attendants: React.FC = () => {
                                     >
                                         <Edit size={18} />
                                     </button>
-                                    <button
-                                        onClick={() => handleDelete(attendant.id)}
-                                        className="p-1 text-secondary hover:text-destructive transition-colors"
-                                        title="Excluir Atendente"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+                                    {['Admin', 'Dev'].includes(user?.role || '') && (
+                                        <button
+                                            onClick={() => handleDelete(attendant.id)}
+                                            className="p-1 text-secondary hover:text-destructive transition-colors"
+                                            title="Excluir Atendente"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    )}
                                 </div>
                             </td>
                             </tr>
