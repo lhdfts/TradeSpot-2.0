@@ -121,6 +121,9 @@ export const Metrics: React.FC = () => {
 
     // --- DATA CALCULATION ---
     const { sdrRanking, closerRanking, chartData, totals, filteredAppointments, sdrTotal, closerTotal, chartTotal, availabilityGrid } = useMemo(() => {
+        const allowedSectors = getAllowedSectors(user);
+        const isGlobalViewer = canViewAllSectors(user);
+
         // 1. Filter Appointments by Date & Event
         let filtered = appointments.filter(a => {
             if (!a.date) return false;
@@ -135,13 +138,34 @@ export const Metrics: React.FC = () => {
             // Event Filter
             if (eventFilter && a.eventId !== eventFilter) return false;
 
-            // Sector Filter (Basic filtering for chart/totals)
-            if (sectorFilter !== 'all') {
-                const att = attendants.find(at => at.id === (sectorFilter === 'SDR' ? a.createdBy : a.attendantId));
-                if (!att) return false;
+            // Sector Filter
+            const creator = attendants.find(att => att.id === a.createdBy);
+            const attendant = attendants.find(att => att.id === a.attendantId);
+
+            if (!isGlobalViewer) {
+                // Non-global users can only see metrics for their allowed sectors
+                const matchesAllowedSector = 
+                    (creator && allowedSectors.includes(creator.sector)) ||
+                    (attendant && allowedSectors.includes(attendant.sector));
+                
+                if (!matchesAllowedSector) return false;
+
+                // Further refine by the active dropdown filter if available
+                if (sectorFilter !== 'all') {
+                    const activeAtt = sectorFilter === 'SDR' ? creator : attendant;
+                    if (!activeAtt) return false;
+                    const isMatch = sectorFilter === 'SDR'
+                        ? (activeAtt.sector === 'SDR' || activeAtt.sector === 'Leads')
+                        : activeAtt.sector === sectorFilter;
+                    if (!isMatch) return false;
+                }
+            } else if (sectorFilter !== 'all') {
+                // Global viewers respect the dropdown
+                const activeAtt = sectorFilter === 'SDR' ? creator : attendant;
+                if (!activeAtt) return false;
                 const isMatch = sectorFilter === 'SDR'
-                    ? (att.sector === 'SDR' || att.sector === 'Leads')
-                    : att.sector === sectorFilter;
+                    ? (activeAtt.sector === 'SDR' || activeAtt.sector === 'Leads')
+                    : activeAtt.sector === sectorFilter;
                 if (!isMatch) return false;
             }
 

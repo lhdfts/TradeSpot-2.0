@@ -135,22 +135,18 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
         // Sector restrictions (Fixed for Medina and TEI)
         const allowedSectors = getAllowedSectors(user);
-        let matchesSector = true;
+        const isGlobalViewer = canViewAllSectors(user);
         
-        // If not a global viewer (TEI or Medina with limited list), enforce restricted view
-        if (!canViewAllSectors(user) && !isMedinaUser(user)) {
-            if (user?.sector === 'Perpétuos') {
-                const linkedEvent = events.find(e => e.id === a.eventId);
-                matchesSector = !!linkedEvent && linkedEvent.sector === 'Perpétuos';
-            } else if (user?.sector === 'Tribo') {
-                const linkedAttendant = attendants.find(att => att.id === a.attendantId);
-                matchesSector = !!linkedAttendant && linkedAttendant.sector === 'Tribo';
-            }
-        } else {
-            // For TEI and Medina, we filter by their allowed sectors
-            const linkedAttendant = attendants.find(att => att.id === a.attendantId);
-            matchesSector = !!linkedAttendant && allowedSectors.includes(linkedAttendant.sector);
-        }
+        const linkedAttendant = attendants.find(att => att.id === a.attendantId);
+        const linkedEvent = events.find(e => e.id === a.eventId);
+        const creatorUser = attendants.find(att => att.id === a.createdBy);
+
+        const matchesSector = isGlobalViewer ||
+            (linkedAttendant && allowedSectors.includes(linkedAttendant.sector)) ||
+            (linkedEvent && allowedSectors.includes(linkedEvent.sector)) ||
+            (creatorUser && allowedSectors.includes(creatorUser.sector)) ||
+            (a.attendantId === user?.id) ||
+            (a.createdBy === user?.id);
 
         return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesSectorFilter && matchesDate && matchesSector;
     }).sort((a, b) => {

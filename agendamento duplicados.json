@@ -1,0 +1,111 @@
+[
+  {
+    "headers": {
+      "accept": "application/json, text/plain, */*",
+      "content-type": "application/json",
+      "user-agent": "axios/1.13.2",
+      "content-length": "939",
+      "accept-encoding": "gzip, compress, deflate, br",
+      "x-vercel-id": "gru1::skc7x-1774576032240-249177901e27",
+      "x-invocation-id": "gru1::skc7x-1774576032240-249177901e27",
+      "host": "n8n.tradestars.com.br",
+      "connection": "keep-alive"
+    },
+    "params": {},
+    "query": {},
+    "body": {
+      "id": "716e0ab2-f172-412e-b268-27245961b1ff",
+      "client_id": "09795d3a-3028-474b-9d91-8e4a8e9a062b",
+      "date": "2026-03-26",
+      "time": "23:30:00+00",
+      "type": "Ligação Closer",
+      "status": "Pendente",
+      "meet_link": "https://meet.google.com/sqt-nnza-axm",
+      "notes": "",
+      "additional_info": "PERFIL ALDEIA, busca as 3 liberdades",
+      "created_at": "2026-03-27T01:47:15.236+00:00",
+      "interest_level": "Alto",
+      "knowledge_level": "Iniciante",
+      "financial_currency": "USD",
+      "financial_amount": 100,
+      "end_time": "00:30:00+00",
+      "oldStatus": null,
+      "updatedBy": null,
+      "google_event_id": "jnvadgjfhm4ilejgfntg4hgk7o",
+      "status_edit_count": 0,
+      "lead": "Sergio Aparecido Laurindo",
+      "phone": "13212783530",
+      "email": "sergio.laurindo1@gmail.com",
+      "student_profile": {
+        "interest": "Alto",
+        "knowledge": "Iniciante",
+        "financial": {
+          "currency": "USD",
+          "amount": 100
+        }
+      },
+      "attendant_name": "Lucas Gonçalves",
+      "created_by_name": "João Vitor Miranda de Almeida",
+      "creator_sector": "SDR",
+      "event_name": "10 DIAS! 0326 - Plano de Fuga EUA "
+    },
+    "webhookUrl": "https://n8n.tradestars.com.br/webhook/fef2183b-d765-40f0-9841-eac5e368cedc",
+    "executionMode": "production"
+  }
+]
+
+[
+  {
+    "headers": {
+      "accept": "application/json, text/plain, */*",
+      "content-type": "application/json",
+      "user-agent": "axios/1.13.2",
+      "content-length": "994",
+      "accept-encoding": "gzip, compress, deflate, br",
+      "x-vercel-id": "gru1::8dfw6-1774576278264-d9cc9af3abf9",
+      "x-invocation-id": "gru1::8dfw6-1774576278264-d9cc9af3abf9",
+      "host": "n8n.tradestars.com.br",
+      "connection": "keep-alive"
+    },
+    "params": {},
+    "query": {},
+    "body": {
+      "id": "12a2442f-d903-4d7e-9ca7-3597e7a660c2",
+      "client_id": "62936f5a-f197-42c1-9bea-31f30d6891d6",
+      "date": "2026-03-26",
+      "time": "23:30:00+00",
+      "type": "Ligação Closer",
+      "status": "Pendente",
+      "meet_link": "https://meet.google.com/oie-fzss-yur",
+      "notes": "",
+      "additional_info": "Lead busca estabilidade financeira e independência profissional (sem chefe). Demonstra interesse em se desenvolver no mercado.",
+      "created_at": "2026-03-27T01:51:21.14+00:00",
+      "interest_level": "Alto",
+      "knowledge_level": "Iniciante",
+      "financial_currency": "USD",
+      "financial_amount": 150,
+      "end_time": "00:30:00+00",
+      "oldStatus": null,
+      "updatedBy": null,
+      "google_event_id": "5j0p6j29r95ceumu2s7fntdo00",
+      "status_edit_count": 0,
+      "lead": "Denis",
+      "phone": "15182688560",
+      "email": "denis.mendessoares1@gmail.com",
+      "student_profile": {
+        "interest": "Alto",
+        "knowledge": "Iniciante",
+        "financial": {
+          "currency": "USD",
+          "amount": 150
+        }
+      },
+      "attendant_name": "Lucas Gonçalves",
+      "created_by_name": "Gleison Lima",
+      "creator_sector": "SDR",
+      "event_name": "10 DIAS! 0326 - Plano de Fuga EUA "
+    },
+    "webhookUrl": "https://n8n.tradestars.com.br/webhook/fef2183b-d765-40f0-9841-eac5e368cedc",
+    "executionMode": "production"
+  }
+]

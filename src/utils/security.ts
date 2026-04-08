@@ -40,9 +40,10 @@ export const sanitizeInput = {
     }
 };
 
-export const canViewAllSectors = (user: { email?: string; sector?: string; id?: string } | null | undefined) => {
+export const canViewAllSectors = (user: { email?: string; sector?: string; id?: string; role?: string } | null | undefined) => {
     if (!user) return false;
-    return user.sector === 'TEI';
+    const globalRoles = ['Admin', 'Dev', 'TEI', 'Qualidade', 'Suporte'];
+    return globalRoles.includes(user.role || '') || user.sector === 'TEI';
 };
 
 export const isMedinaUser = (user: { email?: string; id?: string } | null | undefined) => {

@@ -1,0 +1,271 @@
+﻿diff --git a/server/src/routes/publicRoutes.ts b/server/src/routes/publicRoutes.ts
+index 667b2cd..58aa4f2 100644
+--- a/server/src/routes/publicRoutes.ts
++++ b/server/src/routes/publicRoutes.ts
+@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
+ import axios from 'axios';
+ import { createClient } from '@supabase/supabase-js';
+ import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
+-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent } from '../utils/distribution.js';
++import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
+ import { getAppointmentWebhooks } from '../config/webhooks.js';
+ import { createGoogleMeetLink } from '../services/googleMeet.js';
+ 
+@@ -240,6 +240,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
+                     availableTimes.push(timeSlot);
+                 }
+             }
++        } else {
+         // Standard Closer Logic
+         const allTimes: string[] = [];
+         const isAldeiaOrTribo = sectors.includes('Aldeia') || sectors.includes('Tribo');
+@@ -265,6 +266,13 @@ router.get('/available-times', async (req: Request, res: Response) => {
+         }
+ 
+         for (const timeSlot of allTimes) {
++                if (isAldeiaOrTribo) {
++                    const sectorLimitCheck = sectors.includes('Aldeia') ? 'Aldeia' : 'Tribo';
++                    if (hasSectorTimeLimit(sectorLimitCheck, date, timeSlot, APPOINTMENT_TYPE, existingAppointments, attendants)) {
++                        continue;
++                    }
++                }
++
+                 const hasAvailableCloser = await checkIfAnyCloserAvailable(
+                     filteredAttendants,
+                     existingAppointments,
+diff --git a/server/src/utils/distribution.ts b/server/src/utils/distribution.ts
+index 7383134..76db173 100644
+--- a/server/src/utils/distribution.ts
++++ b/server/src/utils/distribution.ts
+@@ -175,10 +175,56 @@ export const hasConflictingAppointment = (
+             existingEnd = existingStart + getDuration(appt.type);
+         }
+ 
+-        return newStart < existingEnd && newEnd > existingStart;
+     });
+ };
+ 
++export const hasSectorTimeLimit = (
++    sector: string,
++    dateStr: string,
++    timeStr: string,
++    newAppointmentType: string,
++    allAppointments: any[],
++    attendants: any[],
++    excludeAppointmentId?: string
++): boolean => {
++    if (sector !== 'Aldeia' && sector !== 'Tribo') return false;
++    if (newAppointmentType === 'Agendamento Pessoal' || newAppointmentType === 'Personal Appointment') return false;
++
++    const sectorAttendants = new Set(attendants.filter(a => a.sector === sector).map(a => a.id));
++    
++    const newStart = timeToMinutes(timeStr);
++    const newEnd = newStart + getDuration(newAppointmentType);
++
++    let concurrentCount = 0;
++
++    for (const appt of allAppointments) {
++        if (excludeAppointmentId && appt.id === excludeAppointmentId) continue;
++        if (appt.status !== 'Pendente') continue;
++        if (appt.type === 'Agendamento Pessoal' || appt.type === 'Personal Appointment') continue;
++        if (appt.date !== dateStr) continue;
++        
++        // Handle both frontend (attendantId) and backend (attendant_id) keys
++        const attId = appt.attendant_id || appt.attendantId;
++        if (!sectorAttendants.has(attId)) continue;
++
++        const existingStart = timeToMinutes(appt.time);
++        let existingEnd: number;
++        if (appt.end_time) {
++            existingEnd = timeToMinutes(appt.end_time);
++            if (existingEnd <= existingStart && existingEnd !== 0) existingEnd += 1440;
++            else if (existingEnd === 0 && existingStart > 0) existingEnd = 1440;
++        } else {
++            existingEnd = existingStart + getDuration(appt.type);
++        }
++
++        if (newStart < existingEnd && newEnd > existingStart) {
++            concurrentCount++;
++        }
++    }
++
++    return concurrentCount >= 2;
++};
++
+ export const findBestAttendant = async (
+     date: string,
+     time: string,
+@@ -188,6 +234,7 @@ export const findBestAttendant = async (
+ ): Promise<string | null> => {
+     let sectors = ['Closer'];
+     let roleFilter: string | null = null;
++    let sectorLimitCheck: string | null = null;
+ 
+     const isCloserType = ['Liga├º├úo Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
+ 
+@@ -201,9 +248,11 @@ export const findBestAttendant = async (
+             } else if (eventData.sector === 'Tribo') {
+                 sectors = ['Tribo'];
+                 roleFilter = 'Colaborador';
++                sectorLimitCheck = 'Tribo';
+             } else if (eventData.sector === 'Aldeia') {
+                 sectors = ['Aldeia'];
+                 roleFilter = 'Colaborador';
++                sectorLimitCheck = 'Aldeia';
+             } else {
+                 sectors = [eventData.sector];
+             }
+@@ -244,6 +293,13 @@ export const findBestAttendant = async (
+     }
+     if (available.length === 0) return null;
+ 
++    // Sector limits check
++    if (sectorLimitCheck) {
++        if (hasSectorTimeLimit(sectorLimitCheck, date, time, type, appointments, attendants)) {
++            return null;
++        }
++    }
++
+     // 4. Calculate Load
+     const withLoad = available.map(a => {
+         const load = appointments.filter(appt =>
+diff --git a/src/components/AppointmentForm.tsx b/src/components/AppointmentForm.tsx
+index 216fda9..6e09c3e 100644
+--- a/src/components/AppointmentForm.tsx
++++ b/src/components/AppointmentForm.tsx
+@@ -10,7 +10,7 @@ import { useAppointments } from '../context/AppointmentContext';
+ import { useFormData } from '../hooks/useFormData';
+ import { APPOINTMENT_STATUSES } from '../types';
+ import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, AppointmentStatus } from '../types';
+-import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment, generateAllTimes } from '../utils/distribution';
++import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment, generateAllTimes, hasSectorTimeLimit } from '../utils/distribution';
+ import { api } from '../services/api';
+ import { ClientHistory } from './ClientHistory';
+ import { useAuth } from '../context/AuthContext';
+@@ -107,6 +107,12 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
+                 initialData?.eventId === formData.eventId;
+             const isBlockedForThisEvent = isCloserBlockedForSelectedEvent(formData.eventId, formData.attendantId);
+ 
++            if (isAldeiaOrTribo && formData.type !== 'Agendamento Pessoal') {
++                if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, time, formData.type, appointments, attendants, initialData?.id)) {
++                    return false;
++                }
++            }
++
+             // 1. Manually Selected Attendant
+             if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
+                 if (isBlockedForThisEvent && !isSameExistingAssignment) return false;
+@@ -128,7 +134,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
+                 : attendants;
+             
+             // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo
+-            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule: isAldeiaOrTribo });
++            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule: isAldeiaOrTribo, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined });
+             return !!available;
+         });
+ 
+@@ -573,7 +579,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
+             const apptDateTime = new Date(`${formData.date}T${formData.time}:00-03:00`);
+             const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
+ 
+-            if (diffMinutes < 10) {
++            if (diffMinutes < 10 && (formData.type as string) !== 'Fora da agenda') {
+                 toastManager.add({
+                     title: "Hor├írio Inv├ílido",
+                     description: "Os agendamentos devem ser marcados com pelo menos 10 minutos de anteced├¬ncia.",
+@@ -582,6 +588,18 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
+                 return false;
+             }
+ 
++            // 4. Sector Check
++            if (isAldeiaOrTribo && formData.type !== 'Agendamento Pessoal') {
++                if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, formData.time, formData.type, appointments, attendants, initialData?.id)) {
++                    toastManager.add({
++                        title: "Limite de Agendamentos",
++                        description: `O setor ${selectedEvent!.sector} atingiu o limite m├íximo de agendamentos para este hor├írio.`,
++                        type: 'error'
++                    });
++                    return false;
++                }
++            }
++
+             return true;
+         };
+ 
+@@ -626,7 +644,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
+                     formData.type,
+                     freshAttendantsForEvent,
+                     appointments,
+-                    { ignoreSchedule: isAldeiaOrTribo }
++                    { ignoreSchedule: isAldeiaOrTribo, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined }
+                 );
+                 if (bestCloser) {
+                     console.log(`[DISTRIBUTION] Assigned: ${bestCloser.name} (sector: ${bestCloser.sector}, id: ${bestCloser.id})`);
+diff --git a/src/utils/distribution.ts b/src/utils/distribution.ts
+index 9fa023a..dfb0129 100644
+--- a/src/utils/distribution.ts
++++ b/src/utils/distribution.ts
+@@ -159,14 +159,62 @@ export const hasConflictingAppointment = (
+     });
+ };
+ 
++export const hasSectorTimeLimit = (
++    sector: string,
++    dateStr: string,
++    timeStr: string,
++    appointmentType: string,
++    allAppointments: Appointment[],
++    attendants: Attendant[],
++    excludeAppointmentId?: string
++): boolean => {
++    if (sector !== 'Aldeia' && sector !== 'Tribo') return false;
++    if (appointmentType === 'Agendamento Pessoal') return false;
++
++    const sectorAttendants = new Set(attendants.filter(a => a.sector === sector).map(a => a.id));
++    
++    const newStart = timeToMinutes(timeStr);
++    const newEnd = newStart + getDuration(appointmentType);
++
++    let concurrentCount = 0;
++
++    for (const appt of allAppointments) {
++        if (excludeAppointmentId && appt.id === excludeAppointmentId) continue;
++        if (appt.status !== 'Pendente') continue;
++        if (appt.type === 'Agendamento Pessoal') continue;
++        if (appt.date !== dateStr) continue;
++        if (!sectorAttendants.has(appt.attendantId)) continue; 
++
++        const existingStart = timeToMinutes(appt.time);
++        let existingEnd: number;
++        if (appt.end_time) {
++            existingEnd = timeToMinutes(appt.end_time);
++            if (existingEnd <= existingStart && existingEnd !== 0) existingEnd += 1440;
++            else if (existingEnd === 0 && existingStart > 0) existingEnd = 1440;
++        } else {
++            existingEnd = existingStart + getDuration(appt.type);
++        }
++
++        if (newStart < existingEnd && newEnd > existingStart) {
++            concurrentCount++;
++        }
++    }
++
++    return concurrentCount >= 2;
++};
++
+ export const findAvailableCloser = (
+     dateStr: string,
+     timeStr: string,
+     appointmentType: string,
+     attendants: Attendant[],
+     allAppointments: Appointment[],
+-    options: { ignoreSchedule?: boolean } = {}
++    options: { ignoreSchedule?: boolean, sectorLimit?: string } = {}
+ ): Attendant | null => {
++    if (options.sectorLimit && hasSectorTimeLimit(options.sectorLimit, dateStr, timeStr, appointmentType, allAppointments, attendants)) {
++        return null;
++    }
++
+     const isCloserType = ['Liga├º├úo Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(appointmentType);
+     const eligibleAttendants = isCloserType ? attendants.filter(a => a.sector === 'Closer') : attendants;
+     if (eligibleAttendants.length === 0) return null;
