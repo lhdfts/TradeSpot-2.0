@@ -20,6 +20,21 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl!, supabaseKey!);
 
+// --- Event-specific Restrictions ---
+const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';
+const RESTRICTED_EVENT_WHITELIST = [
+    'andre1994bento@gmail.com',
+    'menezes.sp@gmail.com',
+    'luiz.lima@orange.fr',
+    'pmigueltm@gmail.com',
+    'rubensrs28@hotmail.com',
+    'fabioricardo737@gmail.com',
+    'ronaldolorenzi68@gmail.com',
+];
+const RESTRICTED_EVENT_MAX_APPOINTMENTS = 2;
+// Statuses that do NOT count toward the limit (slot was freed up)
+const RESTRICTED_EVENT_FREE_STATUSES = ['Cancelado', 'Reagendado'];
+
 // --- Helper Logic ---
 
 const calculateEndTime = (startTime: string, type: string): string => {
@@ -58,6 +73,40 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
         const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
 
+        // 0.5. Event-specific Whitelist & Limit Check
+        if (data.eventId === RESTRICTED_EVENT_ID) {
+            const emailNorm = data.email.toLowerCase();
+            if (!RESTRICTED_EVENT_WHITELIST.includes(emailNorm)) {
+                console.warn(`[RESTRICTED EVENT] Blocked unauthorized email: ${emailNorm}`);
+                return res.status(403).json({ error: 'Este email não está autorizado a agendar neste evento.' });
+            }
+
+            // Count existing non-freed appointments for this email in this event
+            const { data: emailClients } = await supabase
+                .from('clients')
+                .select('id')
+                .eq('email', emailNorm);
+
+            if (emailClients && emailClients.length > 0) {
+                const clientIds = emailClients.map((c: any) => c.id);
+                const { data: existingEventAppts } = await supabase
+                    .from('appointments')
+                    .select('id, status')
+                    .eq('event_id', RESTRICTED_EVENT_ID)
+                    .in('client_id', clientIds)
+                    .not('status', 'in', `(${RESTRICTED_EVENT_FREE_STATUSES.map(s => `"${s}"`).join(',')})`);
+
+                const usedSlots = existingEventAppts?.length || 0;
+                console.log(`[RESTRICTED EVENT] Email ${emailNorm} has ${usedSlots}/${RESTRICTED_EVENT_MAX_APPOINTMENTS} slots used.`);
+
+                if (usedSlots >= RESTRICTED_EVENT_MAX_APPOINTMENTS) {
+                    return res.status(409).json({
+                        error: `Você já utilizou o limite de ${RESTRICTED_EVENT_MAX_APPOINTMENTS} agendamentos para este evento.`
+                    });
+                }
+            }
+        }
+
         // 0. Buffer Check (10 minutes)
         const now = new Date();
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Brasilia time is UTC-3
@@ -72,7 +121,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         // Agent Logic
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId, { ignoreSchedule: isAldeiaOrTribo });
+            const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(data.type);
+            const ignoreSched = isAldeiaOrTribo && !isCloserAppt;
+            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched });
             if (!availableId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
             }
@@ -116,7 +167,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
-            if (data.type !== 'Fora da agenda' && !isAldeiaOrTribo) {
+            if (data.type !== 'Fora da agenda' && attendant.sector !== 'Aldeia' && attendant.sector !== 'Tribo') {
                 const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type);
                 if (!isWithinSchedule) {
                     return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
@@ -124,12 +175,6 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
         }
 
-        // Event-specific blocklist: never assign blocked closer for this event
-        if (isAttendantBlockedForEvent(finalAttendantId, data.eventId)) {
-            return res.status(409).json({
-                error: 'Este atendente está bloqueado para este evento.'
-            });
-        }
 
         const endTime = calculateEndTime(data.time, data.type);
 
@@ -153,7 +198,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         let clientId: string | null = null;
         const { data: existingClient } = await supabase.from('clients').select('id').eq('phone', cleanPhone).single();
 
-        let financialAmount = data.studentProfile.financial.amount;
+        let financialAmount = data.studentProfile?.financial?.amount;
         if (typeof financialAmount === 'string') {
             const clean = financialAmount.replace(/\./g, '').replace(',', '.');
             const parsed = parseFloat(clean);
@@ -392,7 +437,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 console.log(`[DEBUG] Checking Schedule for ${attendant.name} (${attendant.id})`);
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
-                if (merged.type !== 'Fora da agenda' && !isAldeiaOrTribo) {
+                if (merged.type !== 'Fora da agenda' && attendant.sector !== 'Aldeia' && attendant.sector !== 'Tribo') {
                     const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type);
                     console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
 
@@ -458,8 +503,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (updates.studentProfile) {
             updatePayload.interest_level = updates.studentProfile.interest;
             updatePayload.knowledge_level = updates.studentProfile.knowledge;
-            updatePayload.financial_currency = updates.studentProfile.financial.currency;
-            updatePayload.financial_amount = updates.studentProfile.financial.amount;
+            updatePayload.financial_currency = updates.studentProfile.financial?.currency;
+            updatePayload.financial_amount = updates.studentProfile.financial?.amount;
         }
 
         if (req.body.updatedBy) updatePayload.updatedBy = req.body.updatedBy;

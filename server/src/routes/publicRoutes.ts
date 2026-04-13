@@ -25,6 +25,21 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl!, supabaseKey!);
 
+// --- Event-specific Restrictions ---
+const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';
+const RESTRICTED_EVENT_WHITELIST = [
+    'andre1994bento@gmail.com',
+    'menezes.sp@gmail.com',
+    'luiz.lima@orange.fr',
+    'pmigueltm@gmail.com',
+    'rubensrs28@hotmail.com',
+    'fabioricardo737@gmail.com',
+    'ronaldolorenzi68@gmail.com',
+];
+const RESTRICTED_EVENT_MAX_APPOINTMENTS = 2;
+// Statuses that do NOT count toward the limit (slot was freed up)
+const RESTRICTED_EVENT_FREE_STATUSES = ['Cancelado', 'Reagendado'];
+
 router.get('/events/feeds', async (req: Request, res: Response) => {
     const { sector } = req.query;
     if (!sector || typeof sector !== 'string') {
@@ -433,6 +448,40 @@ router.post('/appointments', async (req: Request, res: Response) => {
 
             if (pendingAppts && pendingAppts.length > 0) {
                 return res.status(409).json({ error: 'Você já possui um agendamento pendente.' });
+            }
+        }
+
+        // 3.5 Event-specific Whitelist & Limit Check
+        if (eventId === RESTRICTED_EVENT_ID) {
+            const emailNorm = data.email.toLowerCase();
+            if (!RESTRICTED_EVENT_WHITELIST.includes(emailNorm)) {
+                console.warn(`[RESTRICTED EVENT] Blocked unauthorized email (public): ${emailNorm}`);
+                return res.status(403).json({ error: 'Este email não está autorizado a agendar neste evento.' });
+            }
+
+            // Count existing non-freed appointments for this email in this event
+            const { data: emailClients } = await supabase
+                .from('clients')
+                .select('id')
+                .eq('email', emailNorm);
+
+            if (emailClients && emailClients.length > 0) {
+                const clientIds = emailClients.map((c: any) => c.id);
+                const { data: existingEventAppts } = await supabase
+                    .from('appointments')
+                    .select('id, status')
+                    .eq('event_id', RESTRICTED_EVENT_ID)
+                    .in('client_id', clientIds)
+                    .not('status', 'in', `(${RESTRICTED_EVENT_FREE_STATUSES.map(s => `"${s}"`).join(',')})`);
+
+                const usedSlots = existingEventAppts?.length || 0;
+                console.log(`[RESTRICTED EVENT] Email ${emailNorm} has ${usedSlots}/${RESTRICTED_EVENT_MAX_APPOINTMENTS} slots used.`);
+
+                if (usedSlots >= RESTRICTED_EVENT_MAX_APPOINTMENTS) {
+                    return res.status(409).json({
+                        error: `Você já utilizou o limite de ${RESTRICTED_EVENT_MAX_APPOINTMENTS} agendamentos para este evento.`
+                    });
+                }
             }
         }
 
