@@ -183,6 +183,8 @@ export const SelfScheduling = () => {
         );
     }
 
+    const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';
+
     if (success) {
         return (
             <div className="p-12 text-center space-y-6">
@@ -206,6 +208,20 @@ export const SelfScheduling = () => {
                 <p className="text-sm text-muted-foreground">
                     Enviamos os detalhes para {formData.email}
                 </p>
+
+                {event?.id === RESTRICTED_EVENT_ID && (
+                    <div className="mx-auto max-w-md text-left border border-amber-400 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-600 rounded-lg p-4 flex gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                                Política de Cancelamento
+                            </p>
+                            <p className="text-sm text-amber-700 dark:text-amber-400">
+                                Caso precise cancelar ou reagendar, solicite com pelo menos <strong>24 horas de antecedência</strong> diretamente pelo canal do <strong>Suporte Prisma</strong>.
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
