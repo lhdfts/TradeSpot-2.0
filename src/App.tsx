@@ -23,6 +23,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Button } from './components/ui/button';
 import { ToastProvider } from './components/ui/toast';
+import { UpdateNotification } from './components/UpdateNotification';
 
 // Wrapper for Create Appointment to handle search params
 const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
@@ -254,6 +255,7 @@ function App() {
         <ThemeProvider>
           <ToastProvider position="top-right">
             <MainRouter />
+            <UpdateNotification />
           </ToastProvider>
         </ThemeProvider>
       </AuthProvider>
