@@ -175,6 +175,8 @@ export const hasConflictingAppointment = (
             existingEnd = existingStart + getDuration(appt.type);
         }
 
+        // Conflict if ranges overlap
+        return newStart < existingEnd && newEnd > existingStart;
     });
 };
 
