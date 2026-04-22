@@ -18,7 +18,7 @@ const timeToMinutes = (time: string): number => {
 };
 
 const getDuration = (type: string): number => {
-    if (['Ligação Closer', 'Gold Call', 'Reschedule', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal'].includes(type)) {
+    if (['Ligação Closer', 'Gold Call', 'Reschedule', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal', 'Atend. de Fechamento'].includes(type)) {
         return 60;
     }
     return 30;
@@ -215,9 +215,45 @@ export const findAvailableCloser = (
         return null;
     }
 
-    const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(appointmentType);
+    const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Atend. de Fechamento'].includes(appointmentType);
     const eligibleAttendants = isCloserType ? attendants.filter(a => a.sector === 'Closer') : attendants;
     if (eligibleAttendants.length === 0) return null;
+
+    if (appointmentType === 'Atend. de Fechamento') {
+        const sortedAlphabetical = [...eligibleAttendants].sort((a, b) => a.name.localeCompare(b.name));
+        
+        let lastAssignedId: string | null = null;
+        let latestTime = 0;
+
+        for (const appt of allAppointments) {
+            if (appt.type === 'Atend. de Fechamento') {
+                const ts = new Date(`${appt.date}T${appt.time}:00`).getTime();
+                if (ts > latestTime) {
+                    latestTime = ts;
+                    lastAssignedId = appt.attendantId;
+                }
+            }
+        }
+
+        let startIndex = 0;
+        if (lastAssignedId) {
+            const lastIdx = sortedAlphabetical.findIndex(a => a.id === lastAssignedId);
+            if (lastIdx !== -1) {
+                startIndex = (lastIdx + 1) % sortedAlphabetical.length;
+            }
+        }
+
+        for (let i = 0; i < sortedAlphabetical.length; i++) {
+            const candidateIdx = (startIndex + i) % sortedAlphabetical.length;
+            const candidate = sortedAlphabetical[candidateIdx];
+
+            if (options.ignoreSchedule || isAttendantWithinSchedule(candidate, dateStr, timeStr, appointmentType)) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
 
     const attendantsWithSchedule = options.ignoreSchedule
         ? eligibleAttendants

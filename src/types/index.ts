@@ -1,5 +1,5 @@
 export type AppointmentStatus = 'Cancelado' | 'Esquecimento' | 'No-show' | 'Pendente' | 'Realizado' | 'Reagendado';
-export type AppointmentType = 'Ligação SDR' | 'Ligação Closer' | 'Agendamento Pessoal' | 'Reagendamento Closer' | 'Upgrade' | 'Fora da agenda' | 'Gold Call' | 'Onboarding';
+export type AppointmentType = 'Ligação SDR' | 'Ligação Closer' | 'Agendamento Pessoal' | 'Reagendamento Closer' | 'Upgrade' | 'Fora da agenda' | 'Gold Call' | 'Onboarding' | 'Atend. de Fechamento';
 export type ProfileLevel = 'Alto' | 'Mediano' | 'Desconhecido';
 export type KnowledgeLevel = 'Iniciante' | 'Intermediário' | 'Avançado';
 

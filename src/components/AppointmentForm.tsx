@@ -91,11 +91,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return;
         }
 
-        if (formData.type === 'Fora da agenda') {
-            setAvailableTimes(generateAllTimes());
-            return;
-        }
-
         const allTimes = generateAllTimes();
         const selectedEvent = events.find(e => e.id === formData.eventId);
         const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
@@ -151,7 +146,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             { value: 'Agendamento Pessoal', label: 'Agendamento Pessoal' },
             { value: 'Reagendamento Closer', label: 'Reagendamento Closer' },
             { value: 'Upgrade', label: 'Upgrade' },
-            { value: 'Fora da agenda', label: 'Fora da agenda' }
+            { value: 'Fora da agenda', label: 'Fora da agenda' },
+            { value: 'Atend. de Fechamento', label: 'Atend. de Fechamento' }
         ];
 
         const selectedEvent = events.find(e => e.id === formData.eventId);
@@ -169,7 +165,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin') return allTypes;
 
         if (user.sector === 'SDR') {
-            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
+            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Atend. de Fechamento'].includes(t.value));
         }
         if (user.sector === 'Closer') {
             return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
@@ -188,7 +184,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Perpétuos') {
-            return allTypes.filter(t => ['Gold Call'].includes(t.value));
+            return allTypes.filter(t => ['Gold Call', 'Atend. de Fechamento'].includes(t.value));
         }
 
         return allTypes;
@@ -224,7 +220,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         // Original logic for CREATING new appointments
         const options = [
-            ...(formData.type === 'Fora da agenda' ? [] : [{ value: 'distribuicao_automatica', label: 'Distribuição Automática' }]),
+            { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
             ...attendants
                 .filter(a => {
                     const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
@@ -246,8 +242,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 .map(a => ({ value: a.id, label: a.name }))
         ];
 
-        // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call, mostrar apenas Distribuição Automática
-        if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call')) {
+        // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call/Fora da agenda, mostrar apenas Distribuição Automática
+        if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda')) {
             return options.filter(opt => opt.value === 'distribuicao_automatica');
         }
 
@@ -319,9 +315,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     setFormData(prev => ({ ...prev, attendantId: user.id }));
                 }
             }
-            // 2. Ligação Closer & Gold Call
-            else if (formData.type === 'Ligação Closer' || formData.type === 'Gold Call') {
-                if (user.sector === 'Closer') {
+            // 2. Ligação Closer, Gold Call, Fora da agenda & Atend. de Fechamento
+            else if (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda' || formData.type === 'Atend. de Fechamento') {
+                if (user.sector === 'Closer' && formData.type !== 'Atend. de Fechamento') {
                     setFormData(prev => ({ ...prev, attendantId: user.id }));
                 } else {
                     setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
@@ -532,7 +528,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         // Helper to check availability
         const checkAvailability = (attendantId: string) => {
-            if (formData.type === 'Fora da agenda') return true;
 
             // Blocked closer cannot be assigned for this event (except when editing the existing assignment)
             const isEditingMode = !!initialData;
@@ -579,7 +574,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const apptDateTime = new Date(`${formData.date}T${formData.time}:00-03:00`);
             const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
-            if (diffMinutes < 10 && (formData.type as string) !== 'Fora da agenda') {
+            if (diffMinutes < 10) {
                 toastManager.add({
                     title: "Horário Inválido",
                     description: "Os agendamentos devem ser marcados com pelo menos 10 minutos de antecedência.",
@@ -892,7 +887,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             label="Data"
                             value={formData.date}
                             onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
-                            minDate={formData.type === 'Fora da agenda' ? undefined : todayDate}
+                            minDate={todayDate}
                             disabled={
                                 isEditing ||
                                 !formData.eventId ||
@@ -905,7 +900,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 label="Horário"
                                 value={formData.time}
                                 onChange={(time) => setFormData({ ...formData, time })}
-                                minTime={(formData.type !== 'Fora da agenda' && formData.date === todayStr) ? minTimeStr : undefined}
+                                minTime={(formData.date === todayStr) ? minTimeStr : undefined}
                                 disabled={
                                     isEditing ||
                                     !formData.date ||
@@ -949,7 +944,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         disabled={
                                             isEditing
                                                 ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
-                                                : (formData.type !== 'Fora da agenda' && formData.type !== 'Upgrade')
+                                                : (formData.type !== 'Upgrade')
                                         }
                                         error={errors.attendantId}
                                     />
@@ -1167,13 +1162,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
                                     setFormData({ ...formData, additionalInfo: sanitizeInput.strictText(e.target.value) });
                                 }}
-                                maxLength={300}
+                                maxLength={500}
                                 disabled={isEditing}
                                 rows={3}
                                 className="pb-6"
                             />
                             <div className="absolute bottom-2 right-3 text-xs text-muted-foreground pointer-events-none">
-                                {formData.additionalInfo.length}/300
+                                {formData.additionalInfo.length}/500
                             </div>
                         </div>
 
