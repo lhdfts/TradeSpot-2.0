@@ -357,7 +357,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             attendant_id: undefined, created_by: undefined, event_id: undefined
         };
 
-        const webhookUrl = getAppointmentWebhooks()[data.type];
+        const allWebhooks = getAppointmentWebhooks();
+        const webhookUrl = allWebhooks[data.type];
+        console.log(`[WEBHOOK DIAG] type="${data.type}" | url="${webhookUrl || '(empty)'}" | allKeys=${JSON.stringify(Object.keys(allWebhooks))}`);
         if (webhookUrl) {
             console.log(`Sending webhook for ${data.type} to ${webhookUrl}`);
             try {
