@@ -221,27 +221,10 @@ export const findAvailableCloser = (
 
     if (appointmentType === 'Atend. de Fechamento') {
         const sortedAlphabetical = [...eligibleAttendants].sort((a, b) => a.name.localeCompare(b.name));
-        
-        let lastAssignedId: string | null = null;
-        let latestTime = 0;
 
-        for (const appt of allAppointments) {
-            if (appt.type === 'Atend. de Fechamento') {
-                const ts = new Date(`${appt.date}T${appt.time}:00`).getTime();
-                if (ts > latestTime) {
-                    latestTime = ts;
-                    lastAssignedId = appt.attendantId;
-                }
-            }
-        }
-
-        let startIndex = 0;
-        if (lastAssignedId) {
-            const lastIdx = sortedAlphabetical.findIndex(a => a.id === lastAssignedId);
-            if (lastIdx !== -1) {
-                startIndex = (lastIdx + 1) % sortedAlphabetical.length;
-            }
-        }
+        // Count existing "Atend. de Fechamento" appointments to determine next position in round-robin
+        const existingCount = allAppointments.filter(appt => appt.type === 'Atend. de Fechamento').length;
+        const startIndex = existingCount % sortedAlphabetical.length;
 
         for (let i = 0; i < sortedAlphabetical.length; i++) {
             const candidateIdx = (startIndex + i) % sortedAlphabetical.length;
