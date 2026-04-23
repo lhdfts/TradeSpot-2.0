@@ -247,10 +247,7 @@ export const findAvailableCloser = (
             const candidateIdx = (startIndex + i) % sortedAlphabetical.length;
             const candidate = sortedAlphabetical[candidateIdx];
 
-            const withinSchedule = options.ignoreSchedule || isAttendantWithinSchedule(candidate, dateStr, timeStr, appointmentType);
-            const noConflict = !hasConflictingAppointment(candidate.id, dateStr, timeStr, appointmentType, allAppointments);
-
-            if (withinSchedule && noConflict) {
+            if (options.ignoreSchedule || isAttendantWithinSchedule(candidate, dateStr, timeStr, appointmentType)) {
                 return candidate;
             }
         }
