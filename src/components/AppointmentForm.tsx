@@ -230,7 +230,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const eventSector = selectedEvent?.sector;
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
-                    if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
+                    if (formData.type === 'Fora da agenda') return a.sector === 'Closer' && a.role === 'Colaborador';
+                    if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
 
                     if (isAdministrative) {
                         return eventSector ? a.sector === eventSector : true;
@@ -316,12 +317,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 }
             }
             // 2. Ligação Closer, Gold Call, Fora da agenda & Atend. de Fechamento
-            else if (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda' || formData.type === 'Atend. de Fechamento') {
+            else if (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Atend. de Fechamento') {
                 if (user.sector === 'Closer' && formData.type !== 'Atend. de Fechamento') {
                     setFormData(prev => ({ ...prev, attendantId: user.id }));
                 } else {
                     setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
                 }
+            }
+            // 2b. Fora da agenda: pré-seleciona Distribuição Automática mas permite escolha manual
+            else if (formData.type === 'Fora da agenda') {
+                setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
             }
             // 3. Agendamento Pessoal
             else if (formData.type === 'Agendamento Pessoal') {
@@ -598,8 +603,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return true;
         };
 
-        // Validate 'Upgrade' and 'Reagendamento Closer' manual selections
-        if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer') {
+        // Validate 'Upgrade', 'Reagendamento Closer' and 'Fora da agenda' manual selections
+        if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda') {
             if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
                 // Skip validation if we are editing and the schedule-relevant fields haven't changed
                 const isScheduleChanged = !initialData ||
@@ -944,7 +949,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         disabled={
                                             isEditing
                                                 ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
-                                                : (formData.type !== 'Upgrade')
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda')
                                         }
                                         error={errors.attendantId}
                                     />
