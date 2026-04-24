@@ -147,7 +147,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             { value: 'Reagendamento Closer', label: 'Reagendamento Closer' },
             { value: 'Upgrade', label: 'Upgrade' },
             { value: 'Fora da agenda', label: 'Fora da agenda' },
-            { value: 'Atend. de Fechamento', label: 'Atend. de Fechamento' }
+            { value: 'Fechamento', label: 'Fechamento' }
         ];
 
         const selectedEvent = events.find(e => e.id === formData.eventId);
@@ -165,7 +165,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin') return allTypes;
 
         if (user.sector === 'SDR') {
-            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Atend. de Fechamento'].includes(t.value));
+            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Fechamento'].includes(t.value));
         }
         if (user.sector === 'Closer') {
             return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
@@ -184,7 +184,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Perpétuos') {
-            return allTypes.filter(t => ['Gold Call', 'Atend. de Fechamento'].includes(t.value));
+            return allTypes.filter(t => ['Gold Call', 'Fechamento'].includes(t.value));
         }
 
         return allTypes;
@@ -316,9 +316,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     setFormData(prev => ({ ...prev, attendantId: user.id }));
                 }
             }
-            // 2. Ligação Closer, Gold Call, Fora da agenda & Atend. de Fechamento
-            else if (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Atend. de Fechamento') {
-                if (user.sector === 'Closer' && formData.type !== 'Atend. de Fechamento') {
+            // 2. Ligação Closer, Gold Call & Fechamento
+            else if (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fechamento') {
+                if (user.sector === 'Closer' && formData.type !== 'Fechamento') {
                     setFormData(prev => ({ ...prev, attendantId: user.id }));
                 } else {
                     setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));

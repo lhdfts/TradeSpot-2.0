@@ -18,7 +18,7 @@ const timeToMinutes = (time: string): number => {
 };
 
 const getDuration = (type: string): number => {
-    if (['Ligação Closer', 'Gold Call', 'Reschedule', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal', 'Atend. de Fechamento'].includes(type)) {
+    if (['Ligação Closer', 'Gold Call', 'Reschedule', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal', 'Fechamento'].includes(type)) {
         return 60;
     }
     return 30;
@@ -215,15 +215,15 @@ export const findAvailableCloser = (
         return null;
     }
 
-    const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Atend. de Fechamento'].includes(appointmentType);
+    const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento'].includes(appointmentType);
     const eligibleAttendants = isCloserType ? attendants.filter(a => a.sector === 'Closer') : attendants;
     if (eligibleAttendants.length === 0) return null;
 
-    if (appointmentType === 'Atend. de Fechamento') {
+    if (appointmentType === 'Fechamento') {
         const sortedAlphabetical = [...eligibleAttendants].sort((a, b) => a.name.localeCompare(b.name));
 
-        // Count existing "Atend. de Fechamento" appointments to determine next position in round-robin
-        const existingCount = allAppointments.filter(appt => appt.type === 'Atend. de Fechamento').length;
+        // Count existing "Fechamento" appointments to determine next position in round-robin
+        const existingCount = allAppointments.filter(appt => appt.type === 'Fechamento').length;
         const startIndex = existingCount % sortedAlphabetical.length;
 
         for (let i = 0; i < sortedAlphabetical.length; i++) {

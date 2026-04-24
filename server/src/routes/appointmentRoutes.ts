@@ -186,7 +186,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             .eq('attendant_id', finalAttendantId)
             .neq('status', 'Cancelado');
 
-        if (data.type !== 'Fora da agenda' && data.type !== 'Atend. de Fechamento' && existingAppts) {
+        if (data.type !== 'Fora da agenda' && data.type !== 'Fechamento' && existingAppts) {
             // @ts-ignore
             const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts);
             if (hasConflict) {
