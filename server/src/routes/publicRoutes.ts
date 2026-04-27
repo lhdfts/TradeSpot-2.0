@@ -124,7 +124,7 @@ router.get('/events/:link', async (req: Request, res: Response) => {
             id: event.id,
             event_name: event.event_name,
             sector: event.sector,
-            duration: 60 // Fixed for Ligação Closer
+            duration: event.sector === 'SDR' ? 30 : 60
         });
 
     } catch (err: any) {
@@ -180,8 +180,10 @@ router.get('/available-times', async (req: Request, res: Response) => {
                     APPOINTMENT_TYPE = 'Agendamento Pessoal';
                 } else if (eventData.sector === 'Perpétuos') {
                     sectors = ['Perpétuos'];
-                } else if (eventData.sector === 'SDR' || eventData.sector === 'Closer') {
-                    // SDR events feed into Closer availability
+                } else if (eventData.sector === 'SDR') {
+                    sectors = ['SDR'];
+                    APPOINTMENT_TYPE = 'Ligação SDR';
+                } else if (eventData.sector === 'Closer') {
                     sectors = ['Closer'];
                 } else {
                     // Default fallback
@@ -203,6 +205,10 @@ router.get('/available-times', async (req: Request, res: Response) => {
         } else {
             // Otherwise, fetch by sectors
             attendantsQuery = attendantsQuery.in('sector', sectors);
+            // SDR events: only Colaborador role
+            if (sectors.includes('SDR')) {
+                attendantsQuery = attendantsQuery.eq('role', 'Colaborador');
+            }
         }
         
         const { data: attendants, error: attError } = await attendantsQuery;
@@ -259,6 +265,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
         // Standard Closer Logic
         const allTimes: string[] = [];
         const isAldeiaOrTribo = sectors.includes('Aldeia') || sectors.includes('Tribo');
+        const isSDR = sectors.includes('SDR');
         const allowedMinutes = isAldeiaOrTribo ? [0, 30] : [0, 15, 30, 45];
 
         for (let hour = 0; hour < 24; hour++) {
@@ -278,6 +285,17 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
                     if (diffMinutes < 12 * 60) {
                         continue; // Skip slots with less than 12h lead time
+                    }
+                }
+
+                // Adjustment: 1h lead time for SDR events (External Link)
+                if (isSDR) {
+                    const now = new Date();
+                    const slotDateTime = new Date(`${date}T${timeSlot}:00-03:00`);
+                    const diffMinutes = (slotDateTime.getTime() - now.getTime()) / 60000;
+
+                    if (diffMinutes < 60) {
+                        continue; // Skip slots with less than 1h lead time
                     }
                 }
 
@@ -403,6 +421,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
             APPOINTMENT_TYPE = 'Agendamento Pessoal';
         } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
             APPOINTMENT_TYPE = 'Onboarding';
+        } else if (eventData.sector === 'SDR') {
+            APPOINTMENT_TYPE = 'Ligação SDR';
         }
 
         // 2. Buffer Check (30 minutes or 12 hours)
@@ -411,12 +431,13 @@ router.post('/appointments', async (req: Request, res: Response) => {
         const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
         const isAldeiaOrTribo = eventData.sector === 'Aldeia' || eventData.sector === 'Tribo';
-        const minLeadMinutes = isAldeiaOrTribo ? 12 * 60 : 30;
+        const isSDR = eventData.sector === 'SDR';
+        const minLeadMinutes = isAldeiaOrTribo ? 12 * 60 : isSDR ? 60 : 30;
 
         if (diffMinutes < minLeadMinutes) {
-            const errorMsg = isAldeiaOrTribo 
-                ? 'O agendamento para este setor deve ter pelo menos 12 horas de antecedência.'
-                : 'O agendamento deve ter pelo menos 30 minutos de antecedência.';
+            let errorMsg = 'O agendamento deve ter pelo menos 30 minutos de antecedência.';
+            if (isAldeiaOrTribo) errorMsg = 'O agendamento para este setor deve ter pelo menos 12 horas de antecedência.';
+            else if (isSDR) errorMsg = 'O agendamento deve ter pelo menos 1 hora de antecedência.';
             return res.status(400).json({ error: errorMsg });
         }
 
@@ -497,7 +518,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 .single();
 
             // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI/CEO), resetamos
-            const allowedSectors = ['Closer', 'Líder', 'Co-Líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia'];
+            const allowedSectors = ['Closer', 'Líder', 'Co-Líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia', 'SDR'];
             const isValidSector = attendantData && allowedSectors.includes(attendantData.sector);
             if (!attendantData || !isValidSector) {
                 finalAttendantId = 'distribuicao_automatica';

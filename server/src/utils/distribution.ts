@@ -255,6 +255,9 @@ export const findBestAttendant = async (
                 sectors = ['Aldeia'];
                 roleFilter = 'Colaborador';
                 sectorLimitCheck = 'Aldeia';
+            } else if (eventData.sector === 'SDR') {
+                sectors = ['SDR'];
+                roleFilter = 'Colaborador';
             } else {
                 sectors = [eventData.sector];
             }
