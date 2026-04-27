@@ -39,9 +39,6 @@ const RESTRICTED_EVENT_FREE_STATUSES = ['Cancelado', 'Reagendado'];
 
 const calculateEndTime = (startTime: string, type: string): string => {
     let duration = 60;
-    if (type === 'Ligação SDR') {
-        duration = 30;
-    }
     const [hours, minutes] = startTime.split(':').map(Number);
     const totalMinutes = hours * 60 + minutes + duration;
     const endHours = Math.floor(totalMinutes / 60) % 24;

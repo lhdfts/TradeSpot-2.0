@@ -767,11 +767,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (!startTime) return '';
         const [hours, minutes] = startTime.split(':').map(Number);
 
-        let duration = 60; // Default for most types
-
-        if (formData.type === 'Ligação SDR') {
-            duration = 30;
-        }
+        let duration = 60; // Todos os tipos duram 1 hora
 
         const totalMinutes = hours * 60 + minutes + duration;
         const endHours = Math.floor(totalMinutes / 60) % 24;

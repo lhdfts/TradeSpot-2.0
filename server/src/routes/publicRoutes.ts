@@ -124,7 +124,7 @@ router.get('/events/:link', async (req: Request, res: Response) => {
             id: event.id,
             event_name: event.event_name,
             sector: event.sector,
-            duration: event.sector === 'SDR' ? 30 : 60
+            duration: 60
         });
 
     } catch (err: any) {

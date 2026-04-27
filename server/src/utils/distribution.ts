@@ -55,8 +55,7 @@ export const timeToMinutes = (time: string): number => {
 };
 
 export const getDuration = (type: string): number => {
-    if (type === 'Ligação SDR') return 30;
-    return 60; // Todos os outros (Closer, Upgrade, Pessoal, etc) duram 1 hora
+    return 60; // Todos os tipos duram 1 hora
 };
 
 // Check if attendant is working at this time
