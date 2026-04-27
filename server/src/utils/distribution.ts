@@ -54,7 +54,7 @@ export const timeToMinutes = (time: string): number => {
     return h * 60 + m;
 };
 
-export const getDuration = (type: string): number => {
+export const getDuration = (_type?: string): number => {
     return 60; // Todos os tipos duram 1 hora
 };
 
