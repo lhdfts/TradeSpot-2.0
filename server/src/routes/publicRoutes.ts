@@ -731,8 +731,15 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 created_by_name: creatorName
             };
 
+            console.log(`[Webhook Debug] Disparando webhook para tipo: ${APPOINTMENT_TYPE}`);
+            console.log(`[Webhook Debug] URL resolvida: ${webhookUrl}`);
+            
             // Non-blocking webhook
-            axios.post(webhookUrl, webhookPayload).catch(err => console.error("Webhook Public Error:", err.message));
+            axios.post(webhookUrl, webhookPayload)
+                .then(() => console.log(`[Webhook Debug] Webhook disparado com sucesso para ${APPOINTMENT_TYPE}`))
+                .catch(err => console.error(`[Webhook Debug] Falha no disparo (${webhookUrl}):`, err.message));
+        } else {
+            console.warn(`[Webhook Debug] Nenhuma URL configurada para o tipo: ${APPOINTMENT_TYPE}`);
         }
 
         res.status(201).json({ message: 'Agendamento realizado com sucesso!', id: createdAppointment.id });
