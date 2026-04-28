@@ -734,10 +734,14 @@ router.post('/appointments', async (req: Request, res: Response) => {
             console.log(`[Webhook Debug] Disparando webhook para tipo: ${APPOINTMENT_TYPE}`);
             console.log(`[Webhook Debug] URL resolvida: ${webhookUrl}`);
             
-            // Non-blocking webhook
-            axios.post(webhookUrl, webhookPayload)
-                .then(() => console.log(`[Webhook Debug] Webhook disparado com sucesso para ${APPOINTMENT_TYPE}`))
-                .catch(err => console.error(`[Webhook Debug] Falha no disparo (${webhookUrl}):`, err.message));
+            try {
+                // Must await in Vercel Serverless, otherwise the function freezes before the request is sent
+                await axios.post(webhookUrl, webhookPayload);
+                console.log(`[Webhook Debug] Webhook disparado com sucesso para ${APPOINTMENT_TYPE}`);
+            } catch (err: any) {
+                console.error(`[Webhook Debug] Falha no disparo (${webhookUrl}):`, err.message);
+                // We don't throw here to ensure the client still gets a success response
+            }
         } else {
             console.warn(`[Webhook Debug] Nenhuma URL configurada para o tipo: ${APPOINTMENT_TYPE}`);
         }
