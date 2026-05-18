@@ -1,14 +1,14 @@
 export type AppointmentStatus = 'Cancelado' | 'Esquecimento' | 'No-show' | 'Pendente' | 'Realizado' | 'Reagendado';
-export type AppointmentType = 'Ligação SDR' | 'Ligação Closer' | 'Agendamento Pessoal' | 'Reagendamento Closer' | 'Upgrade' | 'Fora da agenda' | 'Gold Call' | 'Onboarding' | 'Fechamento';
+export type AppointmentType = 'Ligação SDR' | 'Ligação Closer' | 'Ligação Equipe Aldeia' | 'Agendamento Pessoal' | 'Reagendamento Closer' | 'Upgrade' | 'Fora da agenda' | 'Gold Call' | 'Onboarding' | 'Fechamento';
 export type ProfileLevel = 'Alto' | 'Mediano' | 'Desconhecido';
 export type KnowledgeLevel = 'Iniciante' | 'Intermediário' | 'Avançado';
 
 export interface StudentProfile {
-    interest: ProfileLevel;
-    knowledge: KnowledgeLevel;
-    financial: {
-        currency: string;
-        amount: string;
+    interest?: ProfileLevel;
+    knowledge?: KnowledgeLevel;
+    financial?: {
+        currency?: string;
+        amount?: string;
     };
 }
 

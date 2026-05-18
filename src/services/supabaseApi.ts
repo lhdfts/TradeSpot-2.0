@@ -51,7 +51,7 @@ export class SupabaseApiService implements ApiService {
                     knowledge: app.knowledge_level,
                     financial: {
                         currency: app.financial_currency,
-                        amount: app.financial_amount
+                        amount: app.financial_amount != null ? String(app.financial_amount) : undefined
                     }
                 },
                 // Status tracking
@@ -103,7 +103,7 @@ export class SupabaseApiService implements ApiService {
                     knowledge: createdAppointment.knowledge_level,
                     financial: {
                         currency: createdAppointment.financial_currency,
-                        amount: createdAppointment.financial_amount
+                        amount: createdAppointment.financial_amount != null ? String(createdAppointment.financial_amount) : undefined
                     }
                 }
             } as Appointment;
@@ -150,7 +150,7 @@ export class SupabaseApiService implements ApiService {
                     knowledge: updatedAppointment.knowledge_level,
                     financial: {
                         currency: updatedAppointment.financial_currency,
-                        amount: updatedAppointment.financial_amount
+                        amount: updatedAppointment.financial_amount != null ? String(updatedAppointment.financial_amount) : undefined
                     }
                 }
             } as Appointment;

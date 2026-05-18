@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ import { FloatingSelect } from '../components/FloatingSelect';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { Pagination } from '../components/ui/pagination';
 import { toastManager } from '../components/ui/toast';
+import { useFormData } from '../hooks/useFormData';
 
 
 interface MyAppointmentsProps {
@@ -19,18 +20,49 @@ interface MyAppointmentsProps {
 export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const { appointments } = useAppointments();
     const { user } = useAuth();
+    const { events } = useFormData();
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [eventFilter, setEventFilter] = useState('all');
+    const [typeFilter, setTypeFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: new Date().toISOString().split('T')[0], end: '' });
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    // Reset pagination when filters change
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search, statusFilter, dateRange]);
+    const optionsBaseAppointments = React.useMemo(() => {
+        return appointments.filter(a => {
+            if (!user) return false;
+            return a.attendantId === user.id || a.createdBy === user.id;
+        });
+    }, [appointments, user]);
+
+    const eventOptions = React.useMemo(() => {
+        const ids = Array.from(new Set(optionsBaseAppointments.map(a => a.eventId).filter((v): v is string => !!v)));
+        ids.sort((a, b) => {
+            const nameA = events.find(e => e.id === a)?.event_name || a;
+            const nameB = events.find(e => e.id === b)?.event_name || b;
+            return nameA.localeCompare(nameB);
+        });
+
+        return [
+            { value: 'all', label: 'Todos' },
+            ...ids.map(id => ({
+                value: id,
+                label: events.find(e => e.id === id)?.event_name || id
+            }))
+        ];
+    }, [events, optionsBaseAppointments]);
+
+    const typeOptions = React.useMemo(() => {
+        const types = Array.from(new Set(optionsBaseAppointments.map(a => a.type)));
+        types.sort((a, b) => a.localeCompare(b));
+        return [
+            { value: 'all', label: 'Todos' },
+            ...types.map(t => ({ value: t, label: t }))
+        ];
+    }, [optionsBaseAppointments]);
 
     const filtered = appointments.filter(a => {
         const matchesUser = user && (a.attendantId === user.id || a.createdBy === user.id);
@@ -43,6 +75,8 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
             a.phone.toString().includes(search) ||
             a.email?.toLowerCase().includes(search.toLowerCase());
         const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
+        const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
+        const matchesType = typeFilter === 'all' || a.type === typeFilter;
 
         // Default: Show Only Today and Future
         // If filters are empty, we hide past appointments (yesterday or older).
@@ -66,7 +100,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
             matchesDate = a.date >= safeTodayStr;
         }
 
-        return matchesSearch && matchesStatus && matchesDate;
+        return matchesSearch && matchesStatus && matchesEvent && matchesType && matchesDate;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
@@ -92,7 +126,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                 type: 'success',
             });
             setTimeout(() => setCopiedId(null), 2000);
-        } catch (err) {
+        } catch {
             toastManager.add({
                 title: "Erro",
                 description: "Falha ao copiar telefone. Tente manualmente.",
@@ -132,7 +166,10 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                             label="Pesquisa"
                             startIcon={<Search size={18} />}
                             value={search}
-                            onChange={e => setSearch(e.target.value)}
+                            onChange={e => {
+                                setSearch(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             placeholder=""
                             className="bg-background"
                         />
@@ -142,7 +179,10 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                     <FloatingSelect
                         label="Status"
                         value={statusFilter}
-                        onChange={e => setStatusFilter(e.target.value)}
+                        onChange={e => {
+                            setStatusFilter(e.target.value);
+                            setCurrentPage(1);
+                        }}
                         options={[
                             { value: 'all', label: 'Todos' },
                             { value: 'Cancelado', label: 'Cancelado' },
@@ -153,11 +193,35 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                             { value: 'Reagendado', label: 'Reagendado' }
                         ]}
                     />
+                    <FloatingSelect
+                        label="Evento"
+                        value={eventFilter}
+                        onChange={e => {
+                            setEventFilter(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                        options={eventOptions}
+                    />
+                    <FloatingSelect
+                        label="Tipo"
+                        value={typeFilter}
+                        onChange={e => {
+                            setTypeFilter(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                        options={typeOptions}
+                    />
                     <DateRangePicker
                         startDate={dateRange.start}
                         endDate={dateRange.end}
-                        onStartDateChange={(date) => setDateRange({ ...dateRange, start: date })}
-                        onEndDateChange={(date) => setDateRange({ ...dateRange, end: date })}
+                        onStartDateChange={(date) => {
+                            setDateRange({ ...dateRange, start: date });
+                            setCurrentPage(1);
+                        }}
+                        onEndDateChange={(date) => {
+                            setDateRange({ ...dateRange, end: date });
+                            setCurrentPage(1);
+                        }}
                     />
                 </div>
             </div>

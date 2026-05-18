@@ -109,7 +109,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Brasilia time is UTC-3
 
         const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
-        if (data.type !== 'Fora da agenda' && diffMinutes < 10) {
+        const canBypassBuffer = req.user?.sector === 'Closer' || req.user?.role === 'Dev';
+        if (diffMinutes < 0) {
+            return res.status(400).json({ error: 'O agendamento deve ser em um horário futuro.' });
+        }
+        if (!canBypassBuffer && data.type !== 'Fora da agenda' && diffMinutes < 10) {
             return res.status(400).json({ error: 'Os agendamentos devem ser marcados com pelo menos 10 minutos de antecedência.' });
         }
 
@@ -164,6 +168,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
+            if (data.type === 'Ligação Equipe Aldeia' && attendant.sector !== 'Aldeia') {
+                console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to Ligação Equipe Aldeia.`);
+                return res.status(409).json({
+                    error: `O atendente ${attendant.name} não pertence ao setor Aldeia (setor atual: ${attendant.sector}). Atualize a página e tente novamente.`
+                });
+            }
+
             if (data.type !== 'Fora da agenda' && attendant.sector !== 'Aldeia' && attendant.sector !== 'Tribo') {
                 const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type);
                 if (!isWithinSchedule) {
@@ -195,30 +206,46 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         let clientId: string | null = null;
         const { data: existingClient } = await supabase.from('clients').select('id').eq('phone', cleanPhone).single();
 
-        let financialAmount = data.studentProfile?.financial?.amount;
-        if (typeof financialAmount === 'string') {
-            const clean = financialAmount.replace(/\./g, '').replace(',', '.');
+        const interest = data.studentProfile?.interest;
+        const knowledge = data.studentProfile?.knowledge;
+        const financialCurrency = data.studentProfile?.financial?.currency;
+        const financialAmountRaw = data.studentProfile?.financial?.amount;
+
+        let financialAmount: number | null = null;
+        if (typeof financialAmountRaw === 'string' && financialAmountRaw.trim() !== '') {
+            const clean = financialAmountRaw.replace(/\./g, '').replace(',', '.');
             const parsed = parseFloat(clean);
-            financialAmount = isNaN(parsed) ? 0 : Math.round(parsed);
-        } else if (typeof financialAmount === 'number') {
-            financialAmount = Math.round(financialAmount);
+            financialAmount = isNaN(parsed) ? null : Math.round(parsed);
+        } else if (typeof financialAmountRaw === 'number') {
+            financialAmount = Math.round(financialAmountRaw);
         }
 
-        const clientPayload = {
+        const baseClientPayload: any = {
             name: data.lead,
             phone: cleanPhone,
-            email: data.email,
-            interest_level: data.studentProfile.interest,
-            knowledge_level: data.studentProfile.knowledge,
-            financial_currency: data.studentProfile.financial.currency,
-            financial_amount: financialAmount
+            email: data.email
         };
+
+        const optionalClientPayload: any = {};
+        if (interest) optionalClientPayload.interest_level = interest;
+        if (knowledge) optionalClientPayload.knowledge_level = knowledge;
+        if (financialAmount != null) {
+            optionalClientPayload.financial_currency = financialCurrency || 'BRL';
+            optionalClientPayload.financial_amount = financialAmount;
+        }
 
         if (existingClient) {
             clientId = existingClient.id;
-            await supabase.from('clients').update(clientPayload).eq('id', clientId);
+            await supabase.from('clients').update({ ...baseClientPayload, ...optionalClientPayload }).eq('id', clientId);
         } else {
-            const { data: newClient } = await supabase.from('clients').insert(clientPayload).select('id').single();
+            const insertPayload = {
+                ...baseClientPayload,
+                interest_level: interest ?? null,
+                knowledge_level: knowledge ?? null,
+                financial_currency: financialAmount != null ? (financialCurrency || 'BRL') : null,
+                financial_amount: financialAmount
+            };
+            const { data: newClient } = await supabase.from('clients').insert(insertPayload).select('id').single();
             if (newClient) clientId = newClient.id;
         }
 

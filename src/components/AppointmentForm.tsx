@@ -102,6 +102,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 initialData?.eventId === formData.eventId;
             const isBlockedForThisEvent = isCloserBlockedForSelectedEvent(formData.eventId, formData.attendantId);
 
+            const now = new Date();
+            const apptDateTime = new Date(`${formData.date}T${time}:00-03:00`);
+            const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
+
+            if (diffMinutes < 0) return false;
+            if (user?.sector !== 'Closer' && formData.type !== 'Fora da agenda' && diffMinutes < 10) return false;
+
             if (isAldeiaOrTribo && formData.type !== 'Agendamento Pessoal') {
                 if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, time, formData.type, appointments, attendants, initialData?.id)) {
                     return false;
@@ -134,7 +141,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         });
 
         setAvailableTimes(filtered);
-    }, [formData.date, formData.type, formData.attendantId, formData.eventId, attendants, appointments, initialData]);
+    }, [formData.date, formData.type, formData.attendantId, formData.eventId, attendants, appointments, initialData, events, user]);
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
@@ -155,6 +162,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
         }
 
+        if (user?.sector === 'Closer') {
+            allTypes.push({ value: 'Ligação Equipe Aldeia', label: 'Ligação Equipe Aldeia' });
+        }
+
         if (user && (user.sector === 'Aldeia' || user.sector === 'Tribo' || user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin')) {
             allTypes.push(
                 { value: 'Onboarding', label: 'Onboarding' }
@@ -168,7 +179,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Fechamento'].includes(t.value));
         }
         if (user.sector === 'Closer') {
-            return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
+            return allTypes.filter(t => ['Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Tribo') {
             return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
@@ -195,6 +206,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (isEditing) {
             const typeToSectorMap: Record<string, string> = {
                 'Ligação Closer': 'Closer',
+                'Ligação Equipe Aldeia': 'Aldeia',
                 'Gold Call': 'Closer',
                 'Reagendamento Closer': 'Closer',
                 'Upgrade': 'Closer',
@@ -232,6 +244,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
                     if (formData.type === 'Fora da agenda') return a.sector === 'Closer' && a.role === 'Colaborador';
                     if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
+                    if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia';
 
                     if (isAdministrative) {
                         return eventSector ? a.sector === eventSector : true;
@@ -276,6 +289,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
     useEffect(() => {
         if (initialData) {
+            const incomingProfile = initialData.studentProfile;
             setFormData({
                 lead: initialData.lead,
                 phone: String(initialData.phone || ''),
@@ -289,10 +303,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 meetLink: initialData.meetLink || '',
                 notes: initialData.notes || '',
                 additionalInfo: initialData.additionalInfo || '',
-                studentProfile: initialData.studentProfile || {
-                    interest: 'Mediano',
-                    knowledge: 'Iniciante',
-                    financial: { currency: 'BRL', amount: '' }
+                studentProfile: {
+                    interest: (incomingProfile?.interest || '') as ProfileLevel,
+                    knowledge: (incomingProfile?.knowledge || '') as KnowledgeLevel,
+                    financial: {
+                        currency: incomingProfile?.financial?.currency || 'BRL',
+                        amount: incomingProfile?.financial?.amount != null ? String(incomingProfile.financial.amount) : ''
+                    }
                 }
             });
         } else if (prefillData) {
@@ -323,6 +340,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 } else {
                     setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
                 }
+            }
+            // 2c. Ligação Equipe Aldeia
+            else if (formData.type === 'Ligação Equipe Aldeia') {
+                setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
             }
             // 2b. Fora da agenda: pré-seleciona Distribuição Automática mas permite escolha manual
             else if (formData.type === 'Fora da agenda') {
@@ -514,10 +535,6 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (!formData.lead) { toastManager.add({ title: "Erro", description: "Nome é obrigatório", type: 'error' }); return; }
         if (!formData.phone) { toastManager.add({ title: "Erro", description: "Telefone é obrigatório", type: 'error' }); return; }
         if (!formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
-        if (String(formData.studentProfile.financial.amount) === '') {
-            toastManager.add({ title: "Erro", description: "Valor do Perfil Financeiro é obrigatório", type: 'error' });
-            return;
-        }
 
         // Final Validation Gatekeeper
         if (formData.type === 'Reagendamento Closer') {
@@ -579,7 +596,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const apptDateTime = new Date(`${formData.date}T${formData.time}:00-03:00`);
             const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
-            if (diffMinutes < 10) {
+            const canBypassBuffer = user?.sector === 'Closer';
+            if (diffMinutes < 0) {
+                toastManager.add({
+                    title: "Horário Inválido",
+                    description: "O agendamento deve ser em um horário futuro.",
+                    type: 'error'
+                });
+                return false;
+            }
+            if (!canBypassBuffer && formData.type !== 'Fora da agenda' && diffMinutes < 10) {
                 toastManager.add({
                     title: "Horário Inválido",
                     description: "Os agendamentos devem ser marcados com pelo menos 10 minutos de antecedência.",
@@ -624,6 +650,26 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         try {
             let finalAttendantId = formData.attendantId;
+            const studentProfilePayload = (() => {
+                const interest = formData.studentProfile.interest;
+                const knowledge = formData.studentProfile.knowledge;
+                const currency = formData.studentProfile.financial.currency;
+                const amount = formData.studentProfile.financial.amount;
+
+                const payload: any = {};
+                if (interest) payload.interest = interest;
+                if (knowledge) payload.knowledge = knowledge;
+
+                const hasAmount = String(amount ?? '').trim() !== '';
+                if (hasAmount) {
+                    payload.financial = {
+                        currency: currency || 'BRL',
+                        amount: amount
+                    };
+                }
+
+                return Object.keys(payload).length > 0 ? payload : undefined;
+            })();
 
             // Resolve Automatic Distribution on Submit
             if (formData.attendantId === 'distribuicao_automatica') {
@@ -650,7 +696,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     console.log(`[DISTRIBUTION] Assigned: ${bestCloser.name} (sector: ${bestCloser.sector}, id: ${bestCloser.id})`);
                     finalAttendantId = bestCloser.id;
                 } else {
-                    alert('Não há closers disponíveis para este horário.');
+                    alert('Não há atendentes disponíveis para este horário.');
                     setIsSaving(false);
                     return;
                 }
@@ -662,6 +708,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             if (initialData) {
                 await updateAppointment(initialData.id, {
                     ...formData,
+                    studentProfile: studentProfilePayload,
                     phone: Number(formData.phone.replace(/\D/g, '')),
                     attendantId: finalAttendantId,
                     updatedBy: user?.id // Pass current user for status tracking
@@ -669,6 +716,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             } else {
                 await createAppointment({
                     ...formData,
+                    studentProfile: studentProfilePayload,
                     phone: Number(formData.phone.replace(/\D/g, '')),
                     attendantId: finalAttendantId,
                     createdBy: creatorId
@@ -1128,15 +1176,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                                     financial: { ...prev.studentProfile.financial, amount: formatted }
                                                 }
                                             }));
-                                            if (errors.amount) setErrors(prev => ({ ...prev, amount: '' }));
-                                        }}
-                                        onBlur={() => {
-                                            if (!formData.studentProfile.financial.amount) {
-                                                setErrors(prev => ({ ...prev, amount: 'Valor do Perfil Financeiro é obrigatório' }));
-                                            }
                                         }}
                                         disabled={isEditing}
-                                        error={errors.amount}
                                     // required - Validation handled manually for better UX
                                     />
                                     {getConvertedValue() && (

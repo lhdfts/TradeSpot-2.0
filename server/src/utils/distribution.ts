@@ -109,18 +109,23 @@ export const isAttendantWithinSchedule = (
     // 2. Check Current Day
     if (!schedule || !schedule.start || !schedule.end) return false;
 
-    const startMinutes = timeToMinutes(schedule.start);
-    let endMinutes = timeToMinutes(schedule.end);
+    // Special case: 00:00 → 00:00 means 24h availability — skip boundary check
+    const is24h = schedule.start === '00:00' && schedule.end === '00:00';
 
-    // Apply logic: treat as "crossed midnight" if end <= start
-    if (endMinutes <= startMinutes && endMinutes !== 0) {
-        endMinutes += 1440;
-    } else if (endMinutes === 0) {
-        endMinutes = 1440;
+    if (!is24h) {
+        const startMinutes = timeToMinutes(schedule.start);
+        let endMinutes = timeToMinutes(schedule.end);
+
+        // Apply logic: treat as "crossed midnight" if end <= start
+        if (endMinutes <= startMinutes && endMinutes !== 0) {
+            endMinutes += 1440;
+        } else if (endMinutes === 0) {
+            endMinutes = 1440;
+        }
+
+        // Normal or Overnight Shift (now unified range)
+        if (apptStart < startMinutes || apptEnd > endMinutes) return false;
     }
-
-    // Normal or Overnight Shift (now unified range)
-    if (apptStart < startMinutes || apptEnd > endMinutes) return false;
 
     if (attendant.pauses && attendant.pauses[dayKey]) {
         for (const pause of attendant.pauses[dayKey]) {
@@ -239,7 +244,13 @@ export const findBestAttendant = async (
 
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
 
-    if (eventId && !isCloserType) {
+    if (type === 'Ligação Equipe Aldeia') {
+        sectors = ['Aldeia'];
+        roleFilter = 'Colaborador';
+        sectorLimitCheck = 'Aldeia';
+    }
+
+    if (eventId && !isCloserType && type !== 'Ligação Equipe Aldeia') {
         const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
         if (eventData) {
             if (eventData.sector === 'Perpétuos') {
