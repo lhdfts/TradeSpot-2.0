@@ -234,18 +234,20 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             optionalClientPayload.financial_amount = financialAmount;
         }
 
+        const clientPayload = {
+            ...baseClientPayload,
+            ...optionalClientPayload,
+            interest_level: interest ?? null,
+            knowledge_level: knowledge ?? null,
+            financial_currency: financialAmount != null ? (financialCurrency || 'BRL') : null,
+            financial_amount: financialAmount
+        };
+
         if (existingClient) {
             clientId = existingClient.id;
-            await supabase.from('clients').update({ ...baseClientPayload, ...optionalClientPayload }).eq('id', clientId);
+            await supabase.from('clients').update(clientPayload).eq('id', clientId);
         } else {
-            const insertPayload = {
-                ...baseClientPayload,
-                interest_level: interest ?? null,
-                knowledge_level: knowledge ?? null,
-                financial_currency: financialAmount != null ? (financialCurrency || 'BRL') : null,
-                financial_amount: financialAmount
-            };
-            const { data: newClient } = await supabase.from('clients').insert(insertPayload).select('id').single();
+            const { data: newClient } = await supabase.from('clients').insert(clientPayload).select('id').single();
             if (newClient) clientId = newClient.id;
         }
 
