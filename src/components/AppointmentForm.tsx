@@ -107,7 +107,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
             if (diffMinutes < 0) return false;
-            if (user?.sector !== 'Closer' && formData.type !== 'Fora da agenda' && diffMinutes < 10) return false;
+            const isCloserLigacaoCloser = user?.sector === 'Closer' && formData.type === 'Ligação Closer';
+            if (!isCloserLigacaoCloser && user?.sector !== 'Closer' && formData.type !== 'Fora da agenda' && diffMinutes < 10) return false;
 
             if (isAldeiaOrTribo && formData.type !== 'Agendamento Pessoal') {
                 if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, time, formData.type, appointments, attendants, initialData?.id)) {
@@ -597,7 +598,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const apptDateTime = new Date(`${formData.date}T${formData.time}:00-03:00`);
             const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
-            const canBypassBuffer = user?.sector === 'Closer';
+            const isCloserLigacaoCloser = user?.sector === 'Closer' && formData.type === 'Ligação Closer';
+            const canBypassBuffer = user?.sector === 'Closer' || isCloserLigacaoCloser;
             if (diffMinutes < 0) {
                 toastManager.add({
                     title: "Horário Inválido",
