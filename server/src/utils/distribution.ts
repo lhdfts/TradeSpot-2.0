@@ -243,6 +243,10 @@ export const findBestAttendant = async (
     let sectorLimitCheck: string | null = null;
 
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
+    
+    if (type === 'Reagendamento Closer') {
+        sectors.push('Aldeia');
+    }
 
     if (type === 'Ligação Equipe Aldeia') {
         sectors = ['Aldeia'];

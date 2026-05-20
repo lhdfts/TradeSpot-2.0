@@ -153,11 +153,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             if (data.type === 'Gold Call') {
                 closerSectors.push('Perpétuos');
             }
+            
+            const allowedSectors = [...closerSectors];
+            if (data.type === 'Reagendamento Closer') {
+                allowedSectors.push('Aldeia');
+            }
 
-            if (closerTypes.includes(data.type) && !closerSectors.includes(attendant.sector)) {
-                console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to ${data.type}. Expected sectors: ${closerSectors.join(', ')}`);
+            if (closerTypes.includes(data.type) && !allowedSectors.includes(attendant.sector)) {
+                console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to ${data.type}. Expected sectors: ${allowedSectors.join(', ')}`);
                 return res.status(409).json({
-                    error: `O atendente ${attendant.name} não pertence ao setor Closer (setor atual: ${attendant.sector}). Atualize a página e tente novamente.`
+                    error: `O atendente ${attendant.name} não pertence ao setor permitido para este tipo de agendamento (setor atual: ${attendant.sector}). Atualize a página e tente novamente.`
                 });
             }
 
