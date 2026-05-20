@@ -109,7 +109,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`); // Brasilia time is UTC-3
 
         const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
-        const canBypassBuffer = req.user?.sector === 'Closer' || req.user?.role === 'Dev';
+        const isCloserLigacaoCloser = req.user?.sector === 'Closer' && data.type === 'Ligação Closer';
+        const canBypassBuffer = isCloserLigacaoCloser || req.user?.role === 'Dev';
         if (diffMinutes < 0) {
             return res.status(400).json({ error: 'O agendamento deve ser em um horário futuro.' });
         }
