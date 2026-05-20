@@ -307,9 +307,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             notes: data.notes,
             additional_info: data.additionalInfo,
             google_event_id: googleEventId,
-            interest_level: data.studentProfile.interest,
-            knowledge_level: data.studentProfile.knowledge,
-            financial_currency: data.studentProfile.financial.currency,
+            interest_level: data.studentProfile?.interest ?? null,
+            knowledge_level: data.studentProfile?.knowledge ?? null,
+            financial_currency: data.studentProfile?.financial?.currency ?? null,
             financial_amount: financialAmount,
             created_at: new Date().toISOString(),
             // created_by logic
