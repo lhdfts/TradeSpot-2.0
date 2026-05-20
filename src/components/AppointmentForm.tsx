@@ -185,7 +185,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
         }
         if (user.sector === 'Aldeia') {
-            const allowed = ['Agendamento Pessoal', 'Onboarding'];
+            const allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer'];
             if (formData.eventId === ON_THE_ROAD_EVENT_ID) {
                 allowed.push('Ligação Closer');
             }
@@ -204,20 +204,20 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     const attendantOptions = React.useMemo(() => {
         // When EDITING, filter attendants by appointment type strictly
         if (isEditing) {
-            const typeToSectorMap: Record<string, string> = {
-                'Ligação Closer': 'Closer',
-                'Ligação Equipe Aldeia': 'Aldeia',
-                'Gold Call': 'Closer',
-                'Reagendamento Closer': 'Closer',
-                'Upgrade': 'Closer',
-                'Ligação SDR': 'SDR'
+            const typeToSectors: Record<string, string[]> = {
+                'Ligação Closer': ['Closer'],
+                'Ligação Equipe Aldeia': ['Aldeia'],
+                'Gold Call': ['Closer'],
+                'Reagendamento Closer': ['Closer', 'Aldeia'],
+                'Upgrade': ['Closer'],
+                'Ligação SDR': ['SDR']
             };
 
-            const requiredSector = typeToSectorMap[formData.type];
+            const requiredSectors = typeToSectors[formData.type];
 
             // Filter attendants by sector if type requires it
-            const filteredAttendants = requiredSector
-                ? attendants.filter(a => a.sector === requiredSector)
+            const filteredAttendants = requiredSectors
+                ? attendants.filter(a => requiredSectors.includes(a.sector))
                 : attendants; // For other types like 'Agendamento Pessoal', 'Fora da agenda', show all
 
             const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
@@ -243,7 +243,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
                     if (formData.type === 'Fora da agenda') return a.sector === 'Closer' && a.role === 'Colaborador';
-                    if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
+                    if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
+                    if (formData.type === 'Reagendamento Closer') return a.sector === 'Closer' || a.sector === 'Aldeia';
                     if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia';
 
                     if (isAdministrative) {
