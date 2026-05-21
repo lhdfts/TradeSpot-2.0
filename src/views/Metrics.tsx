@@ -357,17 +357,13 @@ export const Metrics: React.FC = () => {
     // Get allowed types for current sector
     const getAllowedTypesForSector = () => {
         const displaySector = sectorFilter === 'all' && user?.sector ? user.sector : sectorFilter;
-<<<<<<< HEAD
         const allTypes = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento'];
-=======
-        const allTypes = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento'] as const;
->>>>>>> 9ef26ec4fc63b3ea65a59d28f0592e882fe5e510
         
         if (displaySector === 'all' || !displaySector) {
             return allTypes.map(t => ({ value: t, label: t }));
         }
 
-        let allowed: typeof allTypes[number][] = [];
+        let allowed: string[] = [];
         
         if (displaySector === 'SDR' || displaySector === 'Leads') {
             allowed = ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Fechamento'];
