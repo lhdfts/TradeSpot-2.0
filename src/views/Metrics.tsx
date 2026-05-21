@@ -297,7 +297,6 @@ export const Metrics: React.FC = () => {
             const key = a.date;
             if (dateMap.has(key)) {
                 const stats = dateMap.get(key)!;
-                stats.total++;
                 if (a.status as string in stats) {
                     stats[a.status as AppointmentStatus]++;
                 }
@@ -305,7 +304,17 @@ export const Metrics: React.FC = () => {
         });
 
         const sortedData = Array.from(dateMap.values()).sort((a, b) => a.rawDate - b.rawDate);
-        const chartData = sortedData;
+        
+        // Recalculate total based on selected statuses
+        const chartData = sortedData.map(item => {
+            let total = 0;
+            selectedStatuses.forEach(status => {
+                if (status in item) {
+                    total += (item as any)[status];
+                }
+            });
+            return { ...item, total };
+        });
 
         // Calculate Totals
         const totals: Record<string, number> = {};
@@ -327,7 +336,7 @@ export const Metrics: React.FC = () => {
         });
 
         return { rankings: rankingsMap, chartData, filteredAppointments: sortedFiltered, chartTotal };
-    }, [appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, uniqueClients]);
+    }, [appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, uniqueClients, selectedStatuses]);
 
     const handleExport = () => {
         if (!filteredAppointments.length) return;
@@ -639,9 +648,11 @@ export const Metrics: React.FC = () => {
                                                 status === 'Pendente' ? '#B2B2B2' :
                                                 status === 'Cancelado' ? '#FF1744' :
                                                 status === 'Reagendado' ? '#2979FF' :
-                                                status === 'No-show' ? '#FF9100' :
-                                                '#666'
+                                                status === 'Esquecimento' ? '#D500F9' :
+                                                '#FF9100'
                                         }
+                                        radius={[0, 0, 0, 0]}
+                                        barSize={32}
                                     />
                                 )
                             ))}
