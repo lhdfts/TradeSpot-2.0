@@ -13,7 +13,9 @@ import {
     Bar,
     XAxis,
     Tooltip as RechartsTooltip,
-    ResponsiveContainer
+    ResponsiveContainer,
+    Line,
+    LabelList
 } from 'recharts';
 import { cn } from '../lib/utils';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
@@ -535,21 +537,21 @@ export const Metrics: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
-                                <div className="col-span-6">Nome</div>
-                                <div className="col-span-3 text-center text-emerald-500">Realizados</div>
-                                <div className="col-span-3 text-center">
-                                    <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger>
-                                                <span className="cursor-help">Total Recebido</span>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p className="text-xs">Considera somente agendamentos onde a pessoa é o Atendente, mas não é o Criador</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
+                                    <div className="col-span-6">Nome</div>
+                                    <div className="col-span-3 text-center text-emerald-500">Realizados</div>
+                                    <div className="col-span-3 text-center">
+                                        <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger>
+                                                    <span className="cursor-help">TOTAL RECEBIDO</span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p className="text-xs">Considera somente agendamentos onde a pessoa é o Atendente, mas não é o Criador</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    </div>
                                 </div>
-                            </div>
 
                             <div className="space-y-2">
                                 {ranking.slice(0, 5).map((item, idx) => {
@@ -604,7 +606,7 @@ export const Metrics: React.FC = () => {
                                     if (!active || !payload) return null;
                                     return (
                                         <div className="bg-surface border border-border p-3 rounded-lg shadow-xl !opacity-100 min-w-[150px]">
-                                            <p className="text-primary font-bold mb-2 border-b border-border pb-1">{label}</p>
+                                            <p className="text-white font-bold mb-2 border-b border-border pb-1">{label}</p>
                                             <div className="space-y-1">
                                                 {payload.map((item: any) => {
                                                     if (item.dataKey === 'total') return null;
@@ -615,9 +617,9 @@ export const Metrics: React.FC = () => {
                                                                     className="w-2 h-2 rounded-full"
                                                                     style={{ backgroundColor: item.color }}
                                                                 />
-                                                                <span className="text-xs text-secondary">{item.name}</span>
+                                                                <span className="text-xs text-white">{item.name}</span>
                                                             </div>
-                                                            <span className="text-xs font-bold text-primary">{item.value}</span>
+                                                            <span className="text-xs font-bold text-white">{item.value}</span>
                                                         </div>
                                                     );
                                                 })}
@@ -634,15 +636,18 @@ export const Metrics: React.FC = () => {
                                         stackId="a"
                                         fill={
                                             status === 'Realizado' ? '#00E676' :
-                                            status === 'Pendente' ? '#B2B2B2' :
-                                            status === 'Cancelado' ? '#FF1744' :
-                                            status === 'Reagendado' ? '#2979FF' :
-                                            status === 'No-show' ? '#FF9100' :
-                                            '#666'
+                                                status === 'Pendente' ? '#B2B2B2' :
+                                                status === 'Cancelado' ? '#FF1744' :
+                                                status === 'Reagendado' ? '#2979FF' :
+                                                status === 'No-show' ? '#FF9100' :
+                                                '#666'
                                         }
                                     />
                                 )
                             ))}
+                            <Line type="monotone" dataKey="total" stroke="#FFFFFF" strokeWidth={2} dot={{ fill: "#FFFFFF", r: 4 }}>
+                                <LabelList dataKey="total" position="top" fill="#FFFFFF" fontSize={12} />
+                            </Line>
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
