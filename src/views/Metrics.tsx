@@ -650,8 +650,19 @@ export const Metrics: React.FC = () => {
 
                                 <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
                                     <div className="col-span-6">Nome</div>
-                                    <div className="col-span-3 text-center">T. Rec.</div>
-                                    <div className="col-span-3 text-center text-emerald-500">Real.</div>
+                                    <div className="col-span-3 text-center text-emerald-500">Realizados</div>
+                                    <div className="col-span-3 text-center">
+                                        <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="cursor-help">Total Recebido</span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p className="text-xs">Considera somente agendamentos onde a pessoa é o Atendente, mas não é o Criador</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-2">
@@ -666,11 +677,11 @@ export const Metrics: React.FC = () => {
                                                 <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={sdr.name}>
                                                     {sdr.name}
                                                 </div>
-                                                <div className="col-span-3 text-center font-bold text-foreground text-xs">
-                                                    {sdr.totalRecebido}
-                                                </div>
                                                 <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
                                                     {sdr['Realizado']}
+                                                </div>
+                                                <div className="col-span-3 text-center font-bold text-foreground text-xs">
+                                                    {sdr.totalRecebido}
                                                 </div>
                                             </div>
                                         );
@@ -709,8 +720,19 @@ export const Metrics: React.FC = () => {
 
                                 <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
                                     <div className="col-span-6">Nome</div>
-                                    <div className="col-span-3 text-center">T. Rec.</div>
-                                    <div className="col-span-3 text-center text-emerald-500">Real.</div>
+                                    <div className="col-span-3 text-center text-emerald-500">Realizados</div>
+                                    <div className="col-span-3 text-center">
+                                        <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="cursor-help">Total Recebido</span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p className="text-xs">Considera somente agendamentos onde a pessoa é o Atendente, mas não é o Criador</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-2">
@@ -725,11 +747,11 @@ export const Metrics: React.FC = () => {
                                                 <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={closer.name}>
                                                     {closer.name}
                                                 </div>
-                                                <div className="col-span-3 text-center font-bold text-foreground text-xs">
-                                                    {closer.totalRecebido}
-                                                </div>
                                                 <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
                                                     {closer['Realizado']}
+                                                </div>
+                                                <div className="col-span-3 text-center font-bold text-foreground text-xs">
+                                                    {closer.totalRecebido}
                                                 </div>
                                             </div>
                                         );
