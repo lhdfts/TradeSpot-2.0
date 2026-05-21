@@ -16,7 +16,7 @@ import {
     ResponsiveContainer
 } from 'recharts';
 import { cn } from '../lib/utils';
-import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
+import { APPOINTMENT_STATUSES, type AppointmentStatus, type AppointmentType } from '../types';
 import { RankingModal } from '../components/RankingModal';
 import {
     Tooltip,
@@ -357,7 +357,11 @@ export const Metrics: React.FC = () => {
     // Get allowed types for current sector
     const getAllowedTypesForSector = () => {
         const displaySector = sectorFilter === 'all' && user?.sector ? user.sector : sectorFilter;
+<<<<<<< HEAD
         const allTypes = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento'];
+=======
+        const allTypes = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento'] as const;
+>>>>>>> 9ef26ec4fc63b3ea65a59d28f0592e882fe5e510
         
         if (displaySector === 'all' || !displaySector) {
             return allTypes.map(t => ({ value: t, label: t }));
