@@ -7,23 +7,25 @@ interface RankingModalProps {
     onClose: () => void;
     title: string;
     data: any[];
-    type: 'sdr' | 'closer';
+    type: string;
 }
 
 export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, title, data, type }) => {
+    const isSdrRanking = type === 'SDR' || type === 'Leads' || type === 'sdr';
+
     return (
         <Modal
             isOpen={isOpen}
             onClose={onClose}
             title={title}
-            maxWidthClass={type === 'sdr' ? "max-w-7xl" : "max-w-5xl"}
+            maxWidthClass={isSdrRanking ? "max-w-7xl" : "max-w-5xl"}
         >
             <div className="mt-4 overflow-x-auto">
                 <div className={cn(
                     "grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-4 uppercase tracking-wider",
-                    type === 'sdr' ? "min-w-[1000px]" : "min-w-[800px]"
+                    isSdrRanking ? "min-w-[1000px]" : "min-w-[800px]"
                 )}>
-                    {type === 'sdr' ? (
+                    {isSdrRanking ? (
                         <>
                             <div className="col-span-2">Nome</div>
                             <div className="col-span-1 text-center">Total Agendado</div>
@@ -51,7 +53,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
 
                 <div className={cn(
                     "space-y-1 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar",
-                    type === 'sdr' ? "min-w-[1000px]" : "min-w-[800px]"
+                    isSdrRanking ? "min-w-[1000px]" : "min-w-[800px]"
                 )}>
                     {data.map((item, idx) => {
                         let rowStyle = 'bg-background border-l-4 border-transparent';
@@ -66,7 +68,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                                 "grid grid-cols-12 items-center p-3 rounded-r-lg transition-colors border-b border-border/10",
                                 rowStyle
                             )}>
-                                {type === 'sdr' ? (
+                                {isSdrRanking ? (
                                     <>
                                         <div className="col-span-2 font-medium text-foreground text-sm truncate" title={item.name}>
                                             {item.name}

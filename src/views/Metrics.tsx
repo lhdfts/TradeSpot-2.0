@@ -18,7 +18,7 @@ import {
     LabelList
 } from 'recharts';
 import { cn } from '../lib/utils';
-import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
+import { APPOINTMENT_STATUSES, type AppointmentStatus, type AppointmentType } from '../types';
 import { RankingModal } from '../components/RankingModal';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import {
@@ -28,24 +28,7 @@ import {
     TooltipProvider
 } from '../components/ui/tooltip';
 
-interface SDRRankingItem {
-    id: string;
-    name: string;
-    total: number;
-    totalRecebido: number;
-    'Realizado': number;
-    'Cancelado': number;
-    'Esquecimento': number;
-    'No-show': number;
-    'Reagendado': number;
-    'Pendente': number;
-    ligacao: number;
-    reagendamento: number;
-    upgrade: number;
-    originalRank?: number;
-}
-
-interface CloserRankingItem {
+interface RankingItem {
     id: string;
     name: string;
     total: number;
@@ -64,7 +47,6 @@ export const Metrics: React.FC = () => {
     const { attendants, events } = useFormData();
 
     // Filters State
-    // Default to current month
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -74,7 +56,8 @@ export const Metrics: React.FC = () => {
 
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
-    const [uniqueClients, setUniqueClients] = useState('no'); // 'yes' or 'no'
+    const [typeFilter, setTypeFilter] = useState('');
+    const [uniqueClients, setUniqueClients] = useState('no');
 
     const [availabilityDate, setAvailabilityDate] = useState(new Date().toISOString().split('T')[0]);
     const [availabilityAttendant, setAvailabilityAttendant] = useState('');
@@ -102,12 +85,12 @@ export const Metrics: React.FC = () => {
 
     const [rankingModal, setRankingModal] = useState<{
         isOpen: boolean;
-        type: 'sdr' | 'closer';
+        type: string;
         title: string;
         data: any[];
     }>({
         isOpen: false,
-        type: 'sdr',
+        type: 'general',
         title: '',
         data: []
     });
@@ -126,37 +109,52 @@ export const Metrics: React.FC = () => {
     };
 
     // --- DATA CALCULATION ---
-    const { sdrRanking, closerRanking, chartData, totals, filteredAppointments, sdrTotal, closerTotal, chartTotal, availabilityGrid } = useMemo(() => {
+    const { rankings, chartData, totals, filteredAppointments, chartTotal, availabilityGrid } = useMemo(() => {
         const allowedSectors = getAllowedSectors(user);
         const isGlobalViewer = canViewAllSectors(user);
 
-        // 1. Filter Appointments by Date & Event
+        // All available types for filter
+        const allTypes: { value: AppointmentType, label: string }[] = [
+            { value: 'Ligação SDR', label: 'Ligação SDR' },
+            { value: 'Ligação Closer', label: 'Ligação Closer' },
+            { value: 'Ligação Equipe Aldeia', label: 'Ligação Equipe Aldeia' },
+            { value: 'Agendamento Pessoal', label: 'Agendamento Pessoal' },
+            { value: 'Reagendamento Closer', label: 'Reagendamento Closer' },
+            { value: 'Upgrade', label: 'Upgrade' },
+            { value: 'Fora da agenda', label: 'Fora da agenda' },
+            { value: 'Gold Call', label: 'Gold Call' },
+            { value: 'Onboarding', label: 'Onboarding' },
+            { value: 'Fechamento', label: 'Fechamento' }
+        ];
+
+        // 1. Filter Appointments by Date, Event, Type
         let filtered = appointments.filter(a => {
             if (!a.date) return false;
 
-            // Period Filter (Date Range)
+            // Period Filter
             if (startDate && endDate) {
                 if (a.date < startDate || a.date > endDate) return false;
             } else {
-                return false; // Valid range required
+                return false;
             }
 
             // Event Filter
             if (eventFilter && a.eventId !== eventFilter) return false;
+
+            // Type Filter
+            if (typeFilter && a.type !== typeFilter) return false;
 
             // Sector Filter
             const creator = attendants.find(att => att.id === a.createdBy);
             const attendant = attendants.find(att => att.id === a.attendantId);
 
             if (!isGlobalViewer) {
-                // Non-global users can only see metrics for their allowed sectors
                 const matchesAllowedSector = 
                     (creator && creator.sector && allowedSectors.includes(creator.sector)) ||
                     (attendant && attendant.sector && allowedSectors.includes(attendant.sector));
                 
                 if (!matchesAllowedSector) return false;
 
-                // Further refine by the active dropdown filter if available
                 if (sectorFilter !== 'all') {
                     const activeAtt = sectorFilter === 'SDR' ? creator : attendant;
                     if (!activeAtt || !activeAtt.sector) return false;
@@ -166,7 +164,6 @@ export const Metrics: React.FC = () => {
                     if (!isMatch) return false;
                 }
             } else if (sectorFilter !== 'all') {
-                // Global viewers respect the dropdown
                 const activeAtt = sectorFilter === 'SDR' ? creator : attendant;
                 if (!activeAtt || !activeAtt.sector) return false;
                 const isMatch = sectorFilter === 'SDR'
@@ -198,125 +195,84 @@ export const Metrics: React.FC = () => {
             filtered = Array.from(uniqueMap.values());
         }
 
-        // 2. SDR Ranking
-        const sdrMap = new Map<string, SDRRankingItem>();
-        filtered.forEach(a => {
-            // For SDR: count as creator (existing logic)
-            if (a.createdBy && ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(a.type)) {
-                const creator = attendants.find(att => att.id === a.createdBy);
-                if (creator && (creator.sector === 'SDR' || creator.sector === 'Leads')) {
-                    if (!sdrMap.has(a.createdBy)) {
-                        sdrMap.set(a.createdBy, {
-                            id: creator.id,
-                            name: creator.name,
-                            total: 0,
-                            totalRecebido: 0,
-                            'Realizado': 0,
-                            'Cancelado': 0,
-                            'Esquecimento': 0,
-                            'No-show': 0,
-                            'Reagendado': 0,
-                            'Pendente': 0,
-                            ligacao: 0,
-                            reagendamento: 0,
-                            upgrade: 0
-                        });
-                    }
-                    const stats = sdrMap.get(a.createdBy)!;
-                    stats.total++;
-                    if (a.status as string in stats) {
-                        stats[a.status]++;
-                    }
-                    if (a.type === 'Ligação Closer' || a.type === 'Gold Call') stats.ligacao++;
-                    if (a.type === 'Reagendamento Closer') stats.reagendamento++;
-                    if (a.type === 'Upgrade') stats.upgrade++;
-                }
-            }
+        // 2. Generate Rankings for ALL sectors
+        const rankingsMap = new Map<string, RankingItem[]>();
+        const sectors = ['SDR', 'Leads', 'Closer', 'Aldeia', 'Tribo', 'Social Seller', 'Perpétuos', 'Suporte', 'TEI', 'Qualidade'];
+
+        sectors.forEach(sector => {
+            const map = new Map<string, RankingItem>();
             
-            // For SDR: also calculate totalRecebido (as attendant, not creator)
-            if (a.attendantId) {
-                const attendant = attendants.find(att => att.id === a.attendantId);
-                if (attendant && (attendant.sector === 'SDR' || attendant.sector === 'Leads')) {
-                    if (!sdrMap.has(a.attendantId)) {
-                        sdrMap.set(a.attendantId, {
-                            id: attendant.id,
-                            name: attendant.name,
-                            total: 0,
-                            totalRecebido: 0,
-                            'Realizado': 0,
-                            'Cancelado': 0,
-                            'Esquecimento': 0,
-                            'No-show': 0,
-                            'Reagendado': 0,
-                            'Pendente': 0,
-                            ligacao: 0,
-                            reagendamento: 0,
-                            upgrade: 0
-                        });
-                    }
-                    const stats = sdrMap.get(a.attendantId)!;
-                    // Total recebido: attendant and not creator
-                    if (a.attendantId !== a.createdBy) {
-                        stats.totalRecebido++;
-                    }
-                }
-            }
-        });
-
-        // Calculate original global ranking position (sorted by Realizados)
-        let sdrRanking = (Array.from(sdrMap.values())
-            .sort((a, b) => b['Realizado'] - a['Realizado'])
-            .map((item, idx) => ({ ...item, originalRank: idx })) as SDRRankingItem[]);
-
-        // Apply attendant filter IF set
-        if (attendantFilter) {
-            sdrRanking = sdrRanking.filter(item => item.id === attendantFilter);
-        }
-
-        // 3. Closer Ranking
-        const closerMap = new Map<string, CloserRankingItem>();
-        filtered.forEach(a => {
-            if (a.attendantId) {
-                const attendant = attendants.find(att => att.id === a.attendantId);
-                if (attendant && attendant.sector === 'Closer' && attendant.role === 'Colaborador') {
-                    if (!closerMap.has(a.attendantId)) {
-                        closerMap.set(a.attendantId, {
-                            id: attendant.id,
-                            name: attendant.name,
-                            total: 0,
-                            totalRecebido: 0,
-                            'Realizado': 0,
-                            'Cancelado': 0,
-                            'Esquecimento': 0,
-                            'No-show': 0,
-                            'Reagendado': 0,
-                            'Pendente': 0
-                        });
-                    }
-                    const stats = closerMap.get(a.attendantId)!;
-                    stats.total++;
-                    // Total recebido: attendant and not creator
-                    if (a.attendantId !== a.createdBy) {
-                        stats.totalRecebido++;
-                    }
-                    if (a.status as string in stats) {
-                        stats[a.status]++;
+            filtered.forEach(a => {
+                // For SDR/Leads: count as creator for specific types
+                if ((sector === 'SDR' || sector === 'Leads') && a.createdBy && ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(a.type)) {
+                    const creator = attendants.find(att => att.id === a.createdBy);
+                    if (creator && creator.sector === sector) {
+                        if (!map.has(a.createdBy)) {
+                            map.set(a.createdBy, {
+                                id: creator.id,
+                                name: creator.name,
+                                total: 0,
+                                totalRecebido: 0,
+                                'Realizado': 0,
+                                'Cancelado': 0,
+                                'Esquecimento': 0,
+                                'No-show': 0,
+                                'Reagendado': 0,
+                                'Pendente': 0
+                            });
+                        }
+                        const stats = map.get(a.createdBy)!;
+                        stats.total++;
+                        if (a.status as string in stats) {
+                            stats[a.status]++;
+                        }
                     }
                 }
-            }
+
+                // For ALL sectors: calculate as attendant (totalRecebido and status)
+                if (a.attendantId) {
+                    const attendant = attendants.find(att => att.id === a.attendantId);
+                    if (attendant && attendant.sector === sector) {
+                        if (!map.has(a.attendantId)) {
+                            map.set(a.attendantId, {
+                                id: attendant.id,
+                                name: attendant.name,
+                                total: 0,
+                                totalRecebido: 0,
+                                'Realizado': 0,
+                                'Cancelado': 0,
+                                'Esquecimento': 0,
+                                'No-show': 0,
+                                'Reagendado': 0,
+                                'Pendente': 0
+                            });
+                        }
+                        const stats = map.get(a.attendantId)!;
+                        stats.total++;
+                        if (a.attendantId !== a.createdBy) {
+                            stats.totalRecebido++;
+                        }
+                        if (a.status as string in stats) {
+                            stats[a.status]++;
+                        }
+                    }
+                }
+            });
+
+            // Sort by Realizados
+            const ranking = Array.from(map.values())
+                .sort((a, b) => b['Realizado'] - a['Realizado'])
+                .map((item, idx) => ({ ...item, originalRank: idx })) as RankingItem[];
+
+            // Apply attendant filter
+            const filteredRanking = attendantFilter 
+                ? ranking.filter(item => item.id === attendantFilter)
+                : ranking;
+
+            rankingsMap.set(sector, filteredRanking);
         });
 
-        // Calculate original global ranking position (sorted by Realizados)
-        let closerRanking = (Array.from(closerMap.values())
-            .sort((a, b) => b['Realizado'] - a['Realizado'])
-            .map((item, idx) => ({ ...item, originalRank: idx })) as CloserRankingItem[]);
-
-        // Apply attendant filter IF set
-        if (attendantFilter) {
-            closerRanking = closerRanking.filter(item => item.id === attendantFilter);
-        }
-
-        // 4. Chart Data
+        // 3. Chart Data
         type ChartItem = {
             displayDate: string;
             rawDate: number;
@@ -330,17 +286,13 @@ export const Metrics: React.FC = () => {
         };
         const dateMap = new Map<string, ChartItem>();
 
-        // Generate dates in range
         const start = new Date(startDate);
         const end = new Date(endDate);
         const loop = new Date(start);
-        // Force loop to noon to avoid timezone shift issues during iteration
         loop.setHours(12, 0, 0, 0);
         const endLoop = new Date(end);
         endLoop.setHours(23, 59, 59, 999);
 
-        // Limit chart range to prevent browser hang if range is too huge (e.g. accidental 10 years)
-        // Hard limit 366 days
         let count = 0;
         while (loop <= endLoop && count < 366) {
             const dateStr = loop.toISOString().split('T')[0];
@@ -361,10 +313,6 @@ export const Metrics: React.FC = () => {
         }
 
         filtered.forEach(a => {
-            if (sectorFilter !== 'all') {
-                const att = attendants.find(at => at.id === a.attendantId);
-                if (att?.sector !== sectorFilter) return;
-            }
             const key = a.date;
             if (dateMap.has(key)) {
                 const stats = dateMap.get(key)!;
@@ -389,22 +337,17 @@ export const Metrics: React.FC = () => {
             });
         });
 
-        const sdrTotal = sdrRanking.reduce((acc, curr) => acc + curr.total, 0);
-        const closerTotal = closerRanking.reduce((acc, curr) => acc + curr.total, 0);
         const chartTotal = chartData.reduce((acc, curr) => acc + curr.total, 0);
 
         const slots: { time: string; color: string; label: string; statusCounts: Record<string, number> }[] = [];
-
         const currentAttendantId = availabilityAttendant;
         const selectedAtt = attendants.find(a => a.id === currentAttendantId);
         const isAttendantInSector = !availabilitySector || availabilitySector === 'all' || selectedAtt?.sector === availabilitySector;
 
-        // Só calcula os slots se o atendente selecionado for válido para o setor
         if (currentAttendantId && isAttendantInSector) {
             for (let h = 0; h < 24; h++) {
                 for (let m = 0; m < 60; m += 15) {
                     const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-
                     const slotMinutes = h * 60 + m;
 
                     const apptsAtTime = appointments.filter(a => {
@@ -420,14 +363,11 @@ export const Metrics: React.FC = () => {
                         const isCloser = selectedAtt?.sector === 'Closer';
                         const duration = isCloser ? 60 : 15;
 
-                        // Case 1: Appointment is on the exact same date being viewed
                         if (a.date === availabilityDate) {
                             return slotMinutes >= apptMinutes && slotMinutes < apptMinutes + duration;
                         }
 
-                        // Case 2: Appointment was on the PREVIOUS day, but spans past midnight INTO the viewed date
-                        // e.g., viewing 00:00, appointment was on previous day at 23:45 (spans to 00:45)
-                        const viewedDateObj = new Date(availabilityDate + 'T12:00:00'); // Safe timezone assumption for date math
+                        const viewedDateObj = new Date(availabilityDate + 'T12:00:00');
                         const previousDateObj = new Date(viewedDateObj);
                         previousDateObj.setDate(viewedDateObj.getDate() - 1);
                         const prevDateStr = previousDateObj.toISOString().split('T')[0];
@@ -435,7 +375,6 @@ export const Metrics: React.FC = () => {
                         if (a.date === prevDateStr) {
                             const endMinutes = apptMinutes + duration;
                             if (endMinutes > 24 * 60) {
-                                // Spills into next (viewed) day. Calculate remaining minutes inside the new day
                                 const overflowMinutes = endMinutes - (24 * 60);
                                 return slotMinutes >= 0 && slotMinutes < overflowMinutes;
                             }
@@ -444,13 +383,11 @@ export const Metrics: React.FC = () => {
                         return false;
                     });
 
-                    // Agrupa e conta por status
                     const statusCounts: Record<string, number> = {};
                     apptsAtTime.forEach(a => {
                         statusCounts[a.status] = (statusCounts[a.status] || 0) + 1;
                     });
 
-                    // Define a prioridade de exibição da cor
                     const priority: AppointmentStatus[] = ['Realizado', 'Pendente', 'Reagendado', 'Reagendado', 'Cancelado', 'No-show'];
                     const primaryStatus = priority.find(s => statusCounts[s] > 0);
 
@@ -479,13 +416,12 @@ export const Metrics: React.FC = () => {
             return dateA.getTime() - dateB.getTime();
         });
 
-        return { sdrRanking, closerRanking, chartData, totals, filteredAppointments: sortedFiltered, sdrTotal, closerTotal, chartTotal, availabilityGrid: slots };
-    }, [appointments, startDate, endDate, attendantFilter, eventFilter, attendants, sectorFilter, uniqueClients, availabilityAttendant, availabilityDate, availabilitySector]);
+        return { rankings: rankingsMap, chartData, totals, filteredAppointments: sortedFiltered, chartTotal, availabilityGrid: slots };
+    }, [appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, uniqueClients, availabilityAttendant, availabilityDate, availabilitySector]);
 
     React.useEffect(() => {
         if (availabilitySector !== 'all' && availabilityAttendant) {
             const selectedAtt = attendants.find(a => a.id === availabilityAttendant);
-            // Se o atendente não pertence ao novo setor, limpa a seleção
             if (selectedAtt && selectedAtt.sector !== availabilitySector) {
                 setAvailabilityAttendant('');
             }
@@ -522,6 +458,36 @@ export const Metrics: React.FC = () => {
         document.body.removeChild(link);
     };
 
+    // Get allowed types for current sector
+    const getAllowedTypesForSector = () => {
+        const displaySector = sectorFilter === 'all' && user?.sector ? user.sector : sectorFilter;
+        const allTypes = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento'] as const;
+        
+        if (displaySector === 'all' || !displaySector) {
+            return allTypes.map(t => ({ value: t, label: t }));
+        }
+
+        let allowed: typeof allTypes[number][] = [];
+        
+        if (displaySector === 'SDR' || displaySector === 'Leads') {
+            allowed = ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Fechamento'];
+        } else if (displaySector === 'Closer') {
+            allowed = ['Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'];
+        } else if (displaySector === 'Tribo') {
+            allowed = ['Agendamento Pessoal', 'Onboarding'];
+        } else if (displaySector === 'Aldeia') {
+            allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer', 'Ligação Closer'];
+        } else if (displaySector === 'Social Seller') {
+            allowed = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
+        } else if (displaySector === 'Perpétuos') {
+            allowed = ['Gold Call', 'Fechamento'];
+        } else {
+            allowed = [...allTypes];
+        }
+
+        return allowed.map(t => ({ value: t, label: t }));
+    };
+
     return (
         <div className="space-y-6">
             {/* Header & Controls */}
@@ -545,7 +511,7 @@ export const Metrics: React.FC = () => {
                         />
                     </div>
 
-                    {/* Sector Filter for Admin/Dev/Qualidade/TEI/Medina */}
+                    {/* Sector Filter */}
                     {(canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
                         <FloatingSelect
                             label="Setor"
@@ -558,6 +524,18 @@ export const Metrics: React.FC = () => {
                             className="w-40"
                         />
                     )}
+
+                    {/* Type Filter */}
+                    <FloatingSelect
+                        label="Tipo"
+                        value={typeFilter}
+                        onChange={(e: any) => setTypeFilter(e.target.value)}
+                        options={[
+                            { value: '', label: 'Todos' },
+                            ...getAllowedTypesForSector()
+                        ]}
+                        className="w-48"
+                    />
 
                     <FloatingSelect
                         label="Atendente"
@@ -622,390 +600,194 @@ export const Metrics: React.FC = () => {
                         displaySector = user.sector;
                     }
 
-                    // SDR Ranking
-                    if (displaySector === 'SDR') {
+                    const ranking = rankings.get(displaySector === 'SDR' ? 'SDR' : displaySector) || 
+                                   rankings.get(displaySector === 'Leads' ? 'Leads' : displaySector) || 
+                                   [];
+                    const total = ranking.reduce((acc, curr) => acc + curr.total, 0);
+
+                    if (ranking.length === 0 && displaySector) {
                         return (
                             <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                                <div className="flex justify-between items-start mb-6">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-foreground">Agendamentos por SDR</h3>
-                                        <p className="text-xs text-secondary mt-1">Total de agendamentos recebidos e realizados</p>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-lg font-bold text-foreground">Total: {sdrTotal}</span>
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            onClick={() => setRankingModal({
-                                                isOpen: true,
-                                                type: 'sdr',
-                                                title: 'Ranking SDR Completo',
-                                                data: sdrRanking
-                                            })}
-                                        >
-                                            Expandir
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
-                                    <div className="col-span-6">Nome</div>
-                                    <div className="col-span-3 text-center text-emerald-500">Realizados</div>
-                                    <div className="col-span-3 text-center">
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <span className="cursor-help">Total Recebido</span>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p className="text-xs">Considera somente agendamentos onde a pessoa é o Atendente, mas não é o Criador</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    {sdrRanking.slice(0, 5).map((sdr, idx) => {
-                                        let rowStyle = 'bg-background border-l-4 border-transparent';
-                                        if (sdr.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
-                                        else if (sdr.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
-                                        else if (sdr.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
-
-                                        return (
-                                            <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
-                                                <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={sdr.name}>
-                                                    {sdr.name}
-                                                </div>
-                                                <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
-                                                    {sdr['Realizado']}
-                                                </div>
-                                                <div className="col-span-3 text-center font-bold text-foreground text-xs">
-                                                    {sdr.totalRecebido}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {sdrRanking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
-                                </div>
+                                <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
+                                <p className="text-secondary text-sm text-center py-8">Sem dados para o período</p>
                             </div>
                         );
                     }
 
-                    // Closer Ranking
-                    if (displaySector === 'Closer') {
-                        return (
-                            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                                <div className="flex justify-between items-start mb-6">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-foreground">Agendamentos por Closer</h3>
-                                        <p className="text-xs text-secondary mt-1">Total de agendamentos recebidos e realizados</p>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-lg font-bold text-foreground">Total: {closerTotal}</span>
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            onClick={() => setRankingModal({
-                                                isOpen: true,
-                                                type: 'closer',
-                                                title: 'Ranking Closer Completo',
-                                                data: closerRanking
-                                            })}
-                                        >
-                                            Expandir
-                                        </Button>
-                                    </div>
+                    return (
+                        <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
+                                    <p className="text-xs text-secondary mt-1">Total de agendamentos recebidos e realizados</p>
                                 </div>
-
-                                <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
-                                    <div className="col-span-6">Nome</div>
-                                    <div className="col-span-3 text-center text-emerald-500">Realizados</div>
-                                    <div className="col-span-3 text-center">
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <span className="cursor-help">Total Recebido</span>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p className="text-xs">Considera somente agendamentos onde a pessoa é o Atendente, mas não é o Criador</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    {closerRanking.slice(0, 5).map((closer, idx) => {
-                                        let rowStyle = 'bg-background border-l-4 border-transparent';
-                                        if (closer.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
-                                        else if (closer.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
-                                        else if (closer.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
-
-                                        return (
-                                            <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
-                                                <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={closer.name}>
-                                                    {closer.name}
-                                                </div>
-                                                <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
-                                                    {closer['Realizado']}
-                                                </div>
-                                                <div className="col-span-3 text-center font-bold text-foreground text-xs">
-                                                    {closer.totalRecebido}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {closerRanking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
+                                <div className="flex items-center gap-4">
+                                    <span className="text-lg font-bold text-foreground">Total: {total}</span>
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => setRankingModal({
+                                            isOpen: true,
+                                            type: displaySector,
+                                            title: `Ranking ${displaySector} Completo`,
+                                            data: ranking
+                                        })}
+                                    >
+                                        Expandir
+                                    </Button>
                                 </div>
                             </div>
-                        );
-                    }
 
-                    return null;
+                            <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
+                                <div className="col-span-6">Nome</div>
+                                <div className="col-span-3 text-center text-emerald-500">Realizados</div>
+                                <div className="col-span-3 text-center">
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger>
+                                                <span className="cursor-help">Total Recebido</span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="text-xs">Considera somente agendamentos onde a pessoa é o Atendente, mas não é o Criador</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                {ranking.slice(0, 5).map((item, idx) => {
+                                    let rowStyle = 'bg-background border-l-4 border-transparent';
+                                    if (item.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
+                                    else if (item.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
+                                    else if (item.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
+
+                                    return (
+                                        <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
+                                            <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={item.name}>
+                                                {item.name}
+                                            </div>
+                                            <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
+                                                {item['Realizado']}
+                                            </div>
+                                            <div className="col-span-3 text-center font-bold text-foreground text-xs">
+                                                {item.totalRecebido}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {ranking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
+                            </div>
+                        </div>
+                    );
                 })()}
             </div>
 
             {/* Chart */}
-            {(sectorFilter === 'all' || sectorFilter === 'Closer') && (
-                <div className="bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-bold text-foreground">
-                            Agendamentos por Dia
-                        </h3>
-                        <span className="text-lg font-bold text-foreground">Total: {chartTotal}</span>
-                    </div>
-
-                    <div className="h-80 w-full mt-4">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
-                                <XAxis
-                                    dataKey="displayDate"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
-                                    dy={10}
-                                />
-                                <RechartsTooltip
-                                    cursor={{ fill: 'var(--muted)', opacity: 0.2 }}
-                                    content={({ active, payload, label }: any) => {
-                                        if (!active || !payload) return null;
-                                        return (
-                                            <div className="bg-surface border border-border p-3 rounded-lg shadow-xl !opacity-100 min-w-[150px]">
-                                                <p className="text-primary font-bold mb-2 border-b border-border pb-1">{label}</p>
-                                                <div className="space-y-1">
-                                                    {payload.map((item: any) => {
-                                                        if (item.dataKey === 'total') return null;
-                                                        return (
-                                                            <div key={item.dataKey} className="flex items-center justify-between gap-4">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div
-                                                                        className="w-2 h-2 rounded-full"
-                                                                        style={{ backgroundColor: item.color }}
-                                                                    />
-                                                                    <span className="text-xs text-secondary">{item.name}</span>
-                                                                </div>
-                                                                <span className="text-xs font-bold text-primary">{item.value}</span>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        );
-                                    }}
-                                />
-                                {['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'].map((status) => (
-                                    selectedStatuses.includes(status) && (
-                                        <Bar
-                                            key={status}
-                                            dataKey={status}
-                                            stackId="a"
-                                            fill={
-                                                status === 'Realizado' ? '#00E676' :
-                                                    status === 'Pendente' ? '#B2B2B2' :
-                                                        status === 'Cancelado' ? '#FF1744' :
-                                                            status === 'Reagendado' ? '#2979FF' :
-                                                                status === 'Esquecimento' ? '#D500F9' :
-                                                                    '#FF9100'
-                                            }
-                                            radius={[0, 0, 0, 0]}
-                                            barSize={32}
-                                        />
-                                    )
-                                ))}
-                                <Line type="monotone" dataKey="total" stroke="none" isAnimationActive={false}>
-                                    <LabelList dataKey="total" position="top" offset={10} style={{ fill: 'var(--foreground)', fontSize: 10, fontWeight: 'bold' }} />
-                                </Line>
-                            </ComposedChart>
-                        </ResponsiveContainer>
-                    </div>
-
-                    {/* Status Toggle Grid */}
-                    <div className="mt-8 grid grid-cols-3 gap-3">
-                        {APPOINTMENT_STATUSES.map((status) => {
-                            const isSelected = selectedStatuses.includes(status);
-                            const colorClass = {
-                                'Realizado': 'border-[#00E676] bg-[#00E676]/10',
-                                'Pendente': 'border-[#B2B2B2] bg-[#B2B2B2]/10',
-                                'Cancelado': 'border-[#FF1744] bg-[#FF1744]/10',
-                                'Reagendado': 'border-[#2979FF] bg-[#2979FF]/10',
-                                'Esquecimento': 'border-[#D500F9] bg-[#D500F9]/10',
-                                'No-show': 'border-[#FF9100] bg-[#FF9100]/10'
-                            }[status] || 'border-border';
-
-                            const dotColor = {
-                                'Realizado': 'bg-[#00E676]',
-                                'Pendente': 'bg-[#B2B2B2]',
-                                'Cancelado': 'bg-[#FF1744]',
-                                'Reagendado': 'bg-[#2979FF]',
-                                'Esquecimento': 'bg-[#D500F9]',
-                                'No-show': 'bg-[#FF9100]'
-                            }[status] || 'bg-border';
-
-                            return (
-                                <button
-                                    key={status}
-                                    type="button"
-                                    onClick={() => toggleStatus(status)}
-                                    className={cn(
-                                        "flex items-center justify-between px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-medium",
-                                        isSelected
-                                            ? `${colorClass} text-foreground`
-                                            : "border-border bg-background text-secondary hover:border-muted-foreground"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span className={cn("w-3 h-3 rounded-full", dotColor)} />
-                                        <span>{status}</span>
-                                    </div>
-                                    <span className="font-bold">{valueFormatter(totals[status] || 0)}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
+            <div className="bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-foreground">
+                        Agendamentos por Dia
+                    </h3>
+                    <span className="text-lg font-bold text-foreground">Total: {chartTotal}</span>
                 </div>
-            )}
 
+                <div className="h-80 w-full mt-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
+                            <XAxis
+                                dataKey="displayDate"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
+                                dy={10}
+                            />
+                            <RechartsTooltip
+                                cursor={{ fill: 'var(--muted)', opacity: 0.2 }}
+                                content={({ active, payload, label }: any) => {
+                                    if (!active || !payload) return null;
+                                    return (
+                                        <div className="bg-surface border border-border p-3 rounded-lg shadow-xl !opacity-100 min-w-[150px]">
+                                            <p className="text-primary font-bold mb-2 border-b border-border pb-1">{label}</p>
+                                            <div className="space-y-1">
+                                                {payload.map((item: any) => {
+                                                    if (item.dataKey === 'total') return null;
+                                                    return (
+                                                        <div key={item.dataKey} className="flex items-center justify-between gap-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <div
+                                                                    className="w-2 h-2 rounded-full"
+                                                                    style={{ backgroundColor: item.color }}
+                                                                />
+                                                                <span className="text-xs text-secondary">{item.name}</span>
+                                                            </div>
+                                                            <span className="text-xs font-bold text-primary">{item.value}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                }}
+                            />
+                            {['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'].map((status) => (
+                                selectedStatuses.includes(status) && (
+                                    <Bar
+                                        key={status}
+                                        dataKey={status}
+                                        stackId="a"
+                                        fill={
+                                            status === 'Realizado' ? '#00E676' :
+                                            status === 'Pendente' ? '#B2B2B2' :
+                                            status === 'Cancelado' ? '#FF1744' :
+                                            status === 'Reagendado' ? '#2979FF' :
+                                            status === 'No-show' ? '#FF9100' :
+                                            '#666'
+                                        }
+                                    />
+                                )
+                            ))}
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Status Toggle Buttons */}
+                <div className="flex flex-wrap gap-3 justify-center mt-4">
+                    {['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'].map((status) => (
+                        <button
+                            key={status}
+                            onClick={() => toggleStatus(status)}
+                            className={cn(
+                                "px-4 py-2 rounded-lg text-sm font-medium transition-all border",
+                                selectedStatuses.includes(status)
+                                    ? "border-transparent text-white"
+                                    : "bg-transparent text-muted-foreground border-border hover:bg-muted"
+                            )}
+                            style={{
+                                backgroundColor: selectedStatuses.includes(status)
+                                    ? status === 'Realizado' ? '#00E676' :
+                                      status === 'Pendente' ? '#B2B2B2' :
+                                      status === 'Cancelado' ? '#FF1744' :
+                                      status === 'Reagendado' ? '#2979FF' :
+                                      status === 'No-show' ? '#FF9100' :
+                                      '#666'
+                                    : undefined
+                            }}
+                        >
+                            {status}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Ranking Modal */}
             <RankingModal
                 isOpen={rankingModal.isOpen}
-                onClose={() => setRankingModal(prev => ({ ...prev, isOpen: false }))}
+                onClose={() => setRankingModal({ ...rankingModal, isOpen: false })}
                 title={rankingModal.title}
                 data={rankingModal.data}
                 type={rankingModal.type}
             />
-            {(sectorFilter === 'all' || sectorFilter === 'Closer') && (
-                <Card className="mt-6">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
-                        <CardTitle>Disponibilidade Detalhada</CardTitle>
-                        <div className="flex gap-4">
-                            {/* NOVO: Seletor de Setor */}
-                            <FloatingSelect
-                                label="Setor"
-                                value={availabilitySector}
-                                onChange={(e: any) => setAvailabilitySector(e.target.value)}
-                                options={[
-                                    { value: 'all', label: 'Todos' },
-                                    { value: 'SDR', label: 'SDR' },
-                                    { value: 'Closer', label: 'Closer' }
-                                ]}
-                                className="w-32"
-                            />
-
-                            {/* ATUALIZADO: Seletor de Atendente filtrado por setor */}
-                            <FloatingSelect
-                                label="Atendente"
-                                value={availabilityAttendant}
-                                onChange={(e: any) => setAvailabilityAttendant(e.target.value)}
-                                options={[
-                                    { value: '', label: 'Selecione um atendente' },
-                                    ...attendants
-                                        .filter(a => availabilitySector === 'all' || a.sector === availabilitySector)
-                                        .sort((a, b) => a.name.localeCompare(b.name))
-                                        .map(a => ({ value: a.id, label: a.name }))
-                                ]}
-                                className="w-64"
-                            />
-
-                            <FloatingDateInput
-                                label="Data"
-                                value={availabilityDate}
-                                onChange={(e: any) => setAvailabilityDate(e.target.value)}
-                                className="w-44"
-                            />
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {availabilityAttendant ? (
-                            <TooltipProvider>
-                                <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-12 gap-2">
-                                    {availabilityGrid.map((slot) => {
-                                        const hasAppts = Object.keys(slot.statusCounts).length > 0;
-
-                                        return (
-                                            <Tooltip key={slot.time}>
-                                                <TooltipTrigger>
-                                                    <div
-                                                        style={{ backgroundColor: slot.color.startsWith('bg-[') ? slot.color.slice(4, -1) : undefined }}
-                                                        className={cn(
-                                                            "flex flex-col items-center justify-center p-2 rounded-md border border-border text-[10px] font-medium transition-all text-white shadow-sm cursor-default",
-                                                            !slot.color.startsWith('bg-[') && slot.color,
-                                                            slot.color === 'bg-muted/20' && "text-secondary shadow-none"
-                                                        )}
-                                                    >
-                                                        {slot.time}
-                                                    </div>
-                                                </TooltipTrigger>
-
-                                                {hasAppts && (
-                                                    <TooltipContent className="p-3 min-w-[140px]">
-                                                        <div className="space-y-2">
-                                                            <p className="font-bold border-b border-border pb-1 mb-1">{slot.time}</p>
-                                                            <ul className="space-y-1">
-                                                                {Object.entries(slot.statusCounts).map(([status, count]) => (
-                                                                    <li key={status} className="flex items-center justify-between gap-3 text-[11px]">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <div className={cn(
-                                                                                "w-2 h-2 rounded-full",
-                                                                                status === 'Realizado' ? 'bg-[#00E676]' :
-                                                                                    status === 'Pendente' ? 'bg-[#B2B2B2]' :
-                                                                                        status === 'Cancelado' ? 'bg-[#FF1744]' :
-                                                                                            status === 'Reagendado' ? 'bg-[#2979FF]' :
-                                                                                                'bg-[#FF9100]'
-                                                                            )} />
-                                                                            <span>{status}</span>
-                                                                        </div>
-                                                                        <span className="font-bold">{count}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    </TooltipContent>
-                                                )}
-                                            </Tooltip>
-                                        );
-                                    })}
-                                </div>
-                            </TooltipProvider>
-                        ) : (
-                            <div className="h-40 flex items-center justify-center text-secondary border-2 border-dashed border-border rounded-xl">
-                                Selecione um atendente para visualizar a agenda do dia.
-                            </div>
-                        )}
-
-                        {/* Legenda */}
-                        {availabilityAttendant && (
-                            <div className="mt-6 flex flex-wrap gap-4 text-xs text-secondary border-t border-border pt-4">
-                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-muted/20 border border-border" /> Livre</div>
-                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#00E676]" /> Realizado</div>
-                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#B2B2B2]" /> Pendente</div>
-                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#FF1744]" /> Cancelado</div>
-                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#2979FF]" /> Reagendado</div>
-                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#FF9100]" /> No-show</div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
         </div>
     );
 };
