@@ -16,7 +16,7 @@ import {
     ResponsiveContainer
 } from 'recharts';
 import { cn } from '../lib/utils';
-import { APPOINTMENT_STATUSES, type AppointmentStatus, type AppointmentType } from '../types';
+import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 import {
     Tooltip,
