@@ -32,6 +32,7 @@ interface SDRRankingItem {
     id: string;
     name: string;
     total: number;
+    totalRecebido: number;
     'Realizado': number;
     'Cancelado': number;
     'Esquecimento': number;
@@ -48,6 +49,7 @@ interface CloserRankingItem {
     id: string;
     name: string;
     total: number;
+    totalRecebido: number;
     'Realizado': number;
     'Cancelado': number;
     'Esquecimento': number;
@@ -199,6 +201,7 @@ export const Metrics: React.FC = () => {
         // 2. SDR Ranking
         const sdrMap = new Map<string, SDRRankingItem>();
         filtered.forEach(a => {
+            // For SDR: count as creator (existing logic)
             if (a.createdBy && ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(a.type)) {
                 const creator = attendants.find(att => att.id === a.createdBy);
                 if (creator && (creator.sector === 'SDR' || creator.sector === 'Leads')) {
@@ -207,6 +210,7 @@ export const Metrics: React.FC = () => {
                             id: creator.id,
                             name: creator.name,
                             total: 0,
+                            totalRecebido: 0,
                             'Realizado': 0,
                             'Cancelado': 0,
                             'Esquecimento': 0,
@@ -228,11 +232,40 @@ export const Metrics: React.FC = () => {
                     if (a.type === 'Upgrade') stats.upgrade++;
                 }
             }
+            
+            // For SDR: also calculate totalRecebido (as attendant, not creator)
+            if (a.attendantId) {
+                const attendant = attendants.find(att => att.id === a.attendantId);
+                if (attendant && (attendant.sector === 'SDR' || attendant.sector === 'Leads')) {
+                    if (!sdrMap.has(a.attendantId)) {
+                        sdrMap.set(a.attendantId, {
+                            id: attendant.id,
+                            name: attendant.name,
+                            total: 0,
+                            totalRecebido: 0,
+                            'Realizado': 0,
+                            'Cancelado': 0,
+                            'Esquecimento': 0,
+                            'No-show': 0,
+                            'Reagendado': 0,
+                            'Pendente': 0,
+                            ligacao: 0,
+                            reagendamento: 0,
+                            upgrade: 0
+                        });
+                    }
+                    const stats = sdrMap.get(a.attendantId)!;
+                    // Total recebido: attendant and not creator
+                    if (a.attendantId !== a.createdBy) {
+                        stats.totalRecebido++;
+                    }
+                }
+            }
         });
 
-        // Calculate original global ranking position
+        // Calculate original global ranking position (sorted by Realizados)
         let sdrRanking = (Array.from(sdrMap.values())
-            .sort((a, b) => b.total - a.total)
+            .sort((a, b) => b['Realizado'] - a['Realizado'])
             .map((item, idx) => ({ ...item, originalRank: idx })) as SDRRankingItem[]);
 
         // Apply attendant filter IF set
@@ -251,6 +284,7 @@ export const Metrics: React.FC = () => {
                             id: attendant.id,
                             name: attendant.name,
                             total: 0,
+                            totalRecebido: 0,
                             'Realizado': 0,
                             'Cancelado': 0,
                             'Esquecimento': 0,
@@ -261,6 +295,10 @@ export const Metrics: React.FC = () => {
                     }
                     const stats = closerMap.get(a.attendantId)!;
                     stats.total++;
+                    // Total recebido: attendant and not creator
+                    if (a.attendantId !== a.createdBy) {
+                        stats.totalRecebido++;
+                    }
                     if (a.status as string in stats) {
                         stats[a.status]++;
                     }
@@ -268,9 +306,9 @@ export const Metrics: React.FC = () => {
             }
         });
 
-        // Calculate original global ranking position
+        // Calculate original global ranking position (sorted by Realizados)
         let closerRanking = (Array.from(closerMap.values())
-            .sort((a, b) => b.Realizado - a.Realizado)
+            .sort((a, b) => b['Realizado'] - a['Realizado'])
             .map((item, idx) => ({ ...item, originalRank: idx })) as CloserRankingItem[]);
 
         // Apply attendant filter IF set
@@ -591,7 +629,7 @@ export const Metrics: React.FC = () => {
                                 <div className="flex justify-between items-start mb-6">
                                     <div>
                                         <h3 className="text-lg font-bold text-foreground">Agendamentos por SDR</h3>
-                                        <p className="text-xs text-secondary mt-1">Total de agendamentos marcados</p>
+                                        <p className="text-xs text-secondary mt-1">Total de agendamentos recebidos e realizados</p>
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <span className="text-lg font-bold text-foreground">Total: {sdrTotal}</span>
@@ -611,11 +649,9 @@ export const Metrics: React.FC = () => {
                                 </div>
 
                                 <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
-                                    <div className="col-span-4">Nome</div>
-                                    <div className="col-span-2 text-center">T. Marc.</div>
-                                    <div className="col-span-2 text-center text-blue-500">Lig. Clo/Gold</div>
-                                    <div className="col-span-2 text-center text-orange-500">R. Clo.</div>
-                                    <div className="col-span-2 text-center text-purple-500">Upgrade</div>
+                                    <div className="col-span-6">Nome</div>
+                                    <div className="col-span-3 text-center">T. Rec.</div>
+                                    <div className="col-span-3 text-center text-emerald-500">Real.</div>
                                 </div>
 
                                 <div className="space-y-2">
@@ -627,20 +663,14 @@ export const Metrics: React.FC = () => {
 
                                         return (
                                             <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
-                                                <div className="col-span-4 font-medium text-foreground text-[13px] truncate" title={sdr.name}>
+                                                <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={sdr.name}>
                                                     {sdr.name}
                                                 </div>
-                                                <div className="col-span-2 text-center font-bold text-foreground text-xs">
-                                                    {sdr.total}
+                                                <div className="col-span-3 text-center font-bold text-foreground text-xs">
+                                                    {sdr.totalRecebido}
                                                 </div>
-                                                <div className="col-span-2 text-center text-blue-400 text-xs font-medium">
-                                                    {sdr.ligacao}
-                                                </div>
-                                                <div className="col-span-2 text-center text-orange-400 text-xs font-medium">
-                                                    {sdr.reagendamento}
-                                                </div>
-                                                <div className="col-span-2 text-center text-purple-400 text-xs font-medium">
-                                                    {sdr.upgrade}
+                                                <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
+                                                    {sdr['Realizado']}
                                                 </div>
                                             </div>
                                         );
@@ -696,10 +726,10 @@ export const Metrics: React.FC = () => {
                                                     {closer.name}
                                                 </div>
                                                 <div className="col-span-3 text-center font-bold text-foreground text-xs">
-                                                    {closer.total}
+                                                    {closer.totalRecebido}
                                                 </div>
                                                 <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
-                                                    {closer.Realizado}
+                                                    {closer['Realizado']}
                                                 </div>
                                             </div>
                                         );
