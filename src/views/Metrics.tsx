@@ -80,7 +80,11 @@ export const Metrics: React.FC = () => {
 
     // --- UI STATE ---
     const { user } = useAuth();
-    const [sectorFilter, setSectorFilter] = useState('all');
+    const isPrivilegedUser = canViewAllSectors(user) || user?.role === 'Admin' || user?.role === 'Dev';
+    const [sectorFilter, setSectorFilter] = useState(() => {
+        if (isPrivilegedUser) return 'all';
+        return user?.sector || 'all';
+    });
 
     // Reset attendant filter when sector changes
     React.useEffect(() => {
@@ -573,128 +577,141 @@ export const Metrics: React.FC = () => {
             </div>
 
             {/* Rankings */}
-            <div className={cn("grid grid-cols-1 gap-6", sectorFilter === 'all' ? "md:grid-cols-2" : "md:grid-cols-1")}>
-                {/* SDR Ranking */}
-                {(sectorFilter === 'all' || sectorFilter === 'SDR') && (
-                    <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground">Agendamentos por SDR</h3>
-                                <p className="text-xs text-secondary mt-1">Total de agendamentos marcados</p>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <span className="text-lg font-bold text-foreground">Total: {sdrTotal}</span>
-                                <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => setRankingModal({
-                                        isOpen: true,
-                                        type: 'sdr',
-                                        title: 'Ranking SDR Completo',
-                                        data: sdrRanking
-                                    })}
-                                >
-                                    Expandir
-                                </Button>
-                            </div>
-                        </div>
+            <div className="grid grid-cols-1 gap-6">
+                {(() => {
+                    let displaySector = sectorFilter;
+                    if (displaySector === 'all' && user?.sector) {
+                        displaySector = user.sector;
+                    }
 
-                        <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
-                            <div className="col-span-4">Nome</div>
-                            <div className="col-span-2 text-center">T. Marc.</div>
-                            <div className="col-span-2 text-center text-blue-500">Lig. Clo/Gold</div>
-                            <div className="col-span-2 text-center text-orange-500">R. Clo.</div>
-                            <div className="col-span-2 text-center text-purple-500">Upgrade</div>
-                        </div>
-
-                        <div className="space-y-2">
-                            {sdrRanking.slice(0, 5).map((sdr, idx) => {
-                                let rowStyle = 'bg-background border-l-4 border-transparent';
-                                if (sdr.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
-                                else if (sdr.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
-                                else if (sdr.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
-
-                                return (
-                                    <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
-                                        <div className="col-span-4 font-medium text-foreground text-[13px] truncate" title={sdr.name}>
-                                            {sdr.name}
-                                        </div>
-                                        <div className="col-span-2 text-center font-bold text-foreground text-xs">
-                                            {sdr.total}
-                                        </div>
-                                        <div className="col-span-2 text-center text-blue-400 text-xs font-medium">
-                                            {sdr.ligacao}
-                                        </div>
-                                        <div className="col-span-2 text-center text-orange-400 text-xs font-medium">
-                                            {sdr.reagendamento}
-                                        </div>
-                                        <div className="col-span-2 text-center text-purple-400 text-xs font-medium">
-                                            {sdr.upgrade}
-                                        </div>
+                    // SDR Ranking
+                    if (displaySector === 'SDR') {
+                        return (
+                            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-foreground">Agendamentos por SDR</h3>
+                                        <p className="text-xs text-secondary mt-1">Total de agendamentos marcados</p>
                                     </div>
-                                );
-                            })}
-                            {sdrRanking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
-                        </div>
-                    </div>
-                )}
-
-                {/* Closer Ranking */}
-                {(sectorFilter === 'all' || sectorFilter === 'Closer') && (
-                    <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground">Agendamentos por Closer</h3>
-                                <p className="text-xs text-secondary mt-1">Total de agendamentos recebidos e realizados</p>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <span className="text-lg font-bold text-foreground">Total: {closerTotal}</span>
-                                <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => setRankingModal({
-                                        isOpen: true,
-                                        type: 'closer',
-                                        title: 'Ranking Closer Completo',
-                                        data: closerRanking
-                                    })}
-                                >
-                                    Expandir
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
-                            <div className="col-span-6">Nome</div>
-                            <div className="col-span-3 text-center">T. Rec.</div>
-                            <div className="col-span-3 text-center text-emerald-500">Real.</div>
-                        </div>
-
-                        <div className="space-y-2">
-                            {closerRanking.slice(0, 5).map((closer, idx) => {
-                                let rowStyle = 'bg-background border-l-4 border-transparent';
-                                if (closer.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
-                                else if (closer.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
-                                else if (closer.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
-
-                                return (
-                                    <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
-                                        <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={closer.name}>
-                                            {closer.name}
-                                        </div>
-                                        <div className="col-span-3 text-center font-bold text-foreground text-xs">
-                                            {closer.total}
-                                        </div>
-                                        <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
-                                            {closer.Realizado}
-                                        </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-lg font-bold text-foreground">Total: {sdrTotal}</span>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() => setRankingModal({
+                                                isOpen: true,
+                                                type: 'sdr',
+                                                title: 'Ranking SDR Completo',
+                                                data: sdrRanking
+                                            })}
+                                        >
+                                            Expandir
+                                        </Button>
                                     </div>
-                                );
-                            })}
-                            {closerRanking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
-                        </div>
-                    </div>
-                )}
+                                </div>
+
+                                <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
+                                    <div className="col-span-4">Nome</div>
+                                    <div className="col-span-2 text-center">T. Marc.</div>
+                                    <div className="col-span-2 text-center text-blue-500">Lig. Clo/Gold</div>
+                                    <div className="col-span-2 text-center text-orange-500">R. Clo.</div>
+                                    <div className="col-span-2 text-center text-purple-500">Upgrade</div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    {sdrRanking.slice(0, 5).map((sdr, idx) => {
+                                        let rowStyle = 'bg-background border-l-4 border-transparent';
+                                        if (sdr.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
+                                        else if (sdr.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
+                                        else if (sdr.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
+
+                                        return (
+                                            <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
+                                                <div className="col-span-4 font-medium text-foreground text-[13px] truncate" title={sdr.name}>
+                                                    {sdr.name}
+                                                </div>
+                                                <div className="col-span-2 text-center font-bold text-foreground text-xs">
+                                                    {sdr.total}
+                                                </div>
+                                                <div className="col-span-2 text-center text-blue-400 text-xs font-medium">
+                                                    {sdr.ligacao}
+                                                </div>
+                                                <div className="col-span-2 text-center text-orange-400 text-xs font-medium">
+                                                    {sdr.reagendamento}
+                                                </div>
+                                                <div className="col-span-2 text-center text-purple-400 text-xs font-medium">
+                                                    {sdr.upgrade}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {sdrRanking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
+                                </div>
+                            </div>
+                        );
+                    }
+
+                    // Closer Ranking
+                    if (displaySector === 'Closer') {
+                        return (
+                            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-foreground">Agendamentos por Closer</h3>
+                                        <p className="text-xs text-secondary mt-1">Total de agendamentos recebidos e realizados</p>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-lg font-bold text-foreground">Total: {closerTotal}</span>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() => setRankingModal({
+                                                isOpen: true,
+                                                type: 'closer',
+                                                title: 'Ranking Closer Completo',
+                                                data: closerRanking
+                                            })}
+                                        >
+                                            Expandir
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
+                                    <div className="col-span-6">Nome</div>
+                                    <div className="col-span-3 text-center">T. Rec.</div>
+                                    <div className="col-span-3 text-center text-emerald-500">Real.</div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    {closerRanking.slice(0, 5).map((closer, idx) => {
+                                        let rowStyle = 'bg-background border-l-4 border-transparent';
+                                        if (closer.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
+                                        else if (closer.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
+                                        else if (closer.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
+
+                                        return (
+                                            <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
+                                                <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={closer.name}>
+                                                    {closer.name}
+                                                </div>
+                                                <div className="col-span-3 text-center font-bold text-foreground text-xs">
+                                                    {closer.total}
+                                                </div>
+                                                <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
+                                                    {closer.Realizado}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {closerRanking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
+                                </div>
+                            </div>
+                        );
+                    }
+
+                    return null;
+                })()}
             </div>
 
             {/* Chart */}
