@@ -13,14 +13,11 @@ import {
     Bar,
     XAxis,
     Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    Line,
-    LabelList
+    ResponsiveContainer
 } from 'recharts';
 import { cn } from '../lib/utils';
 import { APPOINTMENT_STATUSES, type AppointmentStatus, type AppointmentType } from '../types';
 import { RankingModal } from '../components/RankingModal';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import {
     Tooltip,
     TooltipTrigger,
@@ -58,10 +55,6 @@ export const Metrics: React.FC = () => {
     const [eventFilter, setEventFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
     const [uniqueClients, setUniqueClients] = useState('no');
-
-    const [availabilityDate, setAvailabilityDate] = useState(new Date().toISOString().split('T')[0]);
-    const [availabilityAttendant, setAvailabilityAttendant] = useState('');
-    const [availabilitySector, setAvailabilitySector] = useState('all');
 
     // --- UI STATE ---
     const { user } = useAuth();
@@ -109,23 +102,9 @@ export const Metrics: React.FC = () => {
     };
 
     // --- DATA CALCULATION ---
-    const { rankings, chartData, totals, filteredAppointments, chartTotal, availabilityGrid } = useMemo(() => {
+    const { rankings, chartData, filteredAppointments, chartTotal } = useMemo(() => {
         const allowedSectors = getAllowedSectors(user);
         const isGlobalViewer = canViewAllSectors(user);
-
-        // All available types for filter
-        const allTypes: { value: AppointmentType, label: string }[] = [
-            { value: 'Ligação SDR', label: 'Ligação SDR' },
-            { value: 'Ligação Closer', label: 'Ligação Closer' },
-            { value: 'Ligação Equipe Aldeia', label: 'Ligação Equipe Aldeia' },
-            { value: 'Agendamento Pessoal', label: 'Agendamento Pessoal' },
-            { value: 'Reagendamento Closer', label: 'Reagendamento Closer' },
-            { value: 'Upgrade', label: 'Upgrade' },
-            { value: 'Fora da agenda', label: 'Fora da agenda' },
-            { value: 'Gold Call', label: 'Gold Call' },
-            { value: 'Onboarding', label: 'Onboarding' },
-            { value: 'Fechamento', label: 'Fechamento' }
-        ];
 
         // 1. Filter Appointments by Date, Event, Type
         let filtered = appointments.filter(a => {
@@ -339,97 +318,14 @@ export const Metrics: React.FC = () => {
 
         const chartTotal = chartData.reduce((acc, curr) => acc + curr.total, 0);
 
-        const slots: { time: string; color: string; label: string; statusCounts: Record<string, number> }[] = [];
-        const currentAttendantId = availabilityAttendant;
-        const selectedAtt = attendants.find(a => a.id === currentAttendantId);
-        const isAttendantInSector = !availabilitySector || availabilitySector === 'all' || selectedAtt?.sector === availabilitySector;
-
-        if (currentAttendantId && isAttendantInSector) {
-            for (let h = 0; h < 24; h++) {
-                for (let m = 0; m < 60; m += 15) {
-                    const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                    const slotMinutes = h * 60 + m;
-
-                    const apptsAtTime = appointments.filter(a => {
-                        if (a.attendantId !== currentAttendantId) return false;
-
-                        const timeParts = a.time.split(':');
-                        if (timeParts.length < 2) return false;
-
-                        const apptH = parseInt(timeParts[0], 10);
-                        const apptM = parseInt(timeParts[1], 10);
-                        const apptMinutes = apptH * 60 + apptM;
-
-                        const isCloser = selectedAtt?.sector === 'Closer';
-                        const duration = isCloser ? 60 : 15;
-
-                        if (a.date === availabilityDate) {
-                            return slotMinutes >= apptMinutes && slotMinutes < apptMinutes + duration;
-                        }
-
-                        const viewedDateObj = new Date(availabilityDate + 'T12:00:00');
-                        const previousDateObj = new Date(viewedDateObj);
-                        previousDateObj.setDate(viewedDateObj.getDate() - 1);
-                        const prevDateStr = previousDateObj.toISOString().split('T')[0];
-
-                        if (a.date === prevDateStr) {
-                            const endMinutes = apptMinutes + duration;
-                            if (endMinutes > 24 * 60) {
-                                const overflowMinutes = endMinutes - (24 * 60);
-                                return slotMinutes >= 0 && slotMinutes < overflowMinutes;
-                            }
-                        }
-
-                        return false;
-                    });
-
-                    const statusCounts: Record<string, number> = {};
-                    apptsAtTime.forEach(a => {
-                        statusCounts[a.status] = (statusCounts[a.status] || 0) + 1;
-                    });
-
-                    const priority: AppointmentStatus[] = ['Realizado', 'Pendente', 'Reagendado', 'Reagendado', 'Cancelado', 'No-show'];
-                    const primaryStatus = priority.find(s => statusCounts[s] > 0);
-
-                    let color = 'bg-muted/20';
-                    let label = 'Livre';
-
-                    if (primaryStatus) {
-                        const colorMap: Record<string, string> = {
-                            'Realizado': 'bg-[#00E676]',
-                            'Pendente': 'bg-[#B2B2B2]',
-                            'Cancelado': 'bg-[#FF1744]',
-                            'Reagendado': 'bg-[#2979FF]',
-                            'No-show': 'bg-[#FF9100]'
-                        };
-                        color = colorMap[primaryStatus] || 'bg-blue-500';
-                        label = primaryStatus;
-                    }
-                    slots.push({ time, color, label, statusCounts });
-                }
-            }
-        }
-
         const sortedFiltered = [...filtered].sort((a, b) => {
             const dateA = new Date(`${a.date}T${a.time}`);
             const dateB = new Date(`${b.date}T${b.time}`);
             return dateA.getTime() - dateB.getTime();
         });
 
-        return { rankings: rankingsMap, chartData, totals, filteredAppointments: sortedFiltered, chartTotal, availabilityGrid: slots };
-    }, [appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, uniqueClients, availabilityAttendant, availabilityDate, availabilitySector]);
-
-    React.useEffect(() => {
-        if (availabilitySector !== 'all' && availabilityAttendant) {
-            const selectedAtt = attendants.find(a => a.id === availabilityAttendant);
-            if (selectedAtt && selectedAtt.sector !== availabilitySector) {
-                setAvailabilityAttendant('');
-            }
-        }
-    }, [availabilitySector, availabilityAttendant, attendants]);
-
-    const valueFormatter = (number: number) =>
-        Intl.NumberFormat('pt-BR').format(number).toString();
+        return { rankings: rankingsMap, chartData, filteredAppointments: sortedFiltered, chartTotal };
+    }, [appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, uniqueClients]);
 
     const handleExport = () => {
         if (!filteredAppointments.length) return;
