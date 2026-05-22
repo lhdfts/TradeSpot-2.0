@@ -222,7 +222,9 @@ export const requireRole = (...allowedRoles: string[]) => {
             return next();
         }
 
-        if (!allowedRoles.includes(req.user.role)) {
+        const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
+        const normalizedUserRole = req.user.role.toLowerCase();
+        if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
             logActivity({
                 timestamp: new Date().toISOString(),
                 userId: req.user.id,
