@@ -22,7 +22,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
         >
             <div className="mt-4 overflow-x-auto">
                 <div className={cn(
-                    "grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-4 uppercase tracking-wider",
+                    "grid grid-cols-12 gap-2 text-[10px] font-semibold text-secondary mb-3 px-4 uppercase tracking-wider",
                     isSdrRanking ? "min-w-[1000px]" : "min-w-[800px]"
                 )}>
                     {isSdrRanking ? (
@@ -65,7 +65,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
 
                         return (
                             <div key={idx} className={cn(
-                                "grid grid-cols-12 items-center p-3 rounded-r-lg transition-colors border-b border-border/10",
+                                "grid grid-cols-12 gap-2 items-center p-3 rounded-r-lg transition-colors border-b border-border/10",
                                 rowStyle
                             )}>
                                 {isSdrRanking ? (

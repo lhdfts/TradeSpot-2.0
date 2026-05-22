@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { Logo } from '../components/Logo';
 import { auth } from '../lib/firebase';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, SAMLAuthProvider } from 'firebase/auth';
+import { useAuth } from '../context/AuthContext';
 
 export const Login: React.FC = () => {
     const [loading, setLoading] = useState(false);
+    const { authError, clearAuthError } = useAuth();
 
     React.useEffect(() => {
         getRedirectResult(auth).catch((error) => {
@@ -15,6 +17,7 @@ export const Login: React.FC = () => {
 
     const handleGoogleLogin = async (method: 'popup' | 'redirect') => {
         setLoading(true);
+        clearAuthError();
         const provider = new SAMLAuthProvider(
             "saml.sistema-depositos-google-workspace"
         );
@@ -58,6 +61,11 @@ export const Login: React.FC = () => {
                 </div>
 
                 <div className="mt-8 space-y-6">
+                    {authError && (
+                        <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-lg">
+                            <p className="text-sm">{authError}</p>
+                        </div>
+                    )}
                     <div className="text-center">
                         <h2 className="mt-6 text-3xl font-extrabold text-foreground">
                             Bem-vindo de volta

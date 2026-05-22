@@ -615,7 +615,7 @@ export const Metrics: React.FC = () => {
                                     if (!active || !payload) return null;
                                     return (
                                         <div className="bg-surface border border-border p-3 rounded-lg shadow-xl !opacity-100 min-w-[150px]">
-                                            <p className="text-white font-bold mb-2 border-b border-border pb-1">{label}</p>
+                                            <p className="text-foreground font-bold mb-2 border-b border-border pb-1">{label}</p>
                                             <div className="space-y-1">
                                                 {payload.map((item: any) => {
                                                     if (item.dataKey === 'total') return null;
@@ -626,9 +626,9 @@ export const Metrics: React.FC = () => {
                                                                     className="w-2 h-2 rounded-full"
                                                                     style={{ backgroundColor: item.color }}
                                                                 />
-                                                                <span className="text-xs text-white">{item.name}</span>
+                                                                <span className="text-xs text-foreground">{item.name}</span>
                                                             </div>
-                                                            <span className="text-xs font-bold text-white">{item.value}</span>
+                                                            <span className="text-xs font-bold text-foreground">{item.value}</span>
                                                         </div>
                                                     );
                                                 })}

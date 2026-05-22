@@ -8,6 +8,8 @@ interface AuthContextType {
     login: (user: User) => void;
     logout: () => void;
     hasPermission: (requiredRoles: User['role'][]) => boolean;
+    authError: string | null;
+    clearAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,6 +19,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const [authError, setAuthError] = useState<string | null>(null);
+
+    const clearAuthError = () => {
+        setAuthError(null);
+    };
 
     // Initial load & Listener
     useEffect(() => {
@@ -36,6 +43,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fetchUser = async (firebaseUid: string, token: string) => {
     try {
         setLoading(true);
+        setAuthError(null);
         
         if (!token) throw new Error('Token não gerado pelo Firebase');
 
@@ -49,6 +57,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Erro do Servidor (${response.status}):`, errorText);
+            
+            // Se o erro for 401 ou 403, e o usuário já está autenticado no Firebase,
+            // significa que ele não está no banco de dados
+            if (response.status === 401 || response.status === 403) {
+                setAuthError("Credenciais validadas, mas o usuário não foi encontrado, abra um chamado ou entre em contato com sua liderança solicitando a liberação do acesso");
+                await firebaseSignOut(auth);
+            }
+            
             throw new Error(`Servidor negou acesso: ${response.status}`);
         }
 
@@ -88,7 +104,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, hasPermission }}>
+        <AuthContext.Provider value={{ user, login, logout, hasPermission, authError, clearAuthError }}>
             {!loading && children}
         </AuthContext.Provider>
     );
