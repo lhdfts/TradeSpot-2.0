@@ -656,8 +656,8 @@ export const Metrics: React.FC = () => {
                                     />
                                 )
                             ))}
-                            <Line type="monotone" dataKey="total" stroke="#FFFFFF" strokeWidth={2} dot={{ fill: "#FFFFFF", r: 4 }}>
-                                <LabelList dataKey="total" position="top" fill="#FFFFFF" fontSize={12} />
+                            <Line type="monotone" dataKey="total" stroke="#333333" strokeWidth={2} dot={{ fill: "#333333", r: 4 }}>
+                                <LabelList dataKey="total" position="top" fill="#333333" fontSize={12} />
                             </Line>
                         </ComposedChart>
                     </ResponsiveContainer>

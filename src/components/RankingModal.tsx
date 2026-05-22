@@ -107,7 +107,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                                             {item.name}
                                         </div>
                                         <div className="col-span-2 text-center font-bold text-foreground text-xs">
-                                            {item.total}
+                                            {item.totalRecebido}
                                         </div>
                                         <div className="col-span-1 text-center font-bold text-emerald-500 text-xs">
                                             {item.Realizado}
