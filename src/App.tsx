@@ -144,17 +144,17 @@ const InternalLayout: React.FC = () => {
                 <Route path="/all-appointments" element={<AllAppointments onEdit={handleEdit} />} />
               </Route>
 
-              {/* Metrics - Admin, Líder, Co-Líder */}
-              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Dev', 'Qualidade']} />}>
+              {/* Metrics - Admin, Líder, Co-líder */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-líder', 'Dev', 'Qualidade']} />}>
                 <Route path="/metrics" element={<Metrics />} />
               </Route>
 
               {/* Admin/Líder Only Management */}
-              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-Líder', 'Co-líder', 'Qualidade']} />}>
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-líder', 'Qualidade']} />}>
                 <Route path="/attendants" element={<Attendants />} />
               </Route>
 
-              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-Líder', 'Co-líder', 'Qualidade', 'Colaborador']} />}>
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-líder', 'Qualidade', 'Colaborador']} />}>
                 <Route path="/events" element={<Events />} />
               </Route>
 

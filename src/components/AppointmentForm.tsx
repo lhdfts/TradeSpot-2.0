@@ -241,9 +241,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
                     const selectedEvent = events.find(e => e.id === formData.eventId);
                     const eventSector = selectedEvent?.sector;
-                    const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role);
+                    const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
-                    if (formData.type === 'Fora da agenda') return a.sector === 'Closer' && a.role === 'Colaborador';
+                    if (formData.type === 'Fora da agenda') return a.sector === 'Closer' && (a.role === 'Colaborador' || a.role === 'Co-líder');
                     if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
                     if (formData.type === 'Reagendamento Closer') return a.sector === 'Closer' || a.sector === 'Aldeia';
                     if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia';
@@ -995,7 +995,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         options={attendantOptions}
                                         disabled={
                                             isEditing
-                                                ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
+                                                ? !(user && ['Co-líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
                                                 : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda')
                                         }
                                         error={errors.attendantId}
@@ -1012,7 +1012,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         !user || (
                                             user.id !== initialData.createdBy &&
                                             user.id !== initialData.attendantId &&
-                                            !['Líder', 'Co-Líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
+                                            !['Líder', 'Co-líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
                                         ) || (
                                             user.role === 'Colaborador' &&
                                             user.sector === 'Closer' &&

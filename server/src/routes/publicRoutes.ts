@@ -205,9 +205,9 @@ router.get('/available-times', async (req: Request, res: Response) => {
         } else {
             // Otherwise, fetch by sectors
             attendantsQuery = attendantsQuery.in('sector', sectors);
-            // SDR events: only Colaborador role
+            // SDR events: Colaborador and Co-líder roles
             if (sectors.includes('SDR')) {
-                attendantsQuery = attendantsQuery.eq('role', 'Colaborador');
+                attendantsQuery = attendantsQuery.in('role', ['Colaborador', 'Co-líder']);
             }
         }
         
@@ -518,7 +518,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 .single();
 
             // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI/CEO), resetamos
-            const allowedSectors = ['Closer', 'Líder', 'Co-Líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia', 'SDR'];
+            const allowedSectors = ['Closer', 'Líder', 'Co-líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia', 'SDR'];
             const isValidSector = attendantData && allowedSectors.includes(attendantData.sector);
             if (!attendantData || !isValidSector) {
                 finalAttendantId = 'distribuicao_automatica';

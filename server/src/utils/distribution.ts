@@ -239,7 +239,7 @@ export const findBestAttendant = async (
     options: { ignoreSchedule?: boolean } = {}
 ): Promise<string | null> => {
     let sectors = ['Closer'];
-    let roleFilter: string | null = null;
+    let roleFilters: string[] | null = null;
     let sectorLimitCheck: string | null = null;
 
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
@@ -250,7 +250,7 @@ export const findBestAttendant = async (
 
     if (type === 'Ligação Equipe Aldeia') {
         sectors = ['Aldeia'];
-        roleFilter = 'Colaborador';
+        roleFilters = ['Colaborador', 'Co-líder'];
         sectorLimitCheck = 'Aldeia';
     }
 
@@ -263,15 +263,15 @@ export const findBestAttendant = async (
                 sectors = ['CEO'];
             } else if (eventData.sector === 'Tribo') {
                 sectors = ['Tribo'];
-                roleFilter = 'Colaborador';
+                roleFilters = ['Colaborador', 'Co-líder'];
                 sectorLimitCheck = 'Tribo';
             } else if (eventData.sector === 'Aldeia') {
                 sectors = ['Aldeia'];
-                roleFilter = 'Colaborador';
+                roleFilters = ['Colaborador', 'Co-líder'];
                 sectorLimitCheck = 'Aldeia';
             } else if (eventData.sector === 'SDR') {
                 sectors = ['SDR'];
-                roleFilter = 'Colaborador';
+                roleFilters = ['Colaborador', 'Co-líder'];
             } else {
                 sectors = [eventData.sector];
             }
@@ -280,8 +280,8 @@ export const findBestAttendant = async (
 
     // 1. Fetch Attendants filtered by sector (and role if needed)
     let attendantsQuery = supabase.from('user').select('*').in('sector', sectors);
-    if (roleFilter) {
-        attendantsQuery = attendantsQuery.eq('role', roleFilter);
+    if (roleFilters) {
+        attendantsQuery = attendantsQuery.in('role', roleFilters);
     }
     const { data: attendants, error: attError } = await attendantsQuery;
 

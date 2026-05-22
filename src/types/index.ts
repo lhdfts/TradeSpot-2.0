@@ -28,7 +28,7 @@ export interface Attendant {
     id: string;
     name: string;
     email: string;
-    role: 'Suporte' | 'Qualidade' | 'Co-Líder' | 'Co-líder' | 'Líder' | 'Admin' | 'Dev' | 'Colaborador';
+    role: 'Suporte' | 'Qualidade' | 'Co-líder' | 'Líder' | 'Admin' | 'Dev' | 'Colaborador';
     sector: string; // Relaxed to string to match data like "Closer", "TEI"
     schedule: {
         [key: string]: { start: string; end: string } | null | any; // key is day of week (mon, tue, etc.)
@@ -79,7 +79,7 @@ export interface User {
     firebase_id?: string; // New field
     name: string;
     email: string; // Added email as it is in the DB
-    role: 'Suporte' | 'Qualidade' | 'Co-Líder' | 'Co-líder' | 'Líder' | 'Admin' | 'Dev' | 'Colaborador';
+    role: 'Suporte' | 'Qualidade' | 'Co-líder' | 'Líder' | 'Admin' | 'Dev' | 'Colaborador';
     sector?: string; // Added sector
     // Removed level
 }
