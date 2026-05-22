@@ -64,21 +64,36 @@ export const Attendants: React.FC = () => {
         ? attendants 
         : attendants.filter(a => a.sector === sectorFilter);
 
+    const handleCreate = () => {
+        setSelectedAttendant(null);
+        setIsModalOpen(true);
+    };
+
     return (
         <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                {(canViewAllSectors(user) || isMedinaUser(user)) && (
+                    <FloatingSelect
+                        label="Setor"
+                        value={sectorFilter}
+                        onChange={(e: any) => setSectorFilter(e.target.value)}
+                        options={[
+                            { value: 'all', label: 'Todos os Setores' },
+                            ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
+                        ]}
+                        className="w-44"
+                    />
+                )}
 
-            {(canViewAllSectors(user) || isMedinaUser(user)) && (
-                <FloatingSelect
-                    label="Setor"
-                    value={sectorFilter}
-                    onChange={(e: any) => setSectorFilter(e.target.value)}
-                    options={[
-                        { value: 'all', label: 'Todos os Setores' },
-                        ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
-                    ]}
-                    className="w-44"
-                />
-            )}
+                {user?.sector === 'TEI' && (
+                    <button
+                        onClick={handleCreate}
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                        Criar Atendente
+                    </button>
+                )}
+            </div>
 
             <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
                 <table className="w-full text-left">
