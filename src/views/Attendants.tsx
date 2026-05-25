@@ -5,6 +5,7 @@ import type { Attendant } from '../types';
 import { Edit, Trash2 } from 'lucide-react';
 import { AttendantModal } from '../components/AttendantModal';
 import { FloatingSelect } from '../components/FloatingSelect';
+import { Input as BaseInput } from '../components/ui/input';
 
 import { useAuth } from '../context/AuthContext';
 import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
@@ -17,6 +18,7 @@ export const Attendants: React.FC = () => {
     const [selectedAttendant, setSelectedAttendant] = useState<Attendant | null>(null);
     const [loading, setLoading] = useState(true);
     const [sectorFilter, setSectorFilter] = useState<string>('all');
+    const [searchTerm, setSearchTerm] = useState<string>('');
 
     const fetchAttendants = async () => {
         setLoading(true);
@@ -60,9 +62,17 @@ export const Attendants: React.FC = () => {
 
     if (loading) return <div>Carregando...</div>;
 
-    const displayAttendants = sectorFilter === 'all' 
+    const displayAttendants = (sectorFilter === 'all' 
         ? attendants 
-        : attendants.filter(a => a.sector === sectorFilter);
+        : attendants.filter(a => a.sector === sectorFilter)
+    ).filter(a => {
+        if (!searchTerm.trim()) return true;
+        const term = searchTerm.toLowerCase();
+        return (
+            a.name.toLowerCase().includes(term) || 
+            a.email.toLowerCase().includes(term)
+        );
+    });
 
     const handleCreate = () => {
         setSelectedAttendant(null);
@@ -71,19 +81,28 @@ export const Attendants: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                {(canViewAllSectors(user) || isMedinaUser(user)) && (
-                    <FloatingSelect
-                        label="Setor"
-                        value={sectorFilter}
-                        onChange={(e: any) => setSectorFilter(e.target.value)}
-                        options={[
-                            { value: 'all', label: 'Todos os Setores' },
-                            ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
-                        ]}
-                        className="w-44"
-                    />
-                )}
+            <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="w-64">
+                        <BaseInput
+                            placeholder="Pesquisar por nome ou email"
+                            value={searchTerm}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    {(canViewAllSectors(user) || isMedinaUser(user)) && (
+                        <FloatingSelect
+                            label="Setor"
+                            value={sectorFilter}
+                            onChange={(e: any) => setSectorFilter(e.target.value)}
+                            options={[
+                                { value: 'all', label: 'Todos os Setores' },
+                                ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
+                            ]}
+                            className="w-44"
+                        />
+                    )}
+                </div>
 
                 {user?.sector === 'TEI' && (
                     <button

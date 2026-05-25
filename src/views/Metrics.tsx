@@ -6,6 +6,7 @@ import { Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
+import { Input as BaseInput } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
 import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
 import {
@@ -57,6 +58,7 @@ export const Metrics: React.FC = () => {
     const [eventFilter, setEventFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
     const [uniqueClients, setUniqueClients] = useState('no');
+    const [searchTerm, setSearchTerm] = useState('');
 
     // --- UI STATE ---
     const { user } = useAuth();
@@ -418,6 +420,15 @@ export const Metrics: React.FC = () => {
                         />
                     </div>
 
+                    {/* Search by Name */}
+                    <div className="w-64">
+                        <BaseInput
+                            placeholder="Pesquisar por nome"
+                            value={searchTerm}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+
                     {/* Sector Filter */}
                     {(canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
                         <FloatingSelect
@@ -507,9 +518,15 @@ export const Metrics: React.FC = () => {
                         displaySector = user.sector;
                     }
 
-                    const ranking = rankings.get(displaySector === 'SDR' ? 'SDR' : displaySector) || 
+                    let ranking = rankings.get(displaySector === 'SDR' ? 'SDR' : displaySector) || 
                                    rankings.get(displaySector === 'Leads' ? 'Leads' : displaySector) || 
                                    [];
+                    // Filter by search term
+                    if (searchTerm.trim()) {
+                        ranking = ranking.filter(item => 
+                            item.name.toLowerCase().includes(searchTerm.toLowerCase())
+                        );
+                    }
                     const total = ranking.reduce((acc, curr) => acc + curr.total, 0);
 
                     if (ranking.length === 0 && displaySector) {
