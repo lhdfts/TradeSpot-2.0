@@ -22,7 +22,7 @@ export const Events: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
     const [activeTab, setActiveTab] = useState<'meus' | 'feeds'>('meus');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('active');
     const [sectorFilter, setSectorFilter] = useState<string>('all');
 
     useEffect(() => {
@@ -130,12 +130,24 @@ export const Events: React.FC = () => {
     const canManageEvents = canEditEvents || canExportEvents;
 
     const displayEvents = (activeTab === 'meus' 
-        ? events.filter(e => {
-            const matchesStatus = statusFilter === 'active' ? e.status === true : (statusFilter === 'archived' ? e.status === false : true);
-            const matchesSector = sectorFilter === 'all' || e.sector === sectorFilter;
-            return matchesStatus && matchesSector;
-        })
-        : feedEvents.filter(e => e.status === true && (sectorFilter === 'all' || e.sector === sectorFilter))
+        ? [...events]
+            .filter(e => {
+                const matchesStatus = statusFilter === 'active' ? e.status === true : (statusFilter === 'archived' ? e.status === false : true);
+                const matchesSector = sectorFilter === 'all' || e.sector === sectorFilter;
+                return matchesStatus && matchesSector;
+            })
+            .sort((a, b) => {
+                const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                return dateB - dateA;
+            })
+        : [...feedEvents]
+            .filter(e => e.status === true && (sectorFilter === 'all' || e.sector === sectorFilter))
+            .sort((a, b) => {
+                const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                return dateB - dateA;
+            })
     );
 
     return (
