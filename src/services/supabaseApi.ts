@@ -229,7 +229,7 @@ export class SupabaseApiService implements ApiService {
         list: async (): Promise<Event[]> => {
             const { data, error } = await supabase
                 .from('events')
-                .select('*, sector');
+                .select('*, sector, duration_minutes');
 
             if (error) {
                 console.error("Error fetching events:", error);
@@ -244,7 +244,8 @@ export class SupabaseApiService implements ApiService {
                 status: event.status,
                 created_at: event.created_at,
                 sector: event.sector,
-                self_scheduling_link: event.self_scheduling_link
+                self_scheduling_link: event.self_scheduling_link,
+                duration_minutes: event.duration_minutes
             }));
         },
         listFeeds: async (sector: string): Promise<Event[]> => {
@@ -274,7 +275,8 @@ export class SupabaseApiService implements ApiService {
                     end_date: data.end_date,
                     status: data.status,
                     sector: data.sector,
-                    self_scheduling_link: data.self_scheduling_link
+                    self_scheduling_link: data.self_scheduling_link,
+                    duration_minutes: data.duration_minutes
                 })
                 .select()
                 .single();
@@ -288,7 +290,8 @@ export class SupabaseApiService implements ApiService {
                 end_date: eventData.end_date,
                 status: eventData.status,
                 sector: eventData.sector,
-                self_scheduling_link: eventData.self_scheduling_link
+                self_scheduling_link: eventData.self_scheduling_link,
+                duration_minutes: eventData.duration_minutes
             };
         },
         update: async (id: string, data: Partial<Event>): Promise<Event> => {
@@ -300,7 +303,8 @@ export class SupabaseApiService implements ApiService {
                     end_date: data.end_date,
                     status: data.status,
                     sector: data.sector,
-                    self_scheduling_link: data.self_scheduling_link
+                    self_scheduling_link: data.self_scheduling_link,
+                    duration_minutes: data.duration_minutes
                 })
                 .eq('id', id)
                 .select()
@@ -315,7 +319,8 @@ export class SupabaseApiService implements ApiService {
                 end_date: eventData.end_date,
                 status: eventData.status,
                 sector: eventData.sector,
-                self_scheduling_link: eventData.self_scheduling_link
+                self_scheduling_link: eventData.self_scheduling_link,
+                duration_minutes: eventData.duration_minutes
             };
         },
         delete: async (id: string): Promise<void> => {
