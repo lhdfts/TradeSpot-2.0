@@ -5,7 +5,7 @@ import type { Attendant } from '../types';
 import { Edit, Trash2 } from 'lucide-react';
 import { AttendantModal } from '../components/AttendantModal';
 import { FloatingSelect } from '../components/FloatingSelect';
-import { Input as BaseInput } from '../components/ui/input';
+import { FloatingInput } from '../components/FloatingInput';
 
 import { useAuth } from '../context/AuthContext';
 import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
@@ -84,8 +84,8 @@ export const Attendants: React.FC = () => {
             <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="w-64">
-                        <BaseInput
-                            placeholder="Pesquisar por nome ou email"
+                        <FloatingInput
+                            label="Pesquisar por nome ou email"
                             value={searchTerm}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                         />

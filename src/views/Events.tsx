@@ -5,6 +5,7 @@ import { api } from '../services/api';
 import type { Event } from '../types';
 import { Button } from '../components/ui/button';
 import { FloatingSelect } from '../components/FloatingSelect';
+import { FloatingInput } from '../components/FloatingInput';
 import { Plus, Edit } from 'lucide-react';
 import { EventModal } from '../components/EventModal';
 import { ExportIcon } from '../components/ExportIcon';
@@ -22,8 +23,9 @@ export const Events: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
     const [activeTab, setActiveTab] = useState<'meus' | 'feeds'>('meus');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('active');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
     const [sectorFilter, setSectorFilter] = useState<string>('all');
+    const [searchTerm, setSearchTerm] = useState<string>('');
 
     useEffect(() => {
         setPortalContainer(document.getElementById('header-actions'));
@@ -130,24 +132,19 @@ export const Events: React.FC = () => {
     const canManageEvents = canEditEvents || canExportEvents;
 
     const displayEvents = (activeTab === 'meus' 
-        ? [...events]
-            .filter(e => {
-                const matchesStatus = statusFilter === 'active' ? e.status === true : (statusFilter === 'archived' ? e.status === false : true);
-                const matchesSector = sectorFilter === 'all' || e.sector === sectorFilter;
-                return matchesStatus && matchesSector;
-            })
-            .sort((a, b) => {
-                const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-                const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-                return dateB - dateA;
-            })
-        : [...feedEvents]
-            .filter(e => e.status === true && (sectorFilter === 'all' || e.sector === sectorFilter))
-            .sort((a, b) => {
-                const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-                const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-                return dateB - dateA;
-            })
+        ? events.filter(e => {
+            const matchesStatus = statusFilter === 'active' ? e.status === true : (statusFilter === 'archived' ? e.status === false : true);
+            const matchesSector = sectorFilter === 'all' || e.sector === sectorFilter;
+            const matchesSearch = !searchTerm.trim() || 
+                e.event_name.toLowerCase().includes(searchTerm.toLowerCase());
+            return matchesStatus && matchesSector && matchesSearch;
+        })
+        : feedEvents.filter(e => {
+            const matchesSector = sectorFilter === 'all' || e.sector === sectorFilter;
+            const matchesSearch = !searchTerm.trim() || 
+                e.event_name.toLowerCase().includes(searchTerm.toLowerCase());
+            return e.status === true && matchesSector && matchesSearch;
+        })
     );
 
     return (
@@ -179,6 +176,13 @@ export const Events: React.FC = () => {
                 )}
 
                 <div className="flex flex-wrap items-center gap-4">
+                    <div className="w-64">
+                        <FloatingInput
+                            label="Pesquisar por nome"
+                            value={searchTerm}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                     {(canViewAllSectors(user) || isMedinaUser(user)) && (
                         <FloatingSelect
                             label="Setor"
