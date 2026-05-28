@@ -814,11 +814,17 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     };
 
     // Calculate end time (start time + duration)
-    const calculateEndTime = (startTime: string) => {
+    const calculateEndTime = (startTime: string, eventId: string) => {
         if (!startTime) return '';
         const [hours, minutes] = startTime.split(':').map(Number);
 
-        let duration = 60; // Todos os tipos duram 1 hora
+        let duration = 60; // Default
+        if (eventId) {
+            const selectedEvent = events.find(e => e.id === eventId);
+            if (selectedEvent && selectedEvent.duration_minutes) {
+                duration = selectedEvent.duration_minutes;
+            }
+        }
 
         const totalMinutes = hours * 60 + minutes + duration;
         const endHours = Math.floor(totalMinutes / 60) % 24;
@@ -826,7 +832,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
     };
 
-    const endTime = calculateEndTime(formData.time);
+    const endTime = calculateEndTime(formData.time, formData.eventId);
 
     if (loading) return <div>Carregando...</div>;
 

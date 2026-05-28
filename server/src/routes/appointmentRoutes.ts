@@ -37,8 +37,8 @@ const RESTRICTED_EVENT_FREE_STATUSES = ['Cancelado', 'Reagendado'];
 
 // --- Helper Logic ---
 
-const calculateEndTime = (startTime: string, type: string): string => {
-    let duration = 60;
+const calculateEndTime = (startTime: string, durationMinutes: number = 60): string => {
+    let duration = durationMinutes;
     const [hours, minutes] = startTime.split(':').map(Number);
     const totalMinutes = hours * 60 + minutes + duration;
     const endHours = Math.floor(totalMinutes / 60) % 24;
@@ -64,9 +64,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         // 1.5 Fetch Event to check sector for Aldeia/Tribo specific rules (Internal Link)
         let eventSector = '';
+        let durationMinutes = 60;
         if (data.eventId) {
-            const { data: ev } = await supabase.from('events').select('sector').eq('id', data.eventId).single();
-            if (ev) eventSector = ev.sector;
+            const { data: ev } = await supabase.from('events').select('sector, duration_minutes').eq('id', data.eventId).single();
+            if (ev) {
+                eventSector = ev.sector;
+                if (ev.duration_minutes) durationMinutes = ev.duration_minutes;
+            }
         }
         const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
 
@@ -125,7 +129,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
             const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(data.type);
             const ignoreSched = isAldeiaOrTribo && !isCloserAppt;
-            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched });
+            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
             if (!availableId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
             }
@@ -182,7 +186,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
 
             if (data.type !== 'Fora da agenda' && attendant.sector !== 'Aldeia' && attendant.sector !== 'Tribo') {
-                const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type);
+                const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type, durationMinutes);
                 if (!isWithinSchedule) {
                     return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
                 }
@@ -190,7 +194,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
 
 
-        const endTime = calculateEndTime(data.time, data.type);
+        const endTime = calculateEndTime(data.time, durationMinutes);
 
         // 3. Conflict Check (Range Based)
         const { data: existingAppts } = await supabase
@@ -202,7 +206,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         if (data.type !== 'Fora da agenda' && data.type !== 'Fechamento' && existingAppts) {
             // @ts-ignore
-            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts);
+            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts, undefined, durationMinutes);
             if (hasConflict) {
                 return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
             }
@@ -437,10 +441,14 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
         // 1.5 Fetch Event sector for Aldeia/Tribo rules (Internal Link)
         let eventSector = '';
+        let durationMinutes = 60;
         const eventIdToCheck = merged.event_id;
         if (eventIdToCheck) {
-            const { data: ev } = await supabase.from('events').select('sector').eq('id', eventIdToCheck).single();
-            if (ev) eventSector = ev.sector;
+            const { data: ev } = await supabase.from('events').select('sector, duration_minutes').eq('id', eventIdToCheck).single();
+            if (ev) {
+                eventSector = ev.sector;
+                if (ev.duration_minutes) durationMinutes = ev.duration_minutes;
+            }
         }
         const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
 
@@ -460,7 +468,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         if (updates.time || updates.type) {
-            merged.end_time = calculateEndTime(merged.time, merged.type);
+            merged.end_time = calculateEndTime(merged.time, durationMinutes);
         }
 
         // Logic Check
@@ -472,7 +480,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
                 if (merged.type !== 'Fora da agenda' && attendant.sector !== 'Aldeia' && attendant.sector !== 'Tribo') {
-                    const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type);
+                    const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type, durationMinutes);
                     console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
 
                     if (!isWithin) {
@@ -494,13 +502,13 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
                 if (merged.type !== 'Fora da agenda' && existingAppts) {
                     // Pass 'id' as the 6th argument to exclude current appointment from conflict check
-                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id);
+                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id, durationMinutes);
                     console.log(`[DEBUG] hasConflict result: ${hasConflict}`);
 
                     if (hasConflict) {
                         // Find specific conflicting appointment for logging
                         const newStart = timeToMinutes(merged.time);
-                        const newEnd = newStart + getDuration(merged.type);
+                        const newEnd = newStart + getDuration(merged.type, durationMinutes);
 
                         const collidingAppt = existingAppts.find(appt => {
                             if (appt.attendant_id !== merged.attendant_id) return false;

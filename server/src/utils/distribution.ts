@@ -54,8 +54,8 @@ export const timeToMinutes = (time: string): number => {
     return h * 60 + m;
 };
 
-export const getDuration = (_type?: string): number => {
-    return 60; // Todos os tipos duram 1 hora
+export const getDuration = (_type?: string, durationMinutes: number = 60): number => {
+    return durationMinutes;
 };
 
 // Check if attendant is working at this time
@@ -63,7 +63,8 @@ export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string,
     timeStr: string,
-    appointmentType: string
+    appointmentType: string,
+    durationMinutes: number = 60
 ): boolean => {
     if (!attendant.schedule) return false;
 
@@ -87,7 +88,7 @@ export const isAttendantWithinSchedule = (
     const prevSchedule = attendant.schedule?.[prevDayKey];
 
     const apptStart = timeToMinutes(timeStr);
-    const duration = getDuration(appointmentType);
+    const duration = getDuration(appointmentType, durationMinutes);
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
@@ -153,10 +154,11 @@ export const hasConflictingAppointment = (
     timeStr: string,
     newType: string,
     appointments: Appointment[],
-    excludeId?: string
+    excludeId?: string,
+    durationMinutes: number = 60
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newType);
+    const newEnd = newStart + getDuration(newType, durationMinutes);
 
     return appointments.some(appt => {
         if (appt.attendant_id !== attendantId) return false;
@@ -191,7 +193,8 @@ export const hasSectorTimeLimit = (
     newAppointmentType: string,
     allAppointments: any[],
     attendants: any[],
-    excludeAppointmentId?: string
+    excludeAppointmentId?: string,
+    durationMinutes: number = 60
 ): boolean => {
     if (sector !== 'Aldeia' && sector !== 'Tribo') return false;
     if (newAppointmentType === 'Agendamento Pessoal' || newAppointmentType === 'Personal Appointment') return false;
@@ -199,7 +202,7 @@ export const hasSectorTimeLimit = (
     const sectorAttendants = new Set(attendants.filter(a => a.sector === sector).map(a => a.id));
     
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newAppointmentType);
+    const newEnd = newStart + getDuration(newAppointmentType, durationMinutes);
 
     let concurrentCount = 0;
 
@@ -236,8 +239,9 @@ export const findBestAttendant = async (
     time: string,
     type: string,
     eventId?: string,
-    options: { ignoreSchedule?: boolean } = {}
+    options: { ignoreSchedule?: boolean, durationMinutes?: number } = {}
 ): Promise<string | null> => {
+    const durationMinutes = options.durationMinutes || 60;
     let sectors = ['Closer'];
     let roleFilters: string[] | null = null;
     let sectorLimitCheck: string | null = null;
@@ -308,13 +312,13 @@ export const findBestAttendant = async (
     // 3. Filter by Schedule
     let available = attendantsForEvent;
     if (!options.ignoreSchedule) {
-        available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type));
+        available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type, durationMinutes));
     }
     if (available.length === 0) return null;
 
     // Sector limits check
     if (sectorLimitCheck) {
-        if (hasSectorTimeLimit(sectorLimitCheck, date, time, type, appointments, attendants)) {
+        if (hasSectorTimeLimit(sectorLimitCheck, date, time, type, appointments, attendants, undefined, durationMinutes)) {
             return null;
         }
     }
@@ -337,7 +341,7 @@ export const findBestAttendant = async (
 
     // 6. Check Conflicts
     for (const attendant of withLoad) {
-        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments)) {
+        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments, undefined, durationMinutes)) {
             return attendant.id;
         }
     }

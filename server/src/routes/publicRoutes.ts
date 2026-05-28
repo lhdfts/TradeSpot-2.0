@@ -161,11 +161,13 @@ router.get('/available-times', async (req: Request, res: Response) => {
     try {
         let APPOINTMENT_TYPE = 'Ligação Closer';
         let sectors = ['Closer'];
+        let durationMinutes = 60;
 
         if (eventId && typeof eventId === 'string') {
-            const { data: eventData, error: eventError } = await supabase.from('events').select('event_name, sector').eq('id', eventId).single();
+            const { data: eventData, error: eventError } = await supabase.from('events').select('event_name, sector, duration_minutes').eq('id', eventId).single();
             console.log('[AVAILABLE-TIMES] Event lookup:', { eventId, eventData, eventError });
             if (eventData) {
+                if (eventData.duration_minutes) durationMinutes = eventData.duration_minutes;
                 // 1. Determine base Appointment Type
                 if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
                     APPOINTMENT_TYPE = 'Gold Call';
@@ -255,7 +257,9 @@ router.get('/available-times', async (req: Request, res: Response) => {
                     date,
                     timeSlot,
                     APPOINTMENT_TYPE,
-                    existingAppointments
+                    existingAppointments,
+                    undefined,
+                    durationMinutes
                 );
                 if (!hasConflict) {
                     availableTimes.push(timeSlot);
@@ -306,7 +310,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
         for (const timeSlot of allTimes) {
                 if (isAldeiaOrTribo) {
                     const sectorLimitCheck = sectors.includes('Aldeia') ? 'Aldeia' : 'Tribo';
-                    if (hasSectorTimeLimit(sectorLimitCheck, date, timeSlot, APPOINTMENT_TYPE, existingAppointments, attendants)) {
+                    if (hasSectorTimeLimit(sectorLimitCheck, date, timeSlot, APPOINTMENT_TYPE, existingAppointments, attendants, undefined, durationMinutes)) {
                         continue;
                     }
                 }
@@ -316,7 +320,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
                     existingAppointments,
                     date,
                     timeSlot,
-                    APPOINTMENT_TYPE
+                    APPOINTMENT_TYPE,
+                    durationMinutes
                 );
                 if (hasAvailableCloser) availableTimes.push(timeSlot);
             }
@@ -345,11 +350,12 @@ async function checkIfAnyCloserAvailable(
     appointments: any[],
     date: string,
     time: string,
-    type: string
+    type: string,
+    durationMinutes: number = 60
 ): Promise<boolean> {
     // Filter by schedule first
     const availableBySchedule = attendants.filter(a => {
-        const isWithinSchedule = isAttendantWithinSchedule(a, date, time, type);
+        const isWithinSchedule = isAttendantWithinSchedule(a, date, time, type, durationMinutes);
         if (!isWithinSchedule && time === '09:00') {
             console.log(`[DEBUG] ${a.name} (${a.id}): NOT within schedule for ${date} ${time}`, {
                 hasSchedule: !!a.schedule,
@@ -373,7 +379,9 @@ async function checkIfAnyCloserAvailable(
             date,
             time,
             type,
-            appointments
+            appointments,
+            undefined,
+            durationMinutes
         );
 
         if (!hasConflict) {
