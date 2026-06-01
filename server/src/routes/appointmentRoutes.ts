@@ -12,13 +12,291 @@ import { type AuthenticatedRequest, logSuccessfulAction } from '../middleware/fi
 const router = Router();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+// Priority: New Secret Key, then Service Role Key, then Anon Key (backward compatibility)
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
     console.error("Supabase credentials missing in backend!");
 }
 
 const supabase = createClient(supabaseUrl!, supabaseKey!);
+
+// GET /api/appointments - List all appointments
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { data, error } = await supabase
+            .from('appointments')
+            .select(`
+                *,
+                clients (
+                    name,
+                    phone,
+                    email
+                ),
+                attendant:user!attendant_id (
+                    name
+                ),
+                updater:user!updatedBy (
+                    name,
+                    sector
+                )
+            `)
+            .order('date', { ascending: false })
+            .order('time', { ascending: false })
+            .limit(10000);
+
+        if (error) throw new Error(error.message);
+
+        const mappedData = data.map((app: any) => ({
+            id: app.id,
+            lead: app.clients?.name || 'Unknown',
+            phone: app.clients?.phone || 0,
+            email: app.clients?.email,
+            date: app.date,
+            time: app.time ? app.time.slice(0, 5) : '',
+            type: app.type,
+            status: app.status,
+            attendantId: app.attendant_id,
+            attendantName: app.attendant?.name,
+            eventId: app.event_id,
+            meetLink: app.meet_link,
+            notes: app.notes,
+            additionalInfo: app.additional_info,
+            createdBy: app.created_by,
+            studentProfile: {
+                interest: app.interest_level,
+                knowledge: app.knowledge_level,
+                financial: {
+                    currency: app.financial_currency,
+                    amount: app.financial_amount != null ? String(app.financial_amount) : undefined
+                }
+            },
+            oldStatus: app.oldStatus,
+            updatedBy: app.updatedBy,
+            updater: app.updater
+        }));
+
+        res.json(mappedData);
+    } catch (err: any) {
+        console.error("List Appointments Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
+// GET /api/attendants - List all attendants
+router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { data, error } = await supabase.from('user').select('*');
+
+        if (error) throw new Error(error.message);
+
+        const mappedData = data.map((user: any) => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            sector: user.sector,
+            schedule: user.schedule,
+            pauses: user.pauses,
+            denied_events: user.denied_events
+        }));
+
+        res.json(mappedData);
+    } catch (err: any) {
+        console.error("List Attendants Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
+// PUT /api/attendants/:id - Update attendant
+router.put('/attendants/:id', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const updatePayload: any = {};
+        if (req.body.name !== undefined) updatePayload.name = req.body.name;
+        if (req.body.role !== undefined) updatePayload.role = req.body.role;
+        if (req.body.sector !== undefined) updatePayload.sector = req.body.sector;
+        if (req.body.schedule !== undefined) updatePayload.schedule = req.body.schedule;
+        if (req.body.pauses !== undefined) updatePayload.pauses = req.body.pauses;
+        if (req.body.denied_events !== undefined) updatePayload.denied_events = req.body.denied_events;
+
+        const { data: userData, error } = await supabase
+            .from('user')
+            .update(updatePayload)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+
+        res.json({
+            id: userData.id,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role,
+            sector: userData.sector,
+            schedule: userData.schedule,
+            pauses: userData.pauses,
+            denied_events: userData.denied_events
+        });
+    } catch (err: any) {
+        console.error("Update Attendant Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
+// GET /api/events - List all events
+router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { data, error } = await supabase.from('events').select('*, sector, duration_minutes');
+
+        if (error) throw new Error(error.message);
+
+        const mappedData = data.map((event: any) => ({
+            id: event.id,
+            event_name: event.event_name,
+            start_date: event.start_date,
+            end_date: event.end_date,
+            status: event.status,
+            created_at: event.created_at,
+            sector: event.sector,
+            self_scheduling_link: event.self_scheduling_link,
+            duration_minutes: event.duration_minutes
+        }));
+
+        res.json(mappedData);
+    } catch (err: any) {
+        console.error("List Events Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
+// POST /api/events - Create event
+router.post('/events', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { data: eventData, error } = await supabase
+            .from('events')
+            .insert({
+                event_name: req.body.event_name,
+                start_date: req.body.start_date,
+                end_date: req.body.end_date,
+                status: req.body.status,
+                sector: req.body.sector,
+                self_scheduling_link: req.body.self_scheduling_link,
+                duration_minutes: req.body.duration_minutes
+            })
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+
+        res.status(201).json({
+            id: eventData.id,
+            event_name: eventData.event_name,
+            start_date: eventData.start_date,
+            end_date: eventData.end_date,
+            status: eventData.status,
+            created_at: eventData.created_at,
+            sector: eventData.sector,
+            self_scheduling_link: eventData.self_scheduling_link,
+            duration_minutes: eventData.duration_minutes
+        });
+    } catch (err: any) {
+        console.error("Create Event Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
+// PUT /api/events/:id - Update event
+router.put('/events/:id', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { data: eventData, error } = await supabase
+            .from('events')
+            .update({
+                event_name: req.body.event_name,
+                start_date: req.body.start_date,
+                end_date: req.body.end_date,
+                status: req.body.status,
+                sector: req.body.sector,
+                self_scheduling_link: req.body.self_scheduling_link,
+                duration_minutes: req.body.duration_minutes
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+
+        res.json({
+            id: eventData.id,
+            event_name: eventData.event_name,
+            start_date: eventData.start_date,
+            end_date: eventData.end_date,
+            status: eventData.status,
+            created_at: eventData.created_at,
+            sector: eventData.sector,
+            self_scheduling_link: eventData.self_scheduling_link,
+            duration_minutes: eventData.duration_minutes
+        });
+    } catch (err: any) {
+        console.error("Update Event Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
+// DELETE /api/events/:id - Delete event
+router.delete('/events/:id', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase.from('events').delete().eq('id', id);
+
+        if (error) throw new Error(error.message);
+
+        res.status(204).send();
+    } catch (err: any) {
+        console.error("Delete Event Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
+// GET /api/clients/email/:email - Get client by email
+router.get('/clients/email/:email', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { email } = req.params;
+        const { data, error } = await supabase
+            .from('clients')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
+
+        if (error) throw new Error(error.message);
+
+        res.json(data);
+    } catch (err: any) {
+        console.error("Get Client by Email Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
+
+// GET /api/clients/phone/:phone - Get client by phone
+router.get('/clients/phone/:phone', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { phone } = req.params;
+        const { data, error } = await supabase
+            .from('clients')
+            .select('*')
+            .eq('phone', phone)
+            .maybeSingle();
+
+        if (error) throw new Error(error.message);
+
+        res.json(data);
+    } catch (err: any) {
+        console.error("Get Client by Phone Error:", err);
+        res.status(500).json({ error: 'Erro Interno', details: err.message });
+    }
+});
 
 // --- Event-specific Restrictions ---
 const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';

@@ -1,5 +1,3 @@
-
-import { supabase } from '../lib/supabase';
 import { getAuthHeaders } from '../lib/firebase';
 import type { ApiService } from './api';
 import type { Appointment, Attendant, Event } from '../types';
@@ -7,58 +5,16 @@ import type { Appointment, Attendant, Event } from '../types';
 export class SupabaseApiService implements ApiService {
     appointments = {
         list: async (): Promise<Appointment[]> => {
-            const { data, error } = await supabase
-                .from('appointments')
-                .select(`
-                    *,
-                    clients (
-                        name,
-                        phone,
-                        email
-                    ),
-                    attendant:user!attendant_id (
-                        name
-                    ),
-                    updater:user!updatedBy (
-                        name,
-                        sector
-                    )
-                `)
-                .order('date', { ascending: false })
-                .order('time', { ascending: false })
-                .limit(10000); // Aumentado para 10000 para evitar que agendamentos mais antigos sumam da tela
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/appointments', {
+                headers: authHeaders
+            });
 
-            if (error) throw new Error(error.message);
+            if (!response.ok) {
+                throw new Error('Failed to fetch appointments');
+            }
 
-            return data.map((app: any) => ({
-                id: app.id,
-                lead: app.clients?.name || 'Unknown',
-                phone: app.clients?.phone || 0,
-                email: app.clients?.email,
-                date: app.date,
-                time: app.time.slice(0, 5), // Format HH:MM:SS to HH:MM
-                type: app.type,
-                status: app.status,
-                attendantId: app.attendant_id,
-                attendantName: app.attendant?.name,
-                eventId: app.event_id,
-                meetLink: app.meet_link,
-                notes: app.notes,
-                additionalInfo: app.additional_info,
-                createdBy: app.created_by,
-                studentProfile: {
-                    interest: app.interest_level,
-                    knowledge: app.knowledge_level,
-                    financial: {
-                        currency: app.financial_currency,
-                        amount: app.financial_amount != null ? String(app.financial_amount) : undefined
-                    }
-                },
-                // Status tracking
-                oldStatus: app.oldStatus,
-                updatedBy: app.updatedBy,
-                updater: app.updater
-            }));
+            return await response.json();
         },
         create: async (data: Omit<Appointment, 'id'>): Promise<Appointment> => {
             // New Secure Flow (Spec 2.B): Send to Node.js Backend for Validation & Creation
@@ -159,25 +115,17 @@ export class SupabaseApiService implements ApiService {
 
     attendants = {
         list: async (): Promise<Attendant[]> => {
-            const { data, error } = await supabase
-                .from('user')
-                .select('*');
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/appointments/attendants', {
+                headers: authHeaders
+            });
 
-            if (error) {
-                console.error("Error fetching attendants:", error);
+            if (!response.ok) {
+                console.error('Failed to fetch attendants');
                 return [];
             }
 
-            return data.map((user: any) => ({
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role, // Map role
-                sector: user.sector, // Map sector
-                schedule: user.schedule,
-                pauses: user.pauses,
-                denied_events: user.denied_events
-            }));
+            return await response.json();
         },
         create: async (data: Omit<Attendant, 'id'>): Promise<Attendant> => {
             // Creating a user in Supabase usually requires Auth signup.
@@ -190,33 +138,21 @@ export class SupabaseApiService implements ApiService {
             throw new Error("Creating attendants via API is restricted. Please use Supabase Auth.");
         },
         update: async (id: string, data: Partial<Attendant>): Promise<Attendant> => {
-            const updateData: any = {};
-            if (data.name !== undefined) updateData.name = data.name;
-            if (data.role !== undefined) updateData.role = data.role;
-            if (data.sector !== undefined) updateData.sector = data.sector;
-            if (data.schedule !== undefined) updateData.schedule = data.schedule;
-            if (data.pauses !== undefined) updateData.pauses = data.pauses;
-            if (data.denied_events !== undefined) updateData.denied_events = data.denied_events;
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/appointments/attendants/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify(data)
+            });
 
-            const { data: userData, error } = await supabase
-                .from('user')
-                .update(updateData)
-                .eq('id', id)
-                .select()
-                .single();
+            if (!response.ok) {
+                throw new Error('Failed to update attendant');
+            }
 
-            if (error) throw new Error(error.message);
-
-            return {
-                id: userData.id,
-                name: userData.name,
-                email: userData.email,
-                role: userData.role,
-                sector: userData.sector,
-                schedule: userData.schedule,
-                pauses: userData.pauses,
-                denied_events: userData.denied_events
-            };
+            return await response.json();
         },
         delete: async (id: string): Promise<void> => {
             // Deleting a user is also sensitive.
@@ -227,26 +163,17 @@ export class SupabaseApiService implements ApiService {
 
     events = {
         list: async (): Promise<Event[]> => {
-            const { data, error } = await supabase
-                .from('events')
-                .select('*, sector, duration_minutes');
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/appointments/events', {
+                headers: authHeaders
+            });
 
-            if (error) {
-                console.error("Error fetching events:", error);
+            if (!response.ok) {
+                console.error('Failed to fetch events');
                 return [];
             }
 
-            return data.map((event: any) => ({
-                id: event.id,
-                event_name: event.event_name,
-                start_date: event.start_date,
-                end_date: event.end_date,
-                status: event.status,
-                created_at: event.created_at,
-                sector: event.sector,
-                self_scheduling_link: event.self_scheduling_link,
-                duration_minutes: event.duration_minutes
-            }));
+            return await response.json();
         },
         listFeeds: async (sector: string): Promise<Event[]> => {
             const response = await fetch(`/api/public/events/feeds?sector=${encodeURIComponent(sector)}`);
@@ -267,98 +194,76 @@ export class SupabaseApiService implements ApiService {
             }));
         },
         create: async (data: Omit<Event, 'id'>): Promise<Event> => {
-            const { data: eventData, error } = await supabase
-                .from('events')
-                .insert({
-                    event_name: data.event_name,
-                    start_date: data.start_date,
-                    end_date: data.end_date,
-                    status: data.status,
-                    sector: data.sector,
-                    self_scheduling_link: data.self_scheduling_link,
-                    duration_minutes: data.duration_minutes
-                })
-                .select()
-                .single();
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/appointments/events', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify(data)
+            });
 
-            if (error) throw new Error(error.message);
+            if (!response.ok) {
+                throw new Error('Failed to create event');
+            }
 
-            return {
-                id: eventData.id,
-                event_name: eventData.event_name,
-                start_date: eventData.start_date,
-                end_date: eventData.end_date,
-                status: eventData.status,
-                sector: eventData.sector,
-                self_scheduling_link: eventData.self_scheduling_link,
-                duration_minutes: eventData.duration_minutes
-            };
+            return await response.json();
         },
         update: async (id: string, data: Partial<Event>): Promise<Event> => {
-            const { data: eventData, error } = await supabase
-                .from('events')
-                .update({
-                    event_name: data.event_name,
-                    start_date: data.start_date,
-                    end_date: data.end_date,
-                    status: data.status,
-                    sector: data.sector,
-                    self_scheduling_link: data.self_scheduling_link,
-                    duration_minutes: data.duration_minutes
-                })
-                .eq('id', id)
-                .select()
-                .single();
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/appointments/events/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify(data)
+            });
 
-            if (error) throw new Error(error.message);
+            if (!response.ok) {
+                throw new Error('Failed to update event');
+            }
 
-            return {
-                id: eventData.id,
-                event_name: eventData.event_name,
-                start_date: eventData.start_date,
-                end_date: eventData.end_date,
-                status: eventData.status,
-                sector: eventData.sector,
-                self_scheduling_link: eventData.self_scheduling_link,
-                duration_minutes: eventData.duration_minutes
-            };
+            return await response.json();
         },
         delete: async (id: string): Promise<void> => {
-            const { error } = await supabase
-                .from('events')
-                .delete()
-                .eq('id', id);
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/appointments/events/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders
+            });
 
-            if (error) throw new Error(error.message);
+            if (!response.ok) {
+                throw new Error('Failed to delete event');
+            }
         }
     };
 
     clients = {
         getByEmail: async (email: string): Promise<any | null> => {
-            const { data, error } = await supabase
-                .from('clients')
-                .select('*')
-                .eq('email', email)
-                .maybeSingle();
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/appointments/clients/email/${encodeURIComponent(email)}`, {
+                headers: authHeaders
+            });
 
-            if (error) {
-                throw new Error(error.message);
+            if (!response.ok) {
+                throw new Error('Failed to fetch client by email');
             }
 
-            return data;
+            return await response.json();
         },
         getByPhone: async (phone: string | number): Promise<any | null> => {
-            const { data, error } = await supabase
-                .from('clients')
-                .select('*')
-                .eq('phone', phone)
-                .maybeSingle();
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/appointments/clients/phone/${encodeURIComponent(phone)}`, {
+                headers: authHeaders
+            });
 
-            if (error) {
-                throw new Error(error.message);
+            if (!response.ok) {
+                throw new Error('Failed to fetch client by phone');
             }
 
-            return data;
+            return await response.json();
         }
     };
 }

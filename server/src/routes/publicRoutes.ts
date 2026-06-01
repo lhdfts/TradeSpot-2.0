@@ -8,16 +8,9 @@ import { createGoogleMeetLink } from '../services/googleMeet.js';
 
 const router = Router();
 
-// Init Supabase with SERVICE ROLE key if available for admin tasks, 
-// BUT here we might want to stick to ANON key to respect policies, 
-// OR we need admin strict access because we are creating users/appts on their behalf.
-// Since this is a backend trusted endpoint, we should probably use the same key as the main app logic.
-// The main `appointmentRoutes.ts` uses ANON_KEY? let's check. 
-// Yes: const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-// We will use the same credentials.
-
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+// Priority: New Secret Key, then Service Role Key, then Anon Key (backward compatibility)
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
     console.error("Supabase credentials missing in backend!");
