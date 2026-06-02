@@ -27,7 +27,8 @@ const app = express();
 const PORT = 3000;
 
 app.use(cors());
-app.use(express.json());
+// Limit request body size to prevent abuse (100kb is enough for all our use cases)
+app.use(express.json({ limit: '100kb' }));
 
 // Essential for Vercel to correctly identify client IP addresses
 app.set('trust proxy', 1);
