@@ -33,6 +33,21 @@ app.use(express.json({ limit: '100kb' }));
 // Essential for Vercel to correctly identify client IP addresses
 app.set('trust proxy', 1);
 
+// Security Headers: Prevent clickjacking, MIME sniffing, XSS, etc.
+app.use((req, res, next) => {
+    // Remove X-Powered-By to avoid exposing backend tech stack
+    res.removeHeader('X-Powered-By');
+    // Prevent clickjacking (don't allow any framing)
+    res.setHeader('X-Frame-Options', 'DENY');
+    // Prevent MIME sniffing
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // XSS protection (for older browsers, but still good to have)
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    // Basic Content Security Policy (CSP) - can be tightened later if needed
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://*.firebaseapp.com https://*.firebasedatabase.app https://securetoken.googleapis.com https://www.googleapis.com; frame-src 'self' https://*.firebaseapp.com https://*.googleapis.com;");
+    next();
+});
+
 
 app.get('/api/me', verifyFirebaseToken, (req: AuthenticatedRequest, res) => {
     // Agora o TypeScript reconhecerá req.user sem erros
