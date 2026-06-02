@@ -13,6 +13,10 @@ export const publicRateLimiter = rateLimit({
     },
     standardHeaders: true, // Return rate limit info in headers
     legacyHeaders: false,
+    keyGenerator: (req: Request): string => {
+        // Use X-Forwarded-For for Vercel, fallback to IP
+        return (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    },
 });
 
 /**
@@ -27,6 +31,9 @@ export const strictPublicRateLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req: Request): string => {
+        return (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    },
 });
 
 /**
@@ -41,8 +48,27 @@ export const apiRateLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req: Request): string => {
+        return (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    },
     skip: (req: Request): boolean => {
         // Skip rate limiting for health checks
         return req.path === '/api/health';
     }
+});
+
+/**
+ * Extra strict rate limiter for sensitive operations (like imports, bulk actions)
+ */
+export const sensitiveOperationLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 10, // Only 10 requests per 5 minutes
+    message: {
+        error: 'Limite de operações sensíveis atingido. Por favor, aguarde alguns minutos.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req: Request): string => {
+        return (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    },
 });
