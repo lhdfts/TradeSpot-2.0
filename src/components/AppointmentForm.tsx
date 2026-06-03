@@ -162,6 +162,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (selectedEvent && (selectedEvent.event_name === 'Primeiro Dólar na Prática' || selectedEvent.event_name === 'Dollar On Demand')) {
             allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
         }
+        if (selectedEvent && selectedEvent.event_name === '0526 - Ação 14 Dias') {
+            // "Ligação Closer" is already in the initial allTypes, so no need to push
+        }
 
         if (user?.sector === 'Closer') {
             allTypes.push({ value: 'Ligação Equipe Aldeia', label: 'Ligação Equipe Aldeia' });
@@ -203,6 +206,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     }, [user, formData.eventId, events]);
 
     const attendantOptions = React.useMemo(() => {
+        const selectedEvent = events.find(e => e.id === formData.eventId);
+        const isAcao14Dias = selectedEvent?.event_name === '0526 - Ação 14 Dias';
+
         // When EDITING, filter attendants by appointment type strictly
         if (isEditing) {
             const typeToSectors: Record<string, string[]> = {
@@ -217,9 +223,14 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const requiredSectors = typeToSectors[formData.type];
 
             // Filter attendants by sector if type requires it
-            const filteredAttendants = requiredSectors
+            let filteredAttendants = requiredSectors
                 ? attendants.filter(a => requiredSectors.includes(a.sector))
                 : attendants; // For other types like 'Agendamento Pessoal', 'Fora da agenda', show all
+
+            // If event is "0526 - Ação 14 Dias" and type is "Ligação Closer", filter only role=Colaborador and sector=Closer
+            if (isAcao14Dias && formData.type === 'Ligação Closer') {
+                filteredAttendants = attendants.filter(a => a.sector === 'Closer' && a.role === 'Colaborador');
+            }
 
             const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
             const filteredAttendantsForBlock = shouldBlock
@@ -232,30 +243,34 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         }
 
         // Original logic for CREATING new appointments
+        const filteredAttendants = attendants.filter(a => {
+            const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
+            if (shouldBlock && a.id === BLOCKED_CLOSER_ID) return false;
+
+            const eventSector = selectedEvent?.sector;
+            const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
+
+            // If event is "0526 - Ação 14 Dias" and type is "Ligação Closer", return only role=Colaborador and sector=Closer
+            if (isAcao14Dias && formData.type === 'Ligação Closer') {
+                return a.sector === 'Closer' && a.role === 'Colaborador';
+            }
+
+            if (formData.type === 'Fora da agenda') return a.sector === 'Closer' && (a.role === 'Colaborador' || a.role === 'Co-líder');
+            if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
+            if (formData.type === 'Reagendamento Closer') return a.sector === 'Closer' || a.sector === 'Aldeia';
+            if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia';
+
+            if (isAdministrative) {
+                return eventSector ? a.sector === eventSector : true;
+            }
+
+            if (user?.sector === 'TEI') return true;
+            return user?.sector ? a.sector === user.sector : true;
+        });
+
         const options = [
             { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
-            ...attendants
-                .filter(a => {
-                    const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
-                    if (shouldBlock && a.id === BLOCKED_CLOSER_ID) return false;
-
-                    const selectedEvent = events.find(e => e.id === formData.eventId);
-                    const eventSector = selectedEvent?.sector;
-                    const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
-
-                    if (formData.type === 'Fora da agenda') return a.sector === 'Closer' && (a.role === 'Colaborador' || a.role === 'Co-líder');
-                    if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
-                    if (formData.type === 'Reagendamento Closer') return a.sector === 'Closer' || a.sector === 'Aldeia';
-                    if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia';
-
-                    if (isAdministrative) {
-                        return eventSector ? a.sector === eventSector : true;
-                    }
-
-                    if (user?.sector === 'TEI') return true;
-                    return user?.sector ? a.sector === user.sector : true;
-                })
-                .map(a => ({ value: a.id, label: a.name }))
+            ...filteredAttendants.map(a => ({ value: a.id, label: a.name }))
         ];
 
         // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call/Fora da agenda, mostrar apenas Distribuição Automática
