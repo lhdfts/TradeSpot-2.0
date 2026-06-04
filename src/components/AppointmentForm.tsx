@@ -188,10 +188,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
         }
         if (user.sector === 'Aldeia') {
-            const allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer'];
-            if (formData.eventId === ON_THE_ROAD_EVENT_ID || formData.eventId === ACAO_14_DIAS_EVENT_ID) {
-                allowed.push('Ligação Closer');
-            }
+            const allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer', 'Ligação Closer'];
+            if (formData.eventId === ON_THE_ROAD_EVENT_ID || formData.eventId === ACAO_14_DIAS_EVENT_ID)
             return allTypes.filter(t => allowed.includes(t.value));
         }
         if (user.sector === 'Social Seller') {
