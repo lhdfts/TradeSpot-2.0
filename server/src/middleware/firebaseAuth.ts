@@ -2,6 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { supabase } from '../utils/supabaseClient.js';
 
+/**
+ * Safely extracts client IP address, handling string, string[], or undefined.
+ */
+const getClientIp = (req: Request): string => {
+    const rawIp = req.headers['x-forwarded-for'];
+    const ipString = Array.isArray(rawIp) ? rawIp[0] : rawIp;
+    if (typeof ipString === 'string') {
+        return ipString.split(',')[0].trim() || req.ip || 'unknown';
+    }
+    return req.ip || 'unknown';
+};
+
 // Extended request type with authenticated user info
 export interface AuthenticatedRequest extends Request {
     user?: {
@@ -59,7 +71,7 @@ export const verifyFirebaseToken = async (
     next: NextFunction
 ) => {
     const authHeader = req.headers.authorization;
-    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || 'unknown';
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -205,7 +217,7 @@ export const verifyFirebaseToken = async (
  */
 export const requireRole = (...allowedRoles: string[]) => {
     return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-        const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+        const ipAddress = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'unknown';
 
         if (!req.user) {
@@ -251,7 +263,7 @@ export const logSuccessfulAction = (
 ) => {
     if (!req.user) return;
 
-    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || 'unknown';
 
     logActivity({
