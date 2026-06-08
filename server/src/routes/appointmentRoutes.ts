@@ -1,25 +1,13 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js';
-import { createClient } from '@supabase/supabase-js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction } from '../middleware/firebaseAuth.js';
-
-
+import { supabase } from '../utils/supabaseClient.js';
 
 const router = Router();
-
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-// Priority: New Secret Key, then Service Role Key, then Anon Key (backward compatibility)
-const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-    console.error("Supabase credentials missing in backend!");
-}
-
-const supabase = createClient(supabaseUrl!, supabaseKey!);
 
 // GET /api/appointments - List all appointments
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {

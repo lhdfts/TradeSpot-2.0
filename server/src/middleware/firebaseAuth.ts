@@ -1,12 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
-import { createClient } from '@supabase/supabase-js';
-
-// Supabase client for fetching user roles
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-// Use the new secret key first, then fallback for backward compatibility
-const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl!, supabaseKey!);
+import { supabase } from '../utils/supabaseClient.js';
 
 // Extended request type with authenticated user info
 export interface AuthenticatedRequest extends Request {
