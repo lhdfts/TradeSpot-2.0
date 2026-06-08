@@ -35,10 +35,14 @@ export const sanitizeMiddleware = (req: Request, res: Response, next: NextFuncti
         req.body = sanitizeData(req.body);
     }
     if (req.query) {
-        req.query = sanitizeData(req.query);
+        for (const key of Object.keys(req.query)) {
+            req.query[key] = sanitizeData(req.query[key]);
+        }
     }
     if (req.params) {
-        req.params = sanitizeData(req.params);
+        for (const key of Object.keys(req.params)) {
+            req.params[key] = sanitizeData(req.params[key]);
+        }
     }
     next();
 };
