@@ -77,7 +77,7 @@ router.get('/events/feeds', async (req: Request, res: Response) => {
         res.json(allEvents);
     } catch (err: any) {
         console.error("Feeds Fetch Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -112,7 +112,7 @@ router.get('/events/:link', async (req: Request, res: Response) => {
 
     } catch (err: any) {
         console.error("Public Event Fetch Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -323,7 +323,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
     } catch (err: any) {
         console.error("Available Times Fetch Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 

@@ -16,10 +16,15 @@ export const createAppointmentSchema = z.object({
         .min(8, "O telefone informado é muito curto")
         .max(20, "O telefone informado é muito longo"),
 
-    // Name validation
+    // Name validation - accept student as specified, or lead for compatibility
+    student: z.string()
+        .regex(nameRegex, "Nome inválido (verifique espaços duplos)")
+        .max(100, "Nome muito longo")
+        .optional(),
     lead: z.string()
         .regex(nameRegex, "Nome inválido (verifique espaços duplos)")
-        .max(100, "Nome muito longo"),
+        .max(100, "Nome muito longo")
+        .optional(),
 
     // Secure email validation
     email: z.string()
@@ -64,7 +69,11 @@ export const createAppointmentSchema = z.object({
 
     // NOTE: 'end_time' is NOT included here so it gets stripped/ignored.
 
-    // Controlled free text
+    // Controlled free text - accept additional_info as specified, or additionalInfo for compatibility
+    additional_info: z.string()
+        .max(500, "Máximo de 500 caracteres")
+        .regex(/^[a-zA-Z\u00C0-\u00FF0-9@.()\s"'\-,:;!?]*$/, "Caracteres especiais não permitidos")
+        .optional(),
     additionalInfo: z.string()
         .max(500, "Máximo de 500 caracteres")
         .regex(/^[a-zA-Z\u00C0-\u00FF0-9@.()\s"'\-,:;!?]*$/, "Caracteres especiais não permitidos")
@@ -84,6 +93,9 @@ export const createAppointmentSchema = z.object({
 
     // Creator ID
     createdBy: z.string().optional()
+}).refine(data => data.student || data.lead, {
+    message: "O nome do aluno (student ou lead) deve ser fornecido",
+    path: ["student"]
 });
 
 export type CreateAppointmentDTO = z.infer<typeof createAppointmentSchema>;

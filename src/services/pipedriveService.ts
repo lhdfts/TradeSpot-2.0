@@ -52,9 +52,13 @@ import { PIPEDRIVE_PRODUCT_MAP, CANCELLED_STAGE_IDS, BLOCKED_STAGE_IDS } from '.
 
 // --- Helper Functions ---
 
-const getHeaders = (): Record<string, string> => {
+import { getAuthHeaders } from '../lib/firebase';
+
+const getHeaders = async (): Promise<Record<string, string>> => {
+    const authHeaders = await getAuthHeaders();
     return {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...authHeaders
     };
 };
 
@@ -103,7 +107,7 @@ export const searchPersons = async (
 
     try {
         const response = await axios.get(url, {
-            headers: getHeaders(),
+            headers: await getHeaders(),
             params: params,
         });
         return response.data;
@@ -186,7 +190,7 @@ export const searchDeals = async ({
 
     try {
         const response = await axios.get(url, {
-            headers: getHeaders(),
+            headers: await getHeaders(),
             params: params,
         });
         return response.data;

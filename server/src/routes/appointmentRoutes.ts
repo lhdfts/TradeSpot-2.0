@@ -67,7 +67,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
         res.json(mappedData);
     } catch (err: any) {
         console.error("List Appointments Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -92,7 +92,7 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
         res.json(mappedData);
     } catch (err: any) {
         console.error("List Attendants Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -129,7 +129,7 @@ router.put('/attendants/:id', async (req: AuthenticatedRequest, res: Response) =
         });
     } catch (err: any) {
         console.error("Update Attendant Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -155,7 +155,7 @@ router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
         res.json(mappedData);
     } catch (err: any) {
         console.error("List Events Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -191,7 +191,7 @@ router.post('/events', async (req: AuthenticatedRequest, res: Response) => {
         });
     } catch (err: any) {
         console.error("Create Event Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -229,7 +229,7 @@ router.put('/events/:id', async (req: AuthenticatedRequest, res: Response) => {
         });
     } catch (err: any) {
         console.error("Update Event Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -244,7 +244,7 @@ router.delete('/events/:id', async (req: AuthenticatedRequest, res: Response) =>
         res.status(204).send();
     } catch (err: any) {
         console.error("Delete Event Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -263,7 +263,7 @@ router.get('/clients/email/:email', async (req: AuthenticatedRequest, res: Respo
         res.json(data);
     } catch (err: any) {
         console.error("Get Client by Email Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -282,7 +282,7 @@ router.get('/clients/phone/:phone', async (req: AuthenticatedRequest, res: Respo
         res.json(data);
     } catch (err: any) {
         console.error("Get Client by Phone Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -327,6 +327,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         const data = validation.data;
+        const studentName = data.student || data.lead;
+        if (!studentName) {
+            return res.status(400).json({ error: 'O nome do aluno (student ou lead) é obrigatório.' });
+        }
+        const additionalInfo = data.additional_info || data.additionalInfo;
 
         // 1.5 Fetch Event to check sector for Aldeia/Tribo specific rules (Internal Link)
         let eventSector = '';
@@ -497,7 +502,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         const baseClientPayload: any = {
-            name: data.lead,
+            name: studentName,
             phone: cleanPhone,
             email: data.email
         };
@@ -581,7 +586,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             event_id: data.eventId,
             meet_link: meetLink,
             notes: data.notes,
-            additional_info: data.additionalInfo,
+            additional_info: additionalInfo,
             google_event_id: googleEventId,
             interest_level: data.studentProfile?.interest ?? null,
             knowledge_level: data.studentProfile?.knowledge ?? null,
@@ -606,12 +611,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         if (appError) {
             console.error("Supabase Write Error:", appError);
-            return res.status(500).json({ error: 'Erro no Banco de Dados', details: appError.message });
+            return res.status(500).json({ error: 'Erro no Banco de Dados' });
         }
 
         // Response
         const responseData = {
             ...createdAppointment,
+            student: clientPayload.name,
             lead: clientPayload.name,
             phone: clientPayload.phone,
             email: clientPayload.email,
@@ -681,7 +687,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
     } catch (err: any) {
         console.error("Create Appointment Error:", err);
-        res.status(500).json({ error: 'Erro Interno do Servidor', details: err.message });
+        res.status(500).json({ error: 'Erro Interno do Servidor' });
     }
 });
 
@@ -849,7 +855,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             .select()
             .single();
 
-        if (updateError) return res.status(500).json({ error: 'Falha na Atualização', details: updateError.message });
+        if (updateError) return res.status(500).json({ error: 'Falha na Atualização' });
 
         // Google Guests Sync
         if (updates.attendantId && currentApp.attendant_id !== updates.attendantId && currentApp.google_event_id && updated.status !== 'Cancelado') {
@@ -943,7 +949,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
     } catch (err: any) {
         console.error("Update Error:", err);
-        res.status(500).json({ error: 'Erro Interno do Servidor', details: err.message });
+        res.status(500).json({ error: 'Erro Interno do Servidor' });
     }
 });
 

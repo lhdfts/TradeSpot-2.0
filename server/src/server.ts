@@ -16,6 +16,7 @@ import publicRoutes from './routes/publicRoutes.js';
 // Middleware
 import { verifyFirebaseToken, requireRole, AuthenticatedRequest } from './middleware/firebaseAuth.js';
 import { apiRateLimiter, publicRateLimiter, strictPublicRateLimiter } from './middleware/rateLimiter.js';
+import { sanitizeMiddleware } from './utils/sanitize.js';
 
 // ESM alternative for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -23,11 +24,21 @@ const __dirname = path.dirname(__filename);
 
 
 const app = express();
+app.disable('x-powered-by');
+
 // Force port 3000 to match Vite proxy configuration and avoid .env conflicts
 const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.pipedrive.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-ancestors 'none';");
+    next();
+});
+app.use(sanitizeMiddleware);
 
 // Essential for Vercel to correctly identify client IP addresses
 app.set('trust proxy', 1);

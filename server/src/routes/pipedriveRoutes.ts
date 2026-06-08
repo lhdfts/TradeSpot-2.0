@@ -50,8 +50,7 @@ router.get('/persons/search', async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error('Pipedrive Search Error:', error.response?.data || error.message);
         res.status(500).json({
-            error: 'Failed to fetch from Pipedrive',
-            details: error.response?.data || error.message
+            error: 'Failed to fetch from Pipedrive'
         });
     }
 });
@@ -81,8 +80,7 @@ router.get('/persons/:id/deals', async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error('Pipedrive Person Deals Error:', error.response?.data || error.message);
         res.status(500).json({
-            error: 'Failed to fetch deals for person',
-            details: error.response?.data || error.message
+            error: 'Failed to fetch deals for person'
         });
     }
 });
@@ -129,8 +127,7 @@ async function handleDeals(req: Request, res: Response) {
     } catch (error: any) {
         console.error('Pipedrive Deals Error:', error.response?.data || error.message);
         res.status(500).json({
-            error: 'Failed to search/list deals from Pipedrive',
-            details: error.response?.data || error.message
+            error: 'Failed to search/list deals from Pipedrive'
         });
     }
 }
