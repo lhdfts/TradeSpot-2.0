@@ -9,10 +9,18 @@ const supabaseKey =
     process.env.VITE_SUPABASE_ANON_KEY ||
     process.env.SUPABASE_ANON_KEY;
 
+let supabaseInstance: SupabaseClient | null = null;
+
 if (!supabaseUrl || !supabaseKey) {
     console.error(
         'Supabase credentials missing in backend. Set SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY).'
     );
+} else {
+    try {
+        supabaseInstance = createClient(supabaseUrl, supabaseKey);
+    } catch (err) {
+        console.error('Failed to create Supabase client:', err);
+    }
 }
 
-export const supabase: SupabaseClient = createClient(supabaseUrl!, supabaseKey!);
+export const supabase = supabaseInstance as SupabaseClient;

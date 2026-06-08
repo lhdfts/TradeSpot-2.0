@@ -24,6 +24,8 @@ interface Appointment {
 // for a given event, even if they have schedule availability.
 // MOVED TO DYNAMIC CHECK via user.denied_events
 
+const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
+
 export const isAttendantBlockedForEvent = (
     attendant: Attendant | null | undefined,
     eventId?: string | null,
@@ -252,6 +254,10 @@ export const findBestAttendant = async (
         sectors = ['Aldeia'];
         roleFilters = ['Colaborador', 'Co-líder'];
         sectorLimitCheck = 'Aldeia';
+    }
+
+    if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
+        roleFilters = ['Colaborador'];
     }
 
     if (eventId && !isCloserType && type !== 'Ligação Equipe Aldeia') {

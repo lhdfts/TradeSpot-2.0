@@ -7,6 +7,8 @@ import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } fr
 import { type AuthenticatedRequest, logSuccessfulAction } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
 
+const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
+
 const router = Router();
 
 // GET /api/appointments - List all appointments
@@ -423,6 +425,15 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
+            // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
+            if (data.eventId === ACTION_14_DIAS_EVENT_ID && data.type === 'Ligação Closer') {
+                if (attendant.sector !== 'Closer' || attendant.role !== 'Colaborador') {
+                    return res.status(409).json({
+                        error: `Para este evento, o atendente deve ser um Colaborador do setor Closer (atual: ${attendant.role} - ${attendant.sector}).`
+                    });
+                }
+            }
+
             // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
             const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
             const closerSectors = ['Closer', 'Líder', 'Co-líder'];
@@ -736,6 +747,16 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 return res.status(409).json({
                     error: 'Este atendente está bloqueado para este evento.'
                 });
+            }
+
+            // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
+            const currentType = updates.type || currentApp.type;
+            if (targetEventId === ACTION_14_DIAS_EVENT_ID && currentType === 'Ligação Closer') {
+                if (targetAttendant && (targetAttendant.sector !== 'Closer' || targetAttendant.role !== 'Colaborador')) {
+                    return res.status(409).json({
+                        error: `Para este evento, o atendente deve ser um Colaborador do setor Closer (atual: ${targetAttendant.role} - ${targetAttendant.sector}).`
+                    });
+                }
             }
         }
 
