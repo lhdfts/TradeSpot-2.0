@@ -11,16 +11,6 @@ const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
 
 const router = Router();
 
-<<<<<<< HEAD
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-    console.error("Supabase credentials missing in backend!");
-}
-
-const supabase = createClient(supabaseUrl!, supabaseKey!);
-=======
 // GET /api/appointments - List all appointments
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -326,7 +316,6 @@ router.get('/clients/phone/:phone', async (req: AuthenticatedRequest, res: Respo
         res.status(500).json({ error: 'Erro Interno' });
     }
 });
->>>>>>> dev
 
 // --- Event-specific Restrictions ---
 const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';

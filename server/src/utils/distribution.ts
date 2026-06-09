@@ -20,14 +20,6 @@ interface Appointment {
     status: string;
 }
 
-<<<<<<< HEAD
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL  ||    process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-//  ||  process.env.SUPABASE_SECRET_KEY 
-const supabase = createClient(supabaseUrl!, supabaseKey!);
-
-=======
->>>>>>> dev
 // Event-specific blocklist: prevent specific closer(s) from receiving appointments
 // for a given event, even if they have schedule availability.
 // MOVED TO DYNAMIC CHECK via user.denied_events

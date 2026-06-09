@@ -8,26 +8,6 @@ import { supabase } from '../utils/supabaseClient.js';
 
 const router = Router();
 
-<<<<<<< HEAD
-// Init Supabase with SERVICE ROLE key if available for admin tasks, 
-// BUT here we might want to stick to ANON key to respect policies, 
-// OR we need admin strict access because we are creating users/appts on their behalf.
-// Since this is a backend trusted endpoint, we should probably use the same key as the main app logic.
-// The main `appointmentRoutes.ts` uses ANON_KEY? let's check. 
-// Yes: const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-// We will use the same credentials.
-
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-    console.error("Supabase credentials missing in backend!");
-}
-
-const supabase = createClient(supabaseUrl!, supabaseKey!);
-
-=======
->>>>>>> dev
 // --- Event-specific Restrictions ---
 const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';
 const RESTRICTED_EVENT_WHITELIST = [

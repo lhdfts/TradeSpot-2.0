@@ -21,13 +21,8 @@ import { getPurchasesByEmail } from '../services/pipedriveService';
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
 const ON_THE_ROAD_EVENT_ID = '62936e18-6042-43c9-8526-6ec920184351';
-<<<<<<< HEAD
-// TODO: Replace with actual event ID from Supabase
-const ACAO_14_DIAS_EVENT_ID = '';
-=======
 const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
 
->>>>>>> dev
 
 const isCloserBlockedForSelectedEvent = (eventId: string, attendantId: string) => {
     return eventId === BLOCKED_EVENT_ID && attendantId === BLOCKED_CLOSER_ID;
@@ -200,15 +195,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
         }
         if (user.sector === 'Aldeia') {
-<<<<<<< HEAD
-            const allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer', 'Ligação Closer'];
-            if (formData.eventId === ON_THE_ROAD_EVENT_ID || formData.eventId === ACAO_14_DIAS_EVENT_ID)
-=======
             const allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer'];
             if (formData.eventId === ON_THE_ROAD_EVENT_ID || isAction14Dias) {
                 allowed.push('Ligação Closer');
             }
->>>>>>> dev
             return allTypes.filter(t => allowed.includes(t.value));
         }
         if (user.sector === 'Social Seller') {

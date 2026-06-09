@@ -2,12 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { supabase } from '../utils/supabaseClient.js';
 
-<<<<<<< HEAD
-// Supabase client for fetching user roles
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl!, supabaseKey!);
-=======
 /**
  * Safely extracts client IP address, handling string, string[], or undefined.
  */
@@ -19,7 +13,6 @@ const getClientIp = (req: Request): string => {
     }
     return req.ip || 'unknown';
 };
->>>>>>> dev
 
 // Extended request type with authenticated user info
 export interface AuthenticatedRequest extends Request {
