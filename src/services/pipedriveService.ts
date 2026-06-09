@@ -6,13 +6,7 @@ declare const process: any;
 
 // --- Configuração de Ambiente (Node vs Vite) ---
 
-// 1. Define o TOKEN (Necessário para modo direto/testes. No frontend/proxy, pode ser vazio se o backend injetar)
-const rawToken = (typeof process !== 'undefined' && process.env.VITE_PIPEDRIVE_API_TOKEN) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_PIPEDRIVE_API_TOKEN) ||
-    '';
-
-// 2. Define a URL para apontar para o seu backend local
-// 2. Define a URL para apontar para o seu backend local
+// Define a URL para apontar para o seu backend local
 // Force relative path for browser to use Vite proxy -> Backend -> Pipedrive
 // This avoids CORS issues if VITE_PIPEDRIVE_API_URL is set to the external API in .env
 const rawUrl = (typeof window !== 'undefined')
@@ -21,14 +15,12 @@ const rawUrl = (typeof window !== 'undefined')
 
 // 3. Cria o objeto settings centralizado
 const settings = {
-    PIPEDRIVE_API_TOKEN: rawToken,
     PIPEDRIVE_API_URL: rawUrl
 };
 
 // --- Interfaces ---
 
 interface SearchParams {
-    api_token?: string; // Agora opcional, pois o backend insere
     term?: string;
     fields?: string;
     exact_match?: string;
@@ -63,11 +55,7 @@ const getHeaders = async (): Promise<Record<string, string>> => {
 };
 
 const getParams = (): SearchParams => {
-    const params: SearchParams = {};
-    if (settings.PIPEDRIVE_API_TOKEN) {
-        params.api_token = settings.PIPEDRIVE_API_TOKEN;
-    }
-    return params;
+    return {};
 };
 
 // --- Main Functions ---
