@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, setPersistence, inMemoryPersistence } from "firebase/auth";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -13,6 +13,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+// Set in-memory persistence to mitigate VULN-005 (IndexedDB Leak)
+setPersistence(auth, inMemoryPersistence).catch(console.error);
+
 export const googleProvider = new GoogleAuthProvider();
 
 /**
@@ -37,9 +40,8 @@ export const getIdToken = async (): Promise<string | null> => {
  * Returns empty object if user is not authenticated
  */
 export const getAuthHeaders = async (): Promise<Record<string, string>> => {
-    const token = await getIdToken();
-    if (token) {
-        return { 'Authorization': `Bearer ${token}` };
-    }
+    // For VULN-005, we now use HttpOnly cookies for session management.
+    // The browser will automatically send the 'session' cookie with credentials: 'include'.
+    // We no longer manually append the Authorization header on the frontend.
     return {};
 };

@@ -57,3 +57,26 @@ export const getAllowedSectors = (user: { email?: string; sector?: string; id?: 
     if (isMedinaUser(user)) return ['SDR', 'Aldeia', 'Tribo'];
     return user.sector ? [user.sector] : [];
 };
+
+// Mitigação VULN-009: Formula Injection (CSV)
+export const escapeCsvValue = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    let strValue = String(value);
+    
+    // Se começar com caracteres perigosos de fórmula (=, +, -, @), injeta aspas simples no início
+    if (/^[=+\-@]/.test(strValue)) {
+        strValue = "'" + strValue;
+    }
+    
+    // Trata aspas duplas internas de acordo com padrão CSV (RFC 4180)
+    if (strValue.includes('"')) {
+        strValue = strValue.replace(/"/g, '""');
+    }
+    
+    // Envolve em aspas duplas caso o valor tenha vírgulas, quebras de linha ou as próprias aspas recém-escapadas
+    if (strValue.includes(',') || strValue.includes('\n') || strValue.includes('"')) {
+        return `"${strValue}"`;
+    }
+    
+    return strValue;
+};

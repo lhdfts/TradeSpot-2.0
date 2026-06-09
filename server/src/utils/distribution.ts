@@ -1,5 +1,5 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './supabaseClient.js';
 
 // Types (simplified for backend)
 interface Attendant {
@@ -20,14 +20,19 @@ interface Appointment {
     status: string;
 }
 
+<<<<<<< HEAD
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL  ||    process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 //  ||  process.env.SUPABASE_SECRET_KEY 
 const supabase = createClient(supabaseUrl!, supabaseKey!);
 
+=======
+>>>>>>> dev
 // Event-specific blocklist: prevent specific closer(s) from receiving appointments
 // for a given event, even if they have schedule availability.
 // MOVED TO DYNAMIC CHECK via user.denied_events
+
+const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
 
 export const isAttendantBlockedForEvent = (
     attendant: Attendant | null | undefined,
@@ -257,6 +262,10 @@ export const findBestAttendant = async (
         sectors = ['Aldeia'];
         roleFilters = ['Colaborador', 'Co-líder'];
         sectorLimitCheck = 'Aldeia';
+    }
+
+    if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
+        roleFilters = ['Colaborador'];
     }
 
     if (eventId && !isCloserType && type !== 'Ligação Equipe Aldeia') {

@@ -1,16 +1,17 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js';
-import { createClient } from '@supabase/supabase-js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
-import { type AuthenticatedRequest, logSuccessfulAction } from '../middleware/firebaseAuth.js';
+import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
+import { supabase } from '../utils/supabaseClient.js';
 
-
+const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
 
 const router = Router();
 
+<<<<<<< HEAD
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
@@ -19,6 +20,313 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl!, supabaseKey!);
+=======
+// GET /api/appointments - List all appointments
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        let query = supabase
+            .from('appointments')
+            .select(`
+                *,
+                clients (
+                    name,
+                    phone,
+                    email
+                ),
+                attendant:user!attendant_id (
+                    name
+                ),
+                updater:user!updatedBy (
+                    name,
+                    sector
+                )
+            `)
+            .order('date', { ascending: false })
+            .order('time', { ascending: false });
+
+        // Correção VULN-006: Data Minimization & Least Privilege
+        const userRole = req.user?.role;
+        const userSector = req.user?.sector;
+        const userId = req.user?.id;
+
+        if (userSector === 'TEI' || userSector === 'Suporte') {
+            // Regra 1: TEI e Suporte podem ver tudo de todos os setores
+            query = query.limit(2000);
+        } else if (userSector === 'Closer' && userRole === 'Colaborador') {
+            // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos
+            query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
+            query = query.limit(500);
+        } else {
+            // Regra 3: Outros setores (e Líderes/Admins do Closer) podem ver todos do SEU PRÓPRIO setor
+            const { data: sectorUsers } = await supabase.from('user').select('id').eq('sector', userSector);
+            const sectorUserIds = sectorUsers ? sectorUsers.map(u => u.id) : [];
+            
+            if (sectorUserIds.length > 0) {
+                const inFilter = `(${sectorUserIds.join(',')})`;
+                query = query.or(`attendant_id.in.${inFilter},created_by.in.${inFilter}`);
+            } else {
+                // Fallback de segurança 
+                query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
+            }
+            query = query.limit(1000);
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw new Error(error.message);
+
+        const mappedData = data.map((app: any) => ({
+            id: app.id,
+            lead: app.clients?.name || 'Unknown',
+            phone: app.clients?.phone || 0,
+            email: app.clients?.email,
+            date: app.date,
+            time: app.time ? app.time.slice(0, 5) : '',
+            type: app.type,
+            status: app.status,
+            attendantId: app.attendant_id,
+            attendantName: app.attendant?.name,
+            eventId: app.event_id,
+            meetLink: app.meet_link,
+            notes: app.notes,
+            additionalInfo: app.additional_info,
+            createdBy: app.created_by,
+            studentProfile: {
+                interest: app.interest_level,
+                knowledge: app.knowledge_level,
+                financial: {
+                    currency: app.financial_currency,
+                    amount: app.financial_amount != null ? String(app.financial_amount) : undefined
+                }
+            },
+            oldStatus: app.oldStatus,
+            updatedBy: app.updatedBy,
+            updater: app.updater
+        }));
+
+        res.json(mappedData);
+    } catch (err: any) {
+        console.error("List Appointments Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// GET /api/attendants - List all attendants
+router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { data, error } = await supabase.from('user').select('*');
+
+        if (error) throw new Error(error.message);
+
+        const mappedData = data.map((user: any) => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            sector: user.sector,
+            schedule: user.schedule,
+            pauses: user.pauses,
+            denied_events: user.denied_events
+        }));
+
+        res.json(mappedData);
+    } catch (err: any) {
+        console.error("List Attendants Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+
+// PUT /api/attendants/:id - Update attendant
+router.put('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const updatePayload: any = {};
+        if (req.body.name !== undefined) updatePayload.name = req.body.name;
+        if (req.body.role !== undefined) updatePayload.role = req.body.role;
+        if (req.body.sector !== undefined) updatePayload.sector = req.body.sector;
+        if (req.body.schedule !== undefined) updatePayload.schedule = req.body.schedule;
+        if (req.body.pauses !== undefined) updatePayload.pauses = req.body.pauses;
+        if (req.body.denied_events !== undefined) updatePayload.denied_events = req.body.denied_events;
+
+        const { data: userData, error } = await supabase
+            .from('user')
+            .update(updatePayload)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+
+        res.json({
+            id: userData.id,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role,
+            sector: userData.sector,
+            schedule: userData.schedule,
+            pauses: userData.pauses,
+            denied_events: userData.denied_events
+        });
+    } catch (err: any) {
+        console.error("Update Attendant Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// GET /api/events - List all events
+router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { data, error } = await supabase.from('events').select('*, sector, duration_minutes');
+
+        if (error) throw new Error(error.message);
+
+        const mappedData = data.map((event: any) => ({
+            id: event.id,
+            event_name: event.event_name,
+            start_date: event.start_date,
+            end_date: event.end_date,
+            status: event.status,
+            created_at: event.created_at,
+            sector: event.sector,
+            self_scheduling_link: event.self_scheduling_link,
+            duration_minutes: event.duration_minutes
+        }));
+
+        res.json(mappedData);
+    } catch (err: any) {
+        console.error("List Events Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// POST /api/events - Create event
+router.post('/events', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { data: eventData, error } = await supabase
+            .from('events')
+            .insert({
+                event_name: req.body.event_name,
+                start_date: req.body.start_date,
+                end_date: req.body.end_date,
+                status: req.body.status,
+                sector: req.body.sector,
+                self_scheduling_link: req.body.self_scheduling_link,
+                duration_minutes: req.body.duration_minutes
+            })
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+
+        res.status(201).json({
+            id: eventData.id,
+            event_name: eventData.event_name,
+            start_date: eventData.start_date,
+            end_date: eventData.end_date,
+            status: eventData.status,
+            created_at: eventData.created_at,
+            sector: eventData.sector,
+            self_scheduling_link: eventData.self_scheduling_link,
+            duration_minutes: eventData.duration_minutes
+        });
+    } catch (err: any) {
+        console.error("Create Event Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// PUT /api/events/:id - Update event
+router.put('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { data: eventData, error } = await supabase
+            .from('events')
+            .update({
+                event_name: req.body.event_name,
+                start_date: req.body.start_date,
+                end_date: req.body.end_date,
+                status: req.body.status,
+                sector: req.body.sector,
+                self_scheduling_link: req.body.self_scheduling_link,
+                duration_minutes: req.body.duration_minutes
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+
+        res.json({
+            id: eventData.id,
+            event_name: eventData.event_name,
+            start_date: eventData.start_date,
+            end_date: eventData.end_date,
+            status: eventData.status,
+            created_at: eventData.created_at,
+            sector: eventData.sector,
+            self_scheduling_link: eventData.self_scheduling_link,
+            duration_minutes: eventData.duration_minutes
+        });
+    } catch (err: any) {
+        console.error("Update Event Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// DELETE /api/events/:id - Delete event
+router.delete('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase.from('events').delete().eq('id', id);
+
+        if (error) throw new Error(error.message);
+
+        res.status(204).send();
+    } catch (err: any) {
+        console.error("Delete Event Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// GET /api/clients/email/:email - Get client by email
+router.get('/clients/email/:email', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { email } = req.params;
+        const { data, error } = await supabase
+            .from('clients')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
+
+        if (error) throw new Error(error.message);
+
+        res.json(data);
+    } catch (err: any) {
+        console.error("Get Client by Email Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// GET /api/clients/phone/:phone - Get client by phone
+router.get('/clients/phone/:phone', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { phone } = req.params;
+        const { data, error } = await supabase
+            .from('clients')
+            .select('*')
+            .eq('phone', phone)
+            .maybeSingle();
+
+        if (error) throw new Error(error.message);
+
+        res.json(data);
+    } catch (err: any) {
+        console.error("Get Client by Phone Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+>>>>>>> dev
 
 // --- Event-specific Restrictions ---
 const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';
@@ -61,6 +369,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         const data = validation.data;
+        const studentName = data.student || data.lead;
+        if (!studentName) {
+            return res.status(400).json({ error: 'O nome do aluno (student ou lead) é obrigatório.' });
+        }
+        const additionalInfo = data.additional_info || data.additionalInfo;
 
         // 1.5 Fetch Event to check sector for Aldeia/Tribo specific rules (Internal Link)
         let eventSector = '';
@@ -152,6 +465,15 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
+            // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
+            if (data.eventId === ACTION_14_DIAS_EVENT_ID && data.type === 'Ligação Closer') {
+                if (attendant.sector !== 'Closer' || attendant.role !== 'Colaborador') {
+                    return res.status(409).json({
+                        error: `Para este evento, o atendente deve ser um Colaborador do setor Closer (atual: ${attendant.role} - ${attendant.sector}).`
+                    });
+                }
+            }
+
             // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
             const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
             const closerSectors = ['Closer', 'Líder', 'Co-líder'];
@@ -231,7 +553,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         const baseClientPayload: any = {
-            name: data.lead,
+            name: studentName,
             phone: cleanPhone,
             email: data.email
         };
@@ -315,7 +637,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             event_id: data.eventId,
             meet_link: meetLink,
             notes: data.notes,
-            additional_info: data.additionalInfo,
+            additional_info: additionalInfo,
             google_event_id: googleEventId,
             interest_level: data.studentProfile?.interest ?? null,
             knowledge_level: data.studentProfile?.knowledge ?? null,
@@ -340,12 +662,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         if (appError) {
             console.error("Supabase Write Error:", appError);
-            return res.status(500).json({ error: 'Erro no Banco de Dados', details: appError.message });
+            return res.status(500).json({ error: 'Erro no Banco de Dados' });
         }
 
         // Response
         const responseData = {
             ...createdAppointment,
+            student: clientPayload.name,
             lead: clientPayload.name,
             phone: clientPayload.phone,
             email: clientPayload.email,
@@ -415,7 +738,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
     } catch (err: any) {
         console.error("Create Appointment Error:", err);
-        res.status(500).json({ error: 'Erro Interno do Servidor', details: err.message });
+        res.status(500).json({ error: 'Erro Interno do Servidor' });
     }
 });
 
@@ -464,6 +787,16 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 return res.status(409).json({
                     error: 'Este atendente está bloqueado para este evento.'
                 });
+            }
+
+            // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
+            const currentType = updates.type || currentApp.type;
+            if (targetEventId === ACTION_14_DIAS_EVENT_ID && currentType === 'Ligação Closer') {
+                if (targetAttendant && (targetAttendant.sector !== 'Closer' || targetAttendant.role !== 'Colaborador')) {
+                    return res.status(409).json({
+                        error: `Para este evento, o atendente deve ser um Colaborador do setor Closer (atual: ${targetAttendant.role} - ${targetAttendant.sector}).`
+                    });
+                }
             }
         }
 
@@ -583,7 +916,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             .select()
             .single();
 
-        if (updateError) return res.status(500).json({ error: 'Falha na Atualização', details: updateError.message });
+        if (updateError) return res.status(500).json({ error: 'Falha na Atualização' });
 
         // Google Guests Sync
         if (updates.attendantId && currentApp.attendant_id !== updates.attendantId && currentApp.google_event_id && updated.status !== 'Cancelado') {
@@ -677,7 +1010,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
     } catch (err: any) {
         console.error("Update Error:", err);
-        res.status(500).json({ error: 'Erro Interno do Servidor', details: err.message });
+        res.status(500).json({ error: 'Erro Interno do Servidor' });
     }
 });
 

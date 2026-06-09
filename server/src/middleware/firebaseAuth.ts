@@ -1,11 +1,25 @@
 import { Request, Response, NextFunction } from 'express';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../utils/supabaseClient.js';
 
+<<<<<<< HEAD
 // Supabase client for fetching user roles
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl!, supabaseKey!);
+=======
+/**
+ * Safely extracts client IP address, handling string, string[], or undefined.
+ */
+const getClientIp = (req: Request): string => {
+    const rawIp = req.headers['x-forwarded-for'];
+    const ipString = Array.isArray(rawIp) ? rawIp[0] : rawIp;
+    if (typeof ipString === 'string') {
+        return ipString.split(',')[0].trim() || req.ip || 'unknown';
+    }
+    return req.ip || 'unknown';
+};
+>>>>>>> dev
 
 // Extended request type with authenticated user info
 export interface AuthenticatedRequest extends Request {
@@ -63,11 +77,11 @@ export const verifyFirebaseToken = async (
     res: Response,
     next: NextFunction
 ) => {
-    const authHeader = req.headers.authorization;
-    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    const sessionCookie = req.cookies.session || '';
+    const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || 'unknown';
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!sessionCookie) {
         logActivity({
             timestamp: new Date().toISOString(),
             userId: 'anonymous',
@@ -84,11 +98,9 @@ export const verifyFirebaseToken = async (
         return res.status(401).json({ error: 'Token de autenticação não fornecido' });
     }
 
-    const token = authHeader.split('Bearer ')[1];
-
     try {
         const auth = getFirebaseAuth();
-        const decodedToken = await auth.verifyIdToken(token);
+        const decodedToken = await auth.verifySessionCookie(sessionCookie, true /** checkRevoked */);
         const email = decodedToken.email;
 
         if (!email) {
@@ -210,7 +222,7 @@ export const verifyFirebaseToken = async (
  */
 export const requireRole = (...allowedRoles: string[]) => {
     return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-        const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+        const ipAddress = getClientIp(req);
         const userAgent = req.headers['user-agent'] || 'unknown';
 
         if (!req.user) {
@@ -256,7 +268,7 @@ export const logSuccessfulAction = (
 ) => {
     if (!req.user) return;
 
-    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || 'unknown';
 
     logActivity({

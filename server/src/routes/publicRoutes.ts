@@ -1,13 +1,14 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
 import { getAppointmentWebhooks } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
+import { supabase } from '../utils/supabaseClient.js';
 
 const router = Router();
 
+<<<<<<< HEAD
 // Init Supabase with SERVICE ROLE key if available for admin tasks, 
 // BUT here we might want to stick to ANON key to respect policies, 
 // OR we need admin strict access because we are creating users/appts on their behalf.
@@ -25,6 +26,8 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl!, supabaseKey!);
 
+=======
+>>>>>>> dev
 // --- Event-specific Restrictions ---
 const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';
 const RESTRICTED_EVENT_WHITELIST = [
@@ -94,7 +97,7 @@ router.get('/events/feeds', async (req: Request, res: Response) => {
         res.json(allEvents);
     } catch (err: any) {
         console.error("Feeds Fetch Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -129,7 +132,7 @@ router.get('/events/:link', async (req: Request, res: Response) => {
 
     } catch (err: any) {
         console.error("Public Event Fetch Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -340,7 +343,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
     } catch (err: any) {
         console.error("Available Times Fetch Error:", err);
-        res.status(500).json({ error: 'Erro Interno', details: err.message });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 

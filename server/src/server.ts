@@ -1,6 +1,7 @@
 import './config/init.js';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -12,10 +13,12 @@ initFirebaseAdmin();
 import pipedriveRoutes from './routes/pipedriveRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 // Middleware
 import { verifyFirebaseToken, requireRole, AuthenticatedRequest } from './middleware/firebaseAuth.js';
 import { apiRateLimiter, publicRateLimiter, strictPublicRateLimiter } from './middleware/rateLimiter.js';
+import { sanitizeMiddleware } from './utils/sanitize.js';
 
 // ESM alternative for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -23,11 +26,46 @@ const __dirname = path.dirname(__filename);
 
 
 const app = express();
+app.disable('x-powered-by');
+
 // Force port 3000 to match Vite proxy configuration and avoid .env conflicts
 const PORT = 3000;
 
-app.use(cors());
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl requests)
+        if (!origin) return callback(null, true);
+        
+        const allowedOrigins = [
+            'http://localhost:5173', 
+            'http://localhost:3000', 
+            'http://127.0.0.1:5173', 
+            'https://tradespot-ts.vercel.app'
+        ];
+        
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        
+        // Allow Vercel preview deployments for this specific project
+        if (/^https:\/\/tradespot[a-zA-Z0-9-]*\.vercel\.app$/.test(origin)) {
+            return callback(null, true);
+        }
+        
+        callback(new Error('CORS policy violation'), false);
+    },
+    credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://apis.google.com https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.pipedrive.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://vercel.live https://*.vercel.live; frame-src 'self' https://sistemadepositos-37227.firebaseapp.com https://*.firebaseapp.com https://vercel.live; frame-ancestors 'none';");
+    next();
+});
+app.use(sanitizeMiddleware);
 
 // Essential for Vercel to correctly identify client IP addresses
 app.set('trust proxy', 1);
@@ -49,6 +87,7 @@ app.use('/api/public/appointments', strictPublicRateLimiter);
 // Apply general public rate limiter to event lookup (100 req/15min)
 app.use('/api/public/events', publicRateLimiter);
 app.use('/api/public', publicRoutes);
+app.use('/api/auth', publicRateLimiter, authRoutes);
 
 // Protected routes - require authentication
 // Apply authentication middleware AND rate limiting

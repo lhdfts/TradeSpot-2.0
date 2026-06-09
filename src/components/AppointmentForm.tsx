@@ -21,8 +21,13 @@ import { getPurchasesByEmail } from '../services/pipedriveService';
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
 const ON_THE_ROAD_EVENT_ID = '62936e18-6042-43c9-8526-6ec920184351';
+<<<<<<< HEAD
 // TODO: Replace with actual event ID from Supabase
 const ACAO_14_DIAS_EVENT_ID = '';
+=======
+const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
+
+>>>>>>> dev
 
 const isCloserBlockedForSelectedEvent = (eventId: string, attendantId: string) => {
     return eventId === BLOCKED_EVENT_ID && attendantId === BLOCKED_CLOSER_ID;
@@ -96,6 +101,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         const allTimes = generateAllTimes();
         const selectedEvent = events.find(e => e.id === formData.eventId);
         const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
+        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(formData.type);
 
         const filtered = allTimes.filter(time => {
             const isEditing = !!initialData;
@@ -125,8 +131,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 const attendant = attendants.find(a => a.id === formData.attendantId);
                 if (!attendant) return false;
 
-                // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo
-                const skipScheduleCheck = isAldeiaOrTribo;
+                // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo (unless it's a Closer Appointment)
+                const skipScheduleCheck = isAldeiaOrTribo && !isCloserAppt;
 
                 return (skipScheduleCheck || isAttendantWithinSchedule(attendant, formData.date, time, formData.type)) &&
                     !hasConflictingAppointment(attendant.id, formData.date, time, formData.type, appointments, initialData?.id);
@@ -134,12 +140,17 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
             // 2. Automatic Distribution (or nothing selected yet)
             // Returns true if ANY closer is available (findAvailableCloser encapsulates schedule & conflict checks)
-            const attendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
+            let attendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
                 ? attendants.filter(a => a.id !== BLOCKED_CLOSER_ID)
                 : attendants;
+
+            if (formData.eventId === ACTION_14_DIAS_EVENT_ID && formData.type === 'Ligação Closer') {
+                attendantsForEvent = attendantsForEvent.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
+            }
             
-            // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo
-            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule: isAldeiaOrTribo, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined });
+            // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo (unless it's a Closer Appointment)
+            const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
+            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined });
             return !!available;
         });
 
@@ -148,6 +159,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
+    const isAction14Dias = formData.eventId === ACTION_14_DIAS_EVENT_ID;
 
     const allowedTypes = React.useMemo(() => {
         const allTypes: { value: AppointmentType, label: string }[] = [
@@ -188,8 +200,15 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
         }
         if (user.sector === 'Aldeia') {
+<<<<<<< HEAD
             const allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer', 'Ligação Closer'];
             if (formData.eventId === ON_THE_ROAD_EVENT_ID || formData.eventId === ACAO_14_DIAS_EVENT_ID)
+=======
+            const allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer'];
+            if (formData.eventId === ON_THE_ROAD_EVENT_ID || isAction14Dias) {
+                allowed.push('Ligação Closer');
+            }
+>>>>>>> dev
             return allTypes.filter(t => allowed.includes(t.value));
         }
         if (user.sector === 'Social Seller') {
@@ -200,7 +219,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         }
 
         return allTypes;
-    }, [user, formData.eventId, events]);
+    }, [user, formData.eventId, events, isAction14Dias]);
 
     const attendantOptions = React.useMemo(() => {
         // When EDITING, filter attendants by appointment type strictly
@@ -228,6 +247,12 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 )
                 : filteredAttendants;
 
+            if (isAction14Dias && formData.type === 'Ligação Closer') {
+                return filteredAttendantsForBlock
+                    .filter(a => a.role === 'Colaborador' && a.sector === 'Closer')
+                    .map(a => ({ value: a.id, label: a.name }));
+            }
+
             return filteredAttendantsForBlock.map(a => ({ value: a.id, label: a.name }));
         }
 
@@ -238,6 +263,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 .filter(a => {
                     const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
                     if (shouldBlock && a.id === BLOCKED_CLOSER_ID) return false;
+
+                    if (isAction14Dias && formData.type === 'Ligação Closer') {
+                        return a.sector === 'Closer' && a.role === 'Colaborador';
+                    }
 
                     const selectedEvent = events.find(e => e.id === formData.eventId);
                     const eventSector = selectedEvent?.sector;
@@ -260,11 +289,14 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call/Fora da agenda, mostrar apenas Distribuição Automática
         if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda')) {
+            if (isAction14Dias && formData.type === 'Ligação Closer') {
+                return options;
+            }
             return options.filter(opt => opt.value === 'distribuicao_automatica');
         }
 
         return options;
-    }, [isEditing, formData.type, formData.eventId, attendants, events, user]);
+    }, [isEditing, formData.type, formData.eventId, attendants, events, user, isAction14Dias]);
 
     const eventOptions = React.useMemo(() => {
         // Filter active events by sector (or if user is privileged)
@@ -680,12 +712,18 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 const freshAttendants = await refreshAttendants();
                 console.log('[DISTRIBUTION] Refreshed attendants before submit:', freshAttendants.length, 'total');
 
-                const freshAttendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
+                let freshAttendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
                     ? freshAttendants.filter(a => a.id !== BLOCKED_CLOSER_ID)
                     : freshAttendants;
 
+                if (formData.eventId === ACTION_14_DIAS_EVENT_ID && formData.type === 'Ligação Closer') {
+                    freshAttendantsForEvent = freshAttendantsForEvent.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
+                }
+
                 const selectedEvent = events.find(e => e.id === formData.eventId);
                 const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
+                const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(formData.type);
+                const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
 
                 const bestCloser = findAvailableCloser(
                     formData.date,
@@ -693,7 +731,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     formData.type,
                     freshAttendantsForEvent,
                     appointments,
-                    { ignoreSchedule: isAldeiaOrTribo, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined }
+                    { ignoreSchedule, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined }
                 );
                 if (bestCloser) {
                     console.log(`[DISTRIBUTION] Assigned: ${bestCloser.name} (sector: ${bestCloser.sector}, id: ${bestCloser.id})`);
@@ -1002,7 +1040,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         disabled={
                                             isEditing
                                                 ? !(user && ['Co-líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
-                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda')
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && !(isAction14Dias && formData.type === 'Ligação Closer'))
                                         }
                                         error={errors.attendantId}
                                     />

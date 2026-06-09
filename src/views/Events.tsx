@@ -11,7 +11,7 @@ import { EventModal } from '../components/EventModal';
 import { ExportIcon } from '../components/ExportIcon';
 
 import { useAuth } from '../context/AuthContext';
-import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors, escapeCsvValue } from '../utils/security';
 
 export const Events: React.FC = () => {
     const navigate = useNavigate();
@@ -90,12 +90,12 @@ export const Events: React.FC = () => {
             const csvContent = [
                 headers.join(','),
                 ...eventAppointments.map(app => [
-                    `"${app.lead}"`,
-                    `"${app.phone || ''}"`,
-                    `"${app.email || ''}"`,
-                    app.date,
-                    app.time,
-                    app.status
+                    escapeCsvValue(app.lead),
+                    escapeCsvValue(app.phone),
+                    escapeCsvValue(app.email),
+                    escapeCsvValue(app.date),
+                    escapeCsvValue(app.time),
+                    escapeCsvValue(app.status)
                 ].join(','))
             ].join('\n');
 
