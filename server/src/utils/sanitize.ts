@@ -34,15 +34,36 @@ export const sanitizeMiddleware = (req: Request, res: Response, next: NextFuncti
     if (req.body) {
         req.body = sanitizeData(req.body);
     }
-    if (req.query) {
+    
+    // In Express 5, req.query is a getter. We cannot mutate it directly using req.query[key] = ...
+    // Therefore, we create a new sanitized object and replace the property if possible, 
+    // or just leave it be if we only want to sanitize body. However, since we need to sanitize query:
+    if (req.query && Object.keys(req.query).length > 0) {
+        const sanitizedQuery: any = {};
         for (const key of Object.keys(req.query)) {
-            req.query[key] = sanitizeData(req.query[key]);
+            sanitizedQuery[key] = sanitizeData(req.query[key]);
         }
+        // Attempt to override the getter by redefining the property
+        Object.defineProperty(req, 'query', {
+            value: sanitizedQuery,
+            writable: true,
+            enumerable: true,
+            configurable: true
+        });
     }
-    if (req.params) {
+
+    if (req.params && Object.keys(req.params).length > 0) {
+        const sanitizedParams: any = {};
         for (const key of Object.keys(req.params)) {
-            req.params[key] = sanitizeData(req.params[key]);
+            sanitizedParams[key] = sanitizeData(req.params[key]);
         }
+        Object.defineProperty(req, 'params', {
+            value: sanitizedParams,
+            writable: true,
+            enumerable: true,
+            configurable: true
+        });
     }
+    
     next();
 };

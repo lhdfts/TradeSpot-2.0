@@ -4,7 +4,7 @@ import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js'
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
-import { type AuthenticatedRequest, logSuccessfulAction } from '../middleware/firebaseAuth.js';
+import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
 
 const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
@@ -14,7 +14,7 @@ const router = Router();
 // GET /api/appointments - List all appointments
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('appointments')
             .select(`
                 *,
@@ -32,8 +32,36 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
                 )
             `)
             .order('date', { ascending: false })
-            .order('time', { ascending: false })
-            .limit(10000);
+            .order('time', { ascending: false });
+
+        // Correção VULN-006: Data Minimization & Least Privilege
+        const userRole = req.user?.role;
+        const userSector = req.user?.sector;
+        const userId = req.user?.id;
+
+        if (userSector === 'TEI' || userSector === 'Suporte') {
+            // Regra 1: TEI e Suporte podem ver tudo de todos os setores
+            query = query.limit(2000);
+        } else if (userSector === 'Closer' && userRole === 'Colaborador') {
+            // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos
+            query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
+            query = query.limit(500);
+        } else {
+            // Regra 3: Outros setores (e Líderes/Admins do Closer) podem ver todos do SEU PRÓPRIO setor
+            const { data: sectorUsers } = await supabase.from('user').select('id').eq('sector', userSector);
+            const sectorUserIds = sectorUsers ? sectorUsers.map(u => u.id) : [];
+            
+            if (sectorUserIds.length > 0) {
+                const inFilter = `(${sectorUserIds.join(',')})`;
+                query = query.or(`attendant_id.in.${inFilter},created_by.in.${inFilter}`);
+            } else {
+                // Fallback de segurança 
+                query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
+            }
+            query = query.limit(1000);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw new Error(error.message);
 
@@ -98,8 +126,9 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
     }
 });
 
+
 // PUT /api/attendants/:id - Update attendant
-router.put('/attendants/:id', async (req: AuthenticatedRequest, res: Response) => {
+router.put('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
         const updatePayload: any = {};
@@ -162,7 +191,7 @@ router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/events - Create event
-router.post('/events', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/events', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { data: eventData, error } = await supabase
             .from('events')
@@ -198,7 +227,7 @@ router.post('/events', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PUT /api/events/:id - Update event
-router.put('/events/:id', async (req: AuthenticatedRequest, res: Response) => {
+router.put('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
         const { data: eventData, error } = await supabase
@@ -236,7 +265,7 @@ router.put('/events/:id', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // DELETE /api/events/:id - Delete event
-router.delete('/events/:id', async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
         const { error } = await supabase.from('events').delete().eq('id', id);

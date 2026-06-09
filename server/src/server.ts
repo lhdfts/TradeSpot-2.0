@@ -29,7 +29,31 @@ app.disable('x-powered-by');
 // Force port 3000 to match Vite proxy configuration and avoid .env conflicts
 const PORT = 3000;
 
-app.use(cors());
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl requests)
+        if (!origin) return callback(null, true);
+        
+        const allowedOrigins = [
+            'http://localhost:5173', 
+            'http://localhost:3000', 
+            'http://127.0.0.1:5173', 
+            'https://tradespot-ts.vercel.app'
+        ];
+        
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        
+        // Allow Vercel preview deployments for this specific project
+        if (/^https:\/\/tradespot-ts[a-zA-Z0-9-]*\.vercel\.app$/.test(origin)) {
+            return callback(null, true);
+        }
+        
+        callback(new Error('CORS policy violation'), false);
+    },
+    credentials: true
+}));
 app.use(express.json());
 app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'DENY');

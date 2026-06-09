@@ -8,7 +8,7 @@ import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
 import { Input as BaseInput } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
-import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors, escapeCsvValue } from '../utils/security';
 import {
     ComposedChart,
     Bar,
@@ -347,16 +347,16 @@ export const Metrics: React.FC = () => {
             const attendant = attendants.find(att => att.id === appt.attendantId);
             const event = events.find(e => e.id === appt.eventId);
             return [
-                appt.date,
-                appt.time,
-                `"${appt.lead?.replace(/"/g, '""')}"`,
-                appt.phone,
-                appt.email || '',
-                appt.type,
-                appt.status,
-                `"${attendant?.name || ''}"`,
-                `"${event?.event_name || ''}"`
-            ].map(v => v || '').join(',');
+                escapeCsvValue(appt.date),
+                escapeCsvValue(appt.time),
+                escapeCsvValue(appt.lead),
+                escapeCsvValue(appt.phone),
+                escapeCsvValue(appt.email),
+                escapeCsvValue(appt.type),
+                escapeCsvValue(appt.status),
+                escapeCsvValue(attendant?.name),
+                escapeCsvValue(event?.event_name)
+            ].join(',');
         });
         const csvString = [headers.join(','), ...csvRows].join('\n');
         const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
