@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { adminAuth } from '../lib/firebase.js';
+import { getFirebaseAuth } from '../config/firebase-admin.js';
 
 const router = Router();
 
@@ -16,7 +16,8 @@ router.post('/sessionLogin', async (req: Request, res: Response) => {
 
         // Create the session cookie. This will also verify the ID token in the process.
         // The session cookie will have the same claims as the ID token.
-        const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
+        const auth = getFirebaseAuth();
+        const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
 
         // Set cookie policy for session cookie.
         const options = {
