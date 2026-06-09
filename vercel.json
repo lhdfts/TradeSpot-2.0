@@ -14,6 +14,10 @@
             "source": "/(.*)",
             "headers": [
                 {
+                    "key": "X-Powered-By",
+                    "value": "TradeSpot"
+                },
+                {
                     "key": "X-Frame-Options",
                     "value": "DENY"
                 },
@@ -27,7 +31,7 @@
                 },
                 {
                     "key": "Content-Security-Policy",
-                    "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.pipedrive.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://vercel.live https://*.vercel.live; frame-src 'self' https://sistemadepositos-37227.firebaseapp.com https://*.firebaseapp.com https://vercel.live; frame-ancestors 'none';"
+                    "value": "default-src 'self'; script-src 'self' https://apis.google.com https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.pipedrive.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://vercel.live https://*.vercel.live; frame-src 'self' https://sistemadepositos-37227.firebaseapp.com https://*.firebaseapp.com https://vercel.live; frame-ancestors 'none';"
                 }
             ]
         }
