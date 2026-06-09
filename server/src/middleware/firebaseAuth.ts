@@ -70,11 +70,11 @@ export const verifyFirebaseToken = async (
     res: Response,
     next: NextFunction
 ) => {
-    const authHeader = req.headers.authorization;
+    const sessionCookie = req.cookies.session || '';
     const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || 'unknown';
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!sessionCookie) {
         logActivity({
             timestamp: new Date().toISOString(),
             userId: 'anonymous',
@@ -91,11 +91,9 @@ export const verifyFirebaseToken = async (
         return res.status(401).json({ error: 'Token de autenticação não fornecido' });
     }
 
-    const token = authHeader.split('Bearer ')[1];
-
     try {
         const auth = getFirebaseAuth();
-        const decodedToken = await auth.verifyIdToken(token);
+        const decodedToken = await auth.verifySessionCookie(sessionCookie, true /** checkRevoked */);
         const email = decodedToken.email;
 
         if (!email) {

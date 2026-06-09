@@ -1,6 +1,7 @@
 import './config/init.js';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -12,6 +13,7 @@ initFirebaseAdmin();
 import pipedriveRoutes from './routes/pipedriveRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 // Middleware
 import { verifyFirebaseToken, requireRole, AuthenticatedRequest } from './middleware/firebaseAuth.js';
@@ -55,6 +57,7 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+app.use(cookieParser());
 app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -85,6 +88,7 @@ app.use('/api/public/appointments', strictPublicRateLimiter);
 // Apply general public rate limiter to event lookup (100 req/15min)
 app.use('/api/public/events', publicRateLimiter);
 app.use('/api/public', publicRoutes);
+app.use('/api/auth', publicRateLimiter, authRoutes);
 
 // Protected routes - require authentication
 // Apply authentication middleware AND rate limiting
