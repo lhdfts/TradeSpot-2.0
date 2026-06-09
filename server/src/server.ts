@@ -48,7 +48,7 @@ app.use(cors({
         }
         
         // Allow Vercel preview deployments for this specific project
-        if (/^https:\/\/tradespot-ts[a-zA-Z0-9-]*\.vercel\.app$/.test(origin)) {
+        if (/^https:\/\/tradespot[a-zA-Z0-9-]*\.vercel\.app$/.test(origin)) {
             return callback(null, true);
         }
         
@@ -62,7 +62,6 @@ app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
     res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.pipedrive.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://vercel.live https://*.vercel.live; frame-src 'self' https://sistemadepositos-37227.firebaseapp.com https://*.firebaseapp.com https://vercel.live; frame-ancestors 'none';");
     next();
 });
