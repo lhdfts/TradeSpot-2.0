@@ -13,7 +13,27 @@ const DAY_MAP: Record<number, string> = {
 
 const timeToMinutes = (time: string): number => {
     if (!time) return 0;
-    const [h, m] = time.split(':').map(Number);
+
+    const hasTimezone = time.includes('Z') || time.includes('+') || (time.indexOf('-') > 2);
+    if (hasTimezone) {
+        let timeStr = time;
+        if (timeStr.match(/^\d{2}:\d{2}[Z+-]/)) {
+            timeStr = timeStr.slice(0, 5) + ':00' + timeStr.slice(5);
+        }
+        if (timeStr.match(/[+-]\d{2}$/)) {
+            timeStr += ':00';
+        }
+        const dummyDate = new Date(`1970-01-01T${timeStr}`);
+        if (!isNaN(dummyDate.getTime())) {
+            let h = dummyDate.getUTCHours() - 3;
+            if (h < 0) h += 24;
+            const m = dummyDate.getUTCMinutes();
+            return h * 60 + m;
+        }
+    }
+
+    const timeWithoutTimezone = time.split(/[Z+-]/)[0];
+    const [h, m] = timeWithoutTimezone.split(':').map(Number);
     return h * 60 + m;
 };
 
@@ -41,7 +61,12 @@ export const isAttendantWithinSchedule = (
     if (!attendant.schedule) return false;
 
     // Parse date to get day of week safely
-    const [year, month, day] = dateStr.split('-').map(Number);
+    let year: number, month: number, day: number;
+    if (dateStr.includes('/')) {
+        [day, month, year] = dateStr.split('/').map(Number);
+    } else {
+        [year, month, day] = dateStr.split('-').map(Number);
+    }
     const date = new Date(year, month - 1, day);
     const dayKey = DAY_MAP[date.getDay()];
 

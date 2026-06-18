@@ -297,7 +297,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             // Special case for On The Road 2.0 and Aldeia
             // if (e.id === ON_THE_ROAD_EVENT_ID && user?.sector === 'Aldeia') return true;
 
-            return !e.sector || (user && (['Dev', 'Admin', 'Líder', 'Co-Líder', 'Co-líder', 'Qualidade'].includes(user.role) || user.sector === e.sector));
+            return !e.sector || (user && (['Dev', 'Admin', 'Qualidade'].includes(user.role) || user.sector === e.sector));
         });
 
         // If we are editing and the current event is not in the list, add it
