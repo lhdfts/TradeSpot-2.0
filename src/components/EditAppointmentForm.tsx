@@ -30,9 +30,13 @@ const isCloserBlockedForSelectedEvent = (eventId: string, attendantId: string) =
 
 
 interface EditAppointmentFormProps {
-  initialData?: Partial<Appointment>;
-  prefillData?: { lead?: string; email?: string; phone?: string; type?: AppointmentType };
-  onSuccess?: () => void;
+    initialData?: Appointment | null;
+    prefillData?: {
+        lead?: string;
+        email?: string;
+        phone?: string;
+    } | null;
+    onSuccess: () => void;
 }
 
 const API_URL = import.meta.env.VITE_API_URL;
