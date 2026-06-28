@@ -19,6 +19,7 @@ import authRoutes from './routes/authRoutes.js';
 import { verifyFirebaseToken, requireRole, AuthenticatedRequest } from './middleware/firebaseAuth.js';
 import { apiRateLimiter, publicRateLimiter, strictPublicRateLimiter } from './middleware/rateLimiter.js';
 import { sanitizeMiddleware } from './utils/sanitize.js';
+import { generateRoleIntegrity, verifyRoleIntegrity } from './utils/integrity.js';
 
 // ESM alternative for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -72,8 +73,44 @@ app.set('trust proxy', 1);
 
 
 app.get('/api/me', verifyFirebaseToken, (req: AuthenticatedRequest, res) => {
-    // Agora o TypeScript reconhecerá req.user sem erros
-    res.json(req.user);
+    if (!req.user) return res.status(401).json({ error: 'Não autenticado' });
+
+    // VULN-007 Fix: Include HMAC integrity hash to prevent client-side role tampering
+    const _integrity = generateRoleIntegrity({
+        uid: req.user.uid,
+        role: req.user.role,
+        sector: req.user.sector,
+        id: req.user.id
+    });
+
+    res.json({ ...req.user, _integrity });
+});
+
+// VULN-007 Fix: Role integrity verification endpoint
+// Frontend calls this to verify that stored user data hasn't been tampered with
+app.post('/api/verify-role', verifyFirebaseToken, (req: AuthenticatedRequest, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Não autenticado' });
+
+    const { _integrity } = req.body;
+    if (!_integrity || typeof _integrity !== 'string') {
+        return res.status(400).json({ valid: false, error: 'Hash de integridade não fornecido' });
+    }
+
+    const isValid = verifyRoleIntegrity(
+        {
+            uid: req.user.uid,
+            role: req.user.role,
+            sector: req.user.sector,
+            id: req.user.id
+        },
+        _integrity
+    );
+
+    if (!isValid) {
+        console.warn(`[SECURITY] Role integrity check FAILED for user ${req.user.email} (${req.user.uid}). Possible tampering detected.`);
+    }
+
+    res.json({ valid: isValid });
 });
 
 // Health check - no auth required
