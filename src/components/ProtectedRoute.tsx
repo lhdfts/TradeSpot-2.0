@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles = [] }) => {
     const { user, hasPermission, verifyRoleIntegrity } = useAuth();
-    const [verifying, setVerifying] = useState(false);
+    const [verifying, setVerifying] = useState(true);
     const [verified, setVerified] = useState(false);
 
     // VULN-007 Fix: For role-restricted routes, verify integrity server-side

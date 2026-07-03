@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
@@ -201,6 +201,10 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         const creator = attendants.find(a => a.id === id);
         return creator ? creator.name : 'Unknown';
     };
+
+    if (user?.role === 'Colaborador' && user?.sector === 'Closer') {
+        return <Navigate to="/" replace />;
+    }
 
     return (
         <div className="space-y-6">
