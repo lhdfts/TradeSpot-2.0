@@ -8,6 +8,7 @@ interface AuthContextType {
     login: (user: User) => void;
     logout: () => void;
     hasPermission: (requiredRoles: User['role'][]) => boolean;
+    verifyRoleIntegrity: () => Promise<boolean>;
     authError: string | null;
     clearAuthError: () => void;
 }
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
+    const [roleIntegrityHash, setRoleIntegrityHash] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [authError, setAuthError] = useState<string | null>(null);
 
@@ -41,6 +43,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         role: userData.role,
                         sector: userData.sector
                     });
+                    // VULN-007: Store server-signed integrity hash
+                    if (userData._integrity) {
+                        setRoleIntegrityHash(userData._integrity);
+                    }
                 }
             } catch (e) {
                 // Ignore, user is not logged in via cookie
@@ -114,6 +120,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 role: userData.role,
                 sector: userData.sector
             });
+            // VULN-007: Store server-signed integrity hash
+            if (userData._integrity) {
+                setRoleIntegrityHash(userData._integrity);
+            }
         } catch (err) {
             console.error('FALHA NO LOGIN:', err);
             setUser(null);
@@ -134,6 +144,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         await firebaseSignOut(auth);
         setUser(null);
+        setRoleIntegrityHash(null);
+    };
+
+    /**
+     * VULN-007 Fix: Verify the stored role integrity hash against the server.
+     * If the hash doesn't match (tampering detected), force logout.
+     * Returns true if the role is valid, false if tampered.
+     */
+    const verifyRoleIntegrity = async (): Promise<boolean> => {
+        if (!roleIntegrityHash) return false;
+
+        try {
+            const response = await fetch('/api/verify-role', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ _integrity: roleIntegrityHash })
+            });
+
+            if (!response.ok) return false;
+
+            const { valid } = await response.json();
+            if (!valid) {
+                console.error('[SECURITY] Role integrity verification failed. Possible tampering detected. Forcing logout.');
+                await logout();
+                return false;
+            }
+            return true;
+        } catch (err) {
+            console.error('Role verification error:', err);
+            return false;
+        }
     };
 
     const hasPermission = (requiredRoles: User['role'][]) => {
@@ -144,7 +185,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, hasPermission, authError, clearAuthError }}>
+        <AuthContext.Provider value={{ user, login, logout, hasPermission, verifyRoleIntegrity, authError, clearAuthError }}>
             {!loading && children}
         </AuthContext.Provider>
     );

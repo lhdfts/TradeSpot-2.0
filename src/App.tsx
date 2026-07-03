@@ -15,6 +15,7 @@ import Docs from './views/Docs';
 import { PublicLayout } from './layouts/PublicLayout';
 import { Modal } from './components/ui/modal';
 import { AppointmentForm } from './components/AppointmentForm';
+import { EditAppointmentForm } from './components/EditAppointmentForm';
 import type { Appointment } from './types';
 import { RefreshCw } from 'lucide-react';
 import { useAppointments } from './context/AppointmentContext';
@@ -175,7 +176,7 @@ const InternalLayout: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         title="Editar Agendamento"
       >
-        <AppointmentForm
+        <EditAppointmentForm
           initialData={editingAppt || undefined}
           onSuccess={handleSuccess}
         />

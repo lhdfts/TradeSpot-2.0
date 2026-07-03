@@ -65,11 +65,14 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
         if (error) throw new Error(error.message);
 
+        // VULN-006 Fix: Omit client email for Colaboradores (PII data minimization)
+        const shouldHideClientEmail = userRole === 'Colaborador';
+
         const mappedData = data.map((app: any) => ({
             id: app.id,
             lead: app.clients?.name || 'Unknown',
             phone: app.clients?.phone || 0,
-            email: app.clients?.email,
+            email: shouldHideClientEmail ? undefined : app.clients?.email,
             date: app.date,
             time: app.time ? app.time.slice(0, 5) : '',
             type: app.type,
@@ -102,22 +105,46 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // GET /api/attendants - List all attendants
+// VULN-006 Fix: Data minimization - filter by sector for Colaboradores, hide sensitive fields
 router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { data, error } = await supabase.from('user').select('*');
+        const userRole = req.user?.role;
+        const userSector = req.user?.sector;
+
+        // Management roles can see all attendants with full details
+        const isManagement = ['Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade'].includes(userRole || '');
+        // TEI and Suporte sectors have cross-sector visibility
+        const hasCrossSectorAccess = userSector === 'TEI' || userSector === 'Suporte';
+
+        let query = supabase.from('user').select('id, name, email, role, sector, schedule, pauses, denied_events');
+
+        // Colaboradores only see attendants from their own sector
+        if (!isManagement && !hasCrossSectorAccess) {
+            query = query.eq('sector', userSector);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw new Error(error.message);
 
-        const mappedData = data.map((user: any) => ({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            sector: user.sector,
-            schedule: user.schedule,
-            pauses: user.pauses,
-            denied_events: user.denied_events
-        }));
+        const mappedData = data.map((user: any) => {
+            const baseData: any = {
+                id: user.id,
+                name: user.name,
+                role: user.role,
+                sector: user.sector,
+                schedule: user.schedule,
+                pauses: user.pauses,
+                denied_events: user.denied_events
+            };
+
+            // Only management roles get email (PII minimization)
+            if (isManagement || hasCrossSectorAccess) {
+                baseData.email = user.email;
+            }
+
+            return baseData;
+        });
 
         res.json(mappedData);
     } catch (err: any) {

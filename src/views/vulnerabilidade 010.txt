@@ -1,0 +1,161 @@
+### **VULN-010 - Ausência de Rate Limiting Global na API (Suscetibilidade a DoS)**
+
+## Metadados
+
+**Severidade:** 🟡 MÉDIA
+
+**Tipo:** Rate Limiting / Resource Exhaustion / Brute Force Susceptibility
+
+**CWE:** CWE-770 (Allocation of Resources Without Limits or Throttling) / CWE-307 (Improper Restriction of Excessive Authentication Attempts)
+
+**Status:** 🆕 Descoberto
+
+Data: 22/05/2026
+
+Contexto (Tipo de usuário) usado: Usuário Anônimo / Autenticado
+
+**Alvo:** `API e Supabase`
+
+---
+
+## Descrição
+
+Resumo Técnico
+
+A API e  o supabase (camada de aplicação e não a de autenticação) da plataforma TradeSpot  não possui mecanismos de controle de vazão ou limitação de taxa de requisições (*Rate Limiting*). A infraestrutura aceita um volume indefinido e irrestrito de requisições HTTP sequenciais originadas de uma mesma sessão ou endereço IP em um curto espaço de tempo. A ausência dessa barreira defensiva permite que agentes maliciosos automatizem requisições em larga escala através de scripts, abrindo margem para ataques de negação de serviço (DoS), enumeração de dados e adivinhação de credenciais (Força Bruta).
+
+---
+
+## Prova de Conceito (PoC)
+
+- **Passo 1:** Identificar um endpoint que processe requisições de escrita, busca ou autenticação (ex: a rota de login ou de busca de ativos).
+- **Passo 2:** Utilizar um script automatizado ou ferramenta de intrusão (como o *Burp Suite Intruder*) para disparar uma rajada sequencial de requisições HTTP (ex: 500 requisições em menos de 10 segundos) simulando uma tentativa de força bruta ou automação maliciosa.
+- **Passo 3:** Observar que o servidor responde e processa com sucesso todas as requisições enviadas de forma consecutiva, sem bloquear o endereço IP de origem ou emitir o código de status padrão de limite excedido.
+
+### Requisição de Evidência
+
+HTTP
+
+```
+GET /rest/v1/appointments?select=*%2Cclients%28name%2Cphone%2Cemail%29%2Cattendant%3Auser%21attendant_id%28name%29%2Cupdater%3Auser%21updatedBy%28name%2Csector%29&order=date.desc%2Ctime.desc&limit=10000 HTTP/2
+
+Host: szshdghmtxmkpuhfvmmx.supabase.co
+
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0
+
+Accept: */*
+
+Accept-Language: en-US,en;q=0.5
+
+Accept-Encoding: gzip, deflate, br
+
+Referer: https://tradespot-ts.vercel.app/
+
+Accept-Profile: public
+
+Apikey:
+
+Authorization: Bearer
+
+X-Client-Info: supabase-js-web/2.86.2
+
+Origin: https://tradespot-ts.vercel.app
+
+Sec-Fetch-Dest: empty
+
+Sec-Fetch-Mode: cors
+
+Sec-Fetch-Site: cross-site
+
+Priority: u=4
+
+Te: trailers
+```
+
+### Resposta do Servidor
+
+HTTP
+
+```
+HTTP/2 200 OK
+
+Date: Fri, 22 May 2026 23:47:15 GMT
+
+Content-Type: application/json; charset=utf-8
+
+Content-Range: 0-999/*
+
+Cf-Ray: 9fffb470bc07f1ce-GRU
+
+Cf-Cache-Status: DYNAMIC
+
+Access-Control-Allow-Origin: https://tradespot-ts.vercel.app
+
+Content-Location: /appointments?limit=10000&order=date.desc%2Ctime.desc&select=%2A%2Cclients%28name%2Cphone%2Cemail%29%2Cattendant%3Auser%21attendant_id%28name%29%2Cupdater%3Auser%21updatedBy%28name%2Csector%29
+
+Server: cloudflare
+
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+Vary: Accept-Encoding
+
+X-Content-Type-Options: nosniff
+
+Access-Control-Expose-Headers: Content-Encoding, Content-Location, Content-Range, Content-Type, Date, Location, Server, Transfer-Encoding, Range-Unit
+
+Content-Profile: public
+
+Sb-Gateway-Version: 1
+
+Sb-Project-Ref: szshdghmtxmkpuhfvmmx
+
+Sb-Request-Id: 019e5216-0277-7a34-bd0d-51dd94d414b5
+
+X-Envoy-Attempt-Count: 1
+
+X-Envoy-Upstream-Service-Time: 274
+
+Set-Cookie: __cf_bm=
+```
+
+---
+
+## Impacto no Negócio
+
+Riscos Identificados
+
+- [ ]  **Exaustão de Recursos e DoS:** A falta de limites permite que um único atacante sobrecarregue o banco de dados (especialmente em rotas que realizam buscas pesadas) ou consuma os recursos da hospedagem na Vercel/Supabase, tornando o sistema lento ou completamente indisponível para os clientes legítimos.
+- [ ]  **Abuso de Custos de Infraestrutura:** Dependendo do endpoint (chamadas de APIs pagas de terceiros), a falta de rate limit pode ser abusada para inflar artificialmente a fatura de consumo de nuvem da empresa.
+
+---
+
+## Recomendação de Correção
+
+Como Mitigar
+
+**Implementação de Middleware de Rate Limiting:** A equipe de desenvolvimento deve implementar uma política de limitação de taxa a nível de infraestrutura ou aplicação. Recomenda-se o uso do código de status **HTTP 429 (Too Many Requests)** quando o limite for atingido.
+
+**Abordagem Sistêmica (Revisão Geral):** Em vez de corrigir apenas o endpoint demonstrado na PoC, **toda a arquitetura da API do TradeSpot deve ser revisada** para adotar uma política baseada em regras.
+
+---
+
+## Referências
+
+- OWASP Automated Threats to Web Applications: OAT-007 (Brute Force)
+- OWASP Top 10: A04:2021-Insecure Design / Resource Exhaustion
+
+---
+
+### Resultado final
+
+Durante a execução dos testes de segurança realizados na plataforma TradeSpot, foram identificadas múltiplas vulnerabilidades de diferentes níveis de severidade, incluindo falhas críticas que impactam diretamente os pilares de confidencialidade, integridade e disponibilidade da aplicação.
+
+Os testes demonstraram que a aplicação apresenta fragilidades relevantes em controles de acesso, exposição de informações sensíveis, configuração de infraestrutura e proteção de APIs. Entre os principais riscos identificados destacam-se a ausência de políticas de Row Level Security (RLS) no Supabase, a possibilidade de escalada vertical de privilégios via manipulação client-side, exposição de credenciais e excesso de dados retornados pelas APIs.
+
+Algumas das vulnerabilidades encontradas permitem que usuários autenticados de baixo privilégio — e, em determinados cenários, até mesmo usuários não autenticados — obtenham acesso indevido a informações sensíveis, realizem manipulação de dados críticos ou comprometam integralmente a operação da plataforma.
+
+Apesar disso, também foram observados controles implementados corretamente em determinados pontos da aplicação, como a proteção contra XSS refletido/armazenado e a impossibilidade de acesso não autenticado às rotas principais do sistema.
+
+Recomenda-se que as vulnerabilidades classificadas como críticas sejam tratadas com prioridade máxima, principalmente aquelas relacionadas à autorização no backend, exposição de infraestrutura e ausência de políticas de segurança no banco de dados. Além das correções pontuais, é altamente recomendável que a equipe adote uma abordagem contínua de segurança, incluindo revisão arquitetural das APIs, aplicação do princípio do menor privilégio, hardening da infraestrutura, validações server-side e implementação de processos recorrentes de revisão e monitoramento de segurança.
+
+De forma geral, o resultado do assessment indica que o ambiente atual do TradeSpot necessita de melhorias estruturais relevantes para atingir um nível adequado de maturidade em segurança da informação e reduzir os riscos operacionais, financeiros e regulatórios associados às vulnerabilidades identificadas.
