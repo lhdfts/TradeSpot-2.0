@@ -563,7 +563,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
         // Manual validation for required fields to provide better feedback
         if (!formData.lead) { toastManager.add({ title: "Erro", description: "Nome é obrigatório", type: 'error' }); return; }
         if (!formData.phone) { toastManager.add({ title: "Erro", description: "Telefone é obrigatório", type: 'error' }); return; }
-        if (!formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
+        if (!isEditing && !formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
 
         // Final Validation Gatekeeper
         if (formData.type === 'Reagendamento Closer') {
@@ -742,13 +742,16 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
             const creatorId = user?.id;
 
             if (initialData) {
-                await updateAppointment(initialData.id, {
+                const updatePayload: any = {
                     ...formData,
                     studentProfile: studentProfilePayload,
                     phone: Number(formData.phone.replace(/\D/g, '')),
                     attendantId: finalAttendantId,
                     updatedBy: user?.id // Pass current user for status tracking
-                } as any);
+                };
+                if (!updatePayload.email) delete updatePayload.email;
+
+                await updateAppointment(initialData.id, updatePayload);
             } else {
                 await createAppointment({
                     ...formData,
