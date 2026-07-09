@@ -184,6 +184,85 @@ router.put('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req:
     }
 });
 
+// POST /api/attendants - Create new attendant
+router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { name, email, role, sector, schedule, pauses, denied_events } = req.body;
+
+        if (!name || !email) {
+            return res.status(400).json({ error: 'Nome e email são obrigatórios.' });
+        }
+
+        const { data: existingUser, error: checkError } = await supabase
+            .from('user')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle();
+
+        if (checkError) {
+            console.error("Check Existing Attendant Error:", checkError);
+            throw new Error(checkError.message);
+        }
+
+        if (existingUser) {
+            return res.status(400).json({ error: 'Já existe um atendente cadastrado com este email.' });
+        }
+
+        const insertPayload: any = {
+            name,
+            email,
+            role: role || 'Colaborador',
+            sector: sector || 'SDR',
+            status: true
+        };
+
+        if (schedule !== undefined) insertPayload.schedule = schedule;
+        if (pauses !== undefined) insertPayload.pauses = pauses;
+        if (denied_events !== undefined) insertPayload.denied_events = denied_events;
+
+        const { data: userData, error } = await supabase
+            .from('user')
+            .insert(insertPayload)
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+
+        res.status(201).json({
+            id: userData.id,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role,
+            sector: userData.sector,
+            schedule: userData.schedule,
+            pauses: userData.pauses,
+            denied_events: userData.denied_events
+        });
+    } catch (err: any) {
+        console.error("Create Attendant Error:", err);
+        res.status(500).json({ error: err.message || 'Erro Interno' });
+    }
+});
+
+// DELETE /api/attendants/:id - Delete attendant
+router.delete('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+
+        const { error } = await supabase
+            .from('user')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw new Error(error.message);
+
+        res.status(204).send();
+    } catch (err: any) {
+        console.error("Delete Attendant Error:", err);
+        res.status(500).json({ error: err.message || 'Erro Interno' });
+    }
+});
+
 // GET /api/events - List all events
 router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
     try {
