@@ -213,7 +213,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
         // 2. Fetch Appointments for this date
         const { data: appointments, error: appError } = await supabase
             .from('appointments')
-            .select('id, attendant_id, date, time, type, status')
+            .select('id, attendant_id, date, time, end_time, type, status')
             .eq('date', date)
             .neq('status', 'Cancelado');
 
@@ -405,6 +405,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'Evento não encontrado' });
         }
 
+        const durationMinutes = eventData.duration_minutes || 60;
+
         let APPOINTMENT_TYPE = 'Ligação Closer';
         if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
             APPOINTMENT_TYPE = 'Gold Call';
@@ -515,7 +517,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 finalAttendantId = 'distribuicao_automatica';
             } else {
                 // VALIDAR ESCALA
-                if (!isAttendantWithinSchedule(attendantData, data.date, data.time, APPOINTMENT_TYPE)) {
+                if (!isAttendantWithinSchedule(attendantData, data.date, data.time, APPOINTMENT_TYPE, durationMinutes)) {
                     return res.status(409).json({ error: 'O atendente selecionado não está disponível neste horário.' });
                 }
             }
@@ -547,7 +549,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
             .eq('attendant_id', finalAttendantId)
             .neq('status', 'Cancelado');
 
-        if (conflicts && hasConflictingAppointment(finalAttendantId, data.date, data.time, APPOINTMENT_TYPE, conflicts)) {
+        if (conflicts && hasConflictingAppointment(finalAttendantId, data.date, data.time, APPOINTMENT_TYPE, conflicts, undefined, durationMinutes)) {
             return res.status(409).json({ error: 'Este horário acabou de ser preenchido. Por favor, escolha outro.' });
         }
 
@@ -586,7 +588,6 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // 6. Create Appointment
         // Calculate End Time based on event duration_minutes
         const [hours, minutes] = data.time.split(':').map(Number);
-        const durationMinutes = eventData.duration_minutes || 60;
         const totalMinutes = hours * 60 + minutes + durationMinutes;
         const endHours = Math.floor(totalMinutes / 60) % 24;
         const endMinutes = totalMinutes % 60;

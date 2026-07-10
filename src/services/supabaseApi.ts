@@ -128,14 +128,22 @@ export class SupabaseApiService implements ApiService {
             return await response.json();
         },
         create: async (data: Omit<Attendant, 'id'>): Promise<Attendant> => {
-            // Creating a user in Supabase usually requires Auth signup.
-            // We will insert into public.users, but ideally this should be handled via Auth.
-            // For this demo, we'll assume we can insert directly if RLS allows or we use a function.
-            // However, public.users references auth.users.
-            // We cannot easily create a user here without creating an auth user.
-            // We will throw an error for now or mock it.
-            console.log(data); // Use data to avoid unused var error
-            throw new Error("Creating attendants via API is restricted. Please use Supabase Auth.");
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/appointments/attendants', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Failed to create attendant');
+            }
+
+            return await response.json();
         },
         update: async (id: string, data: Partial<Attendant>): Promise<Attendant> => {
             const authHeaders = await getAuthHeaders();
@@ -149,15 +157,23 @@ export class SupabaseApiService implements ApiService {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to update attendant');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Failed to update attendant');
             }
 
             return await response.json();
         },
         delete: async (id: string): Promise<void> => {
-            // Deleting a user is also sensitive.
-            console.log(id); // Use id to avoid unused var error
-            throw new Error("Deleting attendants via API is restricted.");
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/appointments/attendants/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Failed to delete attendant');
+            }
         }
     };
 

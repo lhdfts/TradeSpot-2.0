@@ -26,6 +26,7 @@ interface AttendantModalProps {
 
 export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose, onSuccess, attendant }) => {
     const { user } = useAuth();
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState<Partial<Attendant>>({
         name: '',
         email: '',
@@ -76,6 +77,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSubmitting(true);
         try {
             if (attendant) {
                 await api.attendants.update(attendant.id, formData);
@@ -84,8 +86,11 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             }
             onSuccess();
             onClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to save attendant', error);
+            alert(error?.message || 'Erro ao salvar atendente');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -279,8 +284,10 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                 </div>
 
                 <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-                    <Button type="submit">Salvar</Button>
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? 'Salvando...' : 'Salvar'}
+                    </Button>
                 </div>
             </form>
         </Modal>

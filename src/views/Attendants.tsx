@@ -51,8 +51,13 @@ export const Attendants: React.FC = () => {
 
     const handleDelete = async (id: string) => {
         if (confirm('Tem certeza que deseja excluir este atendente?')) {
-            await api.attendants.delete(id);
-            fetchAttendants();
+            try {
+                await api.attendants.delete(id);
+                fetchAttendants();
+            } catch (error: any) {
+                console.error('Failed to delete attendant', error);
+                alert(error?.message || 'Erro ao excluir atendente');
+            }
         }
     };
 
@@ -104,7 +109,7 @@ export const Attendants: React.FC = () => {
                     )}
                 </div>
 
-                {user?.sector === 'TEI' && (
+                {(user?.sector === 'TEI' || user?.role === 'Dev' || user?.role === 'Admin') && (
                     <button
                         onClick={handleCreate}
                         className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg font-medium transition-colors"
