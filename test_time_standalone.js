@@ -1,26 +1,13 @@
 const timeToMinutes = (time) => {
-    if (!time) return 0;
+    if (!time || typeof time !== 'string') return 0;
 
-    const hasTimezone = time.includes('Z') || time.includes('+') || (time.indexOf('-') > 2);
-    if (hasTimezone) {
-        let timeStr = time;
-        if (timeStr.match(/^\d{2}:\d{2}[Z+-]/)) {
-            timeStr = timeStr.slice(0, 5) + ':00' + timeStr.slice(5);
-        }
-        if (timeStr.match(/[+-]\d{2}$/)) {
-            timeStr += ':00';
-        }
-        const dummyDate = new Date(`1970-01-01T${timeStr}`);
-        if (!isNaN(dummyDate.getTime())) {
-            let h = dummyDate.getUTCHours() - 3;
-            if (h < 0) h += 24;
-            const m = dummyDate.getUTCMinutes();
-            return h * 60 + m;
-        }
-    }
+    const timePart = time.includes('T') ? time.split('T')[1] : time;
+    const cleanTime = timePart.split(/[Z+-]/)[0];
+    const match = cleanTime.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return 0;
 
-    const timeWithoutTimezone = time.split(/[Z+-]/)[0];
-    const [h, m] = timeWithoutTimezone.split(':').map(Number);
+    const h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
     return h * 60 + m;
 };
 

@@ -149,7 +149,16 @@ export const SelfScheduling = () => {
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || 'Erro ao realizar agendamento');
+                let errorMsg = result.error || 'Erro ao realizar agendamento';
+                if (result.details) {
+                    const fieldErrors = Object.values(result.details)
+                        .map((d: any) => d?._errors?.[0])
+                        .filter(Boolean);
+                    if (fieldErrors.length > 0) {
+                        errorMsg = `${errorMsg}: ${fieldErrors.join(' | ')}`;
+                    }
+                }
+                throw new Error(errorMsg);
             }
 
             setSuccess(true);
