@@ -72,6 +72,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             email: app.clients?.email,
             date: app.date,
             time: app.time ? app.time.slice(0, 5) : '',
+            end_time: app.end_time ? app.end_time.slice(0, 5) : undefined,
             type: app.type,
             status: app.status,
             attendantId: app.attendant_id,

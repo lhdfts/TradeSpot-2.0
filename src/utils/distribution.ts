@@ -37,8 +37,8 @@ const timeToMinutes = (time: string): number => {
     return h * 60 + m;
 };
 
-const getDuration = (_type?: string): number => {
-    return 60; // Todos os tipos duram 1 hora
+export const getDuration = (_type?: string, durationMinutes: number = 60): number => {
+    return durationMinutes;
 };
 
 export const generateAllTimes = () => {
@@ -56,7 +56,8 @@ export const isAttendantWithinSchedule = (
     attendant: Attendant,
     dateStr: string, // YYYY-MM-DD
     timeStr: string,  // HH:MM
-    appointmentType: string // Added type to calculate duration
+    appointmentType: string, // Added type to calculate duration
+    durationMinutes: number = 60
 ): boolean => {
     if (!attendant.schedule) return false;
 
@@ -76,7 +77,7 @@ export const isAttendantWithinSchedule = (
     const prevDayKey = DAY_MAP[prevDate.getDay()];
 
     const apptStart = timeToMinutes(timeStr);
-    const duration = getDuration(appointmentType);
+    const duration = getDuration(appointmentType, durationMinutes);
     const apptEnd = apptStart + duration;
 
     // 1. Check Previous Day Spillover
@@ -141,10 +142,11 @@ export const hasConflictingAppointment = (
     timeStr: string,
     newAppointmentType: string,
     allAppointments: Appointment[],
-    excludeAppointmentId?: string
+    excludeAppointmentId?: string,
+    durationMinutes: number = 60
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newAppointmentType);
+    const newEnd = newStart + getDuration(newAppointmentType, durationMinutes);
 
     return allAppointments.some(appt => {
         // Exclude self if updating
@@ -231,7 +233,7 @@ export const findAvailableCloser = (
     appointmentType: string,
     attendants: Attendant[],
     allAppointments: Appointment[],
-    options: { ignoreSchedule?: boolean, sectorLimit?: string } = {}
+    options: { ignoreSchedule?: boolean, sectorLimit?: string, durationMinutes?: number } = {}
 ): Attendant | null => {
     if (options.sectorLimit && hasSectorTimeLimit(options.sectorLimit, dateStr, timeStr, appointmentType, allAppointments, attendants)) {
         return null;
@@ -255,7 +257,7 @@ export const findAvailableCloser = (
             const candidateIdx = (startIndex + i) % sortedAlphabetical.length;
             const candidate = sortedAlphabetical[candidateIdx];
 
-            if (options.ignoreSchedule || isAttendantWithinSchedule(candidate, dateStr, timeStr, appointmentType)) {
+            if (options.ignoreSchedule || isAttendantWithinSchedule(candidate, dateStr, timeStr, appointmentType, options.durationMinutes)) {
                 return candidate;
             }
         }
@@ -266,7 +268,7 @@ export const findAvailableCloser = (
     const attendantsWithSchedule = options.ignoreSchedule
         ? eligibleAttendants
         : eligibleAttendants.filter(attendant =>
-            isAttendantWithinSchedule(attendant, dateStr, timeStr, appointmentType)
+            isAttendantWithinSchedule(attendant, dateStr, timeStr, appointmentType, options.durationMinutes)
         );
 
     if (attendantsWithSchedule.length === 0) return null;
@@ -288,7 +290,7 @@ export const findAvailableCloser = (
     });
 
     for (const attendant of attendantsWithLoad) {
-        if (!hasConflictingAppointment(attendant.id, dateStr, timeStr, appointmentType, allAppointments)) {
+        if (!hasConflictingAppointment(attendant.id, dateStr, timeStr, appointmentType, allAppointments, undefined, options.durationMinutes)) {
             return attendant;
         }
     }

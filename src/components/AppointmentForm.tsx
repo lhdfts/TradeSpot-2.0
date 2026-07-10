@@ -95,6 +95,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         const allTimes = generateAllTimes();
         const selectedEvent = events.find(e => e.id === formData.eventId);
+        const eventDurationMinutes = selectedEvent?.duration_minutes || 60;
         const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
         const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(formData.type);
 
@@ -129,8 +130,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo (unless it's a Closer Appointment)
                 const skipScheduleCheck = isAldeiaOrTribo && !isCloserAppt;
 
-                return (skipScheduleCheck || isAttendantWithinSchedule(attendant, formData.date, time, formData.type)) &&
-                    !hasConflictingAppointment(attendant.id, formData.date, time, formData.type, appointments, initialData?.id);
+                return (skipScheduleCheck || isAttendantWithinSchedule(attendant, formData.date, time, formData.type, eventDurationMinutes)) &&
+                    !hasConflictingAppointment(attendant.id, formData.date, time, formData.type, appointments, initialData?.id, eventDurationMinutes);
             }
 
             // 2. Automatic Distribution (or nothing selected yet)
@@ -145,7 +146,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             
             // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo (unless it's a Closer Appointment)
             const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
-            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined });
+            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined, durationMinutes: eventDurationMinutes });
             return !!available;
         });
 
@@ -593,10 +594,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             if (!selectedAttendant) return true; // Can't validate if not found
 
             const selectedEvent = events.find(e => e.id === formData.eventId);
+            const eventDurationMinutes = selectedEvent?.duration_minutes || 60;
             const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
 
             // 1. Check Schedule (Work hours + Pauses)
-            if (!isAldeiaOrTribo && !isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time, formData.type)) {
+            if (!isAldeiaOrTribo && !isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time, formData.type, eventDurationMinutes)) {
                 toastManager.add({
                     title: "Indisponibilidade",
                     description: `${selectedAttendant.name} não está disponível neste horário (Fora de expediente ou Pausa).`,
@@ -606,7 +608,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
 
             // 2. Check Conflicts (Overlapping appointments)
-            if (hasConflictingAppointment(attendantId, formData.date, formData.time, formData.type, appointments, initialData?.id)) {
+            if (hasConflictingAppointment(attendantId, formData.date, formData.time, formData.type, appointments, initialData?.id, eventDurationMinutes)) {
                 toastManager.add({
                     title: "Conflito de Agenda",
                     description: `${selectedAttendant.name} já possui um agendamento conflitante neste horário.`,
