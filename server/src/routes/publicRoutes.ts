@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
-import { getAppointmentWebhooks } from '../config/webhooks.js';
+import { getAppointmentWebhooks, getGlobalAppointmentWebhook } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 import { supabase } from '../utils/supabaseClient.js';
 
@@ -685,44 +685,49 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         // 7. Webhook Trigger
-        const webhookUrl = getAppointmentWebhooks()[APPOINTMENT_TYPE];
-        if (webhookUrl) {
-            // Fetch names for webhook
-            let attendantName = '';
-            let creatorName = 'Sistema (Link Público)';
+        // Fetch names and sectors for webhooks
+        let attendantName = '';
+        let attendantSector = '';
+        let creatorName = 'Sistema (Link Público)';
 
-            const idsToFetch = [finalAttendantId, validatedSenderId].filter(Boolean) as string[];
-            if (idsToFetch.length > 0) {
-                const { data: users } = await supabase.from('user').select('id, name').in('id', idsToFetch);
-                if (users) {
-                    const att = users.find(u => u.id === finalAttendantId);
-                    if (att) attendantName = att.name;
+        const idsToFetch = [finalAttendantId, validatedSenderId].filter(Boolean) as string[];
+        if (idsToFetch.length > 0) {
+            const { data: users } = await supabase.from('user').select('id, name, sector').in('id', idsToFetch);
+            if (users) {
+                const att = users.find(u => u.id === finalAttendantId);
+                if (att) {
+                    attendantName = att.name;
+                    attendantSector = att.sector || '';
+                }
 
-                    const creator = users.find(u => u.id === validatedSenderId);
-                    if (creator) {
-                        creatorName = (validatedSenderId === 'a6127506-db64-4ac9-ba09-7eac663b0b31')
-                            ? 'Sistema (Link Público)'
-                            : creator.name || 'Sistema (Link Público)';
-                    }
+                const creator = users.find(u => u.id === validatedSenderId);
+                if (creator) {
+                    creatorName = (validatedSenderId === 'a6127506-db64-4ac9-ba09-7eac663b0b31')
+                        ? 'Sistema (Link Público)'
+                        : creator.name || 'Sistema (Link Público)';
                 }
             }
+        }
 
-            const webhookPayload = {
-                ...createdAppointment,
-                lead: clientPayload.name,
-                phone: clientPayload.phone,
-                email: clientPayload.email,
-                student_profile: {
-                    interest: 'Desconhecido',
-                    knowledge: 'Iniciante',
-                    financial: { currency: 'BRL', amount: 0 }
-                },
-                attendant_name: attendantName,
-                event_name: eventData.event_name,
-                event_sector: eventData.sector,
-                created_by_name: creatorName
-            };
+        const webhookPayload = {
+            ...createdAppointment,
+            lead: clientPayload.name,
+            phone: clientPayload.phone,
+            email: clientPayload.email,
+            student_profile: {
+                interest: 'Desconhecido',
+                knowledge: 'Iniciante',
+                financial: { currency: 'BRL', amount: 0 }
+            },
+            attendant_name: attendantName,
+            attendant_sector: attendantSector || eventData.sector || '',
+            event_name: eventData.event_name,
+            event_sector: eventData.sector,
+            created_by_name: creatorName
+        };
 
+        const webhookUrl = getAppointmentWebhooks()[APPOINTMENT_TYPE];
+        if (webhookUrl) {
             console.log(`[Webhook Debug] Disparando webhook para tipo: ${APPOINTMENT_TYPE}`);
             console.log(`[Webhook Debug] URL resolvida: ${webhookUrl}`);
             
@@ -736,6 +741,18 @@ router.post('/appointments', async (req: Request, res: Response) => {
             }
         } else {
             console.warn(`[Webhook Debug] Nenhuma URL configurada para o tipo: ${APPOINTMENT_TYPE}`);
+        }
+
+        // Global / Unified Webhook Trigger (Todos os agendamentos criados)
+        const globalWebhookUrl = getGlobalAppointmentWebhook();
+        if (globalWebhookUrl) {
+            console.log(`[Webhook Debug] Disparando webhook global unificado: ${globalWebhookUrl}`);
+            try {
+                await axios.post(globalWebhookUrl, webhookPayload);
+                console.log(`[Webhook Debug] Webhook global disparado com sucesso`);
+            } catch (err: any) {
+                console.error(`[Webhook Debug] Falha no disparo do webhook global (${globalWebhookUrl}):`, err.message);
+            }
         }
 
         res.status(201).json({ message: 'Agendamento realizado com sucesso!', id: createdAppointment.id });

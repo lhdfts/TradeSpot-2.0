@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
-import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js';
+import { getAppointmentWebhooks, getUpdateWebhook, getGlobalAppointmentWebhook } from '../config/webhooks.js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
@@ -772,13 +772,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         };
 
         // Webhook
-        const names: any = { attendant_name: null, created_by_name: null, creator_sector: null, event_name: null };
+        const names: any = { attendant_name: null, attendant_sector: null, created_by_name: null, creator_sector: null, event_name: null };
         const idsToFetch = [finalAttendantId, appointmentPayload.created_by].filter(Boolean) as string[];
         if (idsToFetch.length > 0) {
             const { data: users } = await supabase.from('user').select('id, name, sector').in('id', idsToFetch);
             if (users) {
                 const att = users.find(u => u.id === finalAttendantId);
-                if (att) names.attendant_name = att.name;
+                if (att) {
+                    names.attendant_name = att.name;
+                    names.attendant_sector = att.sector;
+                }
                 const cr = users.find(u => u.id === appointmentPayload.created_by);
                 if (cr) {
                     names.created_by_name = cr.name;
@@ -798,6 +801,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             ...responseData,
             type: data.type,
             attendant_name: names.attendant_name,
+            attendant_sector: names.attendant_sector || names.event_sector || null,
             created_by_name: names.created_by_name,
             creator_sector: names.creator_sector,
             event_name: names.event_name,
@@ -818,6 +822,18 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
         } else {
             console.log(`No webhook configured for type: ${data.type}`);
+        }
+
+        // Global / Unified Webhook Trigger (Todos os agendamentos criados)
+        const globalWebhookUrl = getGlobalAppointmentWebhook();
+        if (globalWebhookUrl) {
+            console.log(`Sending Global Webhook to ${globalWebhookUrl}`);
+            try {
+                await axios.post(globalWebhookUrl, webhookResponse);
+                console.log('Global Webhook sent successfully');
+            } catch (err: any) {
+                console.error(`Global Webhook Failed:`, err.message, err.response?.data);
+            }
         }
 
         // Log successful action
