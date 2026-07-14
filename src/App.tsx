@@ -7,6 +7,7 @@ import { AllAppointments } from './views/AllAppointments';
 import { Metrics } from './views/Metrics';
 import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
+import { UnnichatConnections } from './views/UnnichatConnections';
 import { CeoScheduler } from './views/CeoScheduler';
 import { Login } from './views/Login';
 import { SelfScheduling } from './views/public/SelfScheduling';
@@ -157,6 +158,11 @@ const InternalLayout: React.FC = () => {
 
               <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-líder', 'Qualidade', 'Colaborador']} />}>
                 <Route path="/events" element={<Events />} />
+              </Route>
+
+              {/* Conexões Unnichat - Admin, Dev, Líder */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev', 'Líder']} />}>
+                <Route path="/unnichat-connections" element={<UnnichatConnections />} />
               </Route>
 
               {/* CEO Only Management */}

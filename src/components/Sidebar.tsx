@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut } from 'lucide-react';
+import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut, Webhook } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { cn } from './ui/button';
 import { Logo } from './Logo';
@@ -166,6 +166,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                         icon={<Ticket size={20} />}
                         label={isCollapsed ? "" : "Eventos"}
                         to="/events"
+                        collapsed={isCollapsed}
+                    />
+                )}
+
+                {/* Conexões Unnichat - Admin/Líder/Dev/TEI */}
+                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.sector === 'TEI') && (
+                    <NavItem
+                        icon={<Webhook size={20} />}
+                        label={isCollapsed ? "" : "Conexões Unnichat"}
+                        to="/unnichat-connections"
                         collapsed={isCollapsed}
                     />
                 )}

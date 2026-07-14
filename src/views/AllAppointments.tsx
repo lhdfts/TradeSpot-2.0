@@ -30,7 +30,7 @@ const getBrazilTodayISO = () => {
 };
 
 export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
-    const { appointments } = useAppointments();
+    const { appointments, refresh } = useAppointments();
     const { attendants, events } = useFormData();
     const [searchParams] = useSearchParams();
     const { user } = useAuth();
@@ -55,6 +55,15 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const itemsPerPage = 10;
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    // Solução 1 (Recomendada - Filtro de Data no Backend):
+    // Busca do Supabase exatamente os agendamentos do período selecionado, antes dos limites de linhas
+    useEffect(() => {
+        refresh({
+            startDate: dateRange.start || undefined,
+            endDate: dateRange.end || undefined
+        });
+    }, [dateRange.start, dateRange.end]);
 
     const filteredAttendants = (user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade'
         ? attendants

@@ -1,12 +1,19 @@
 import { getAuthHeaders } from '../lib/firebase';
 import type { ApiService } from './api';
-import type { Appointment, Attendant, Event } from '../types';
+import type { Appointment, Attendant, Event, UnnichatConnection } from '../types';
 
 export class SupabaseApiService implements ApiService {
     appointments = {
-        list: async (): Promise<Appointment[]> => {
+        list: async (params?: { startDate?: string; endDate?: string }): Promise<Appointment[]> => {
             const authHeaders = await getAuthHeaders();
-            const response = await fetch('/api/appointments', {
+            let url = '/api/appointments';
+            if (params?.startDate || params?.endDate) {
+                const searchParams = new URLSearchParams();
+                if (params.startDate) searchParams.append('startDate', params.startDate);
+                if (params.endDate) searchParams.append('endDate', params.endDate);
+                url += `?${searchParams.toString()}`;
+            }
+            const response = await fetch(url, {
                 headers: authHeaders
             });
 
@@ -253,6 +260,57 @@ export class SupabaseApiService implements ApiService {
             if (!response.ok) {
                 throw new Error('Failed to delete event');
             }
+        }
+    };
+
+    unnichatConnections = {
+        list: async (): Promise<UnnichatConnection[]> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/unnichat-connections', {
+                headers: authHeaders
+            });
+            if (!response.ok) throw new Error('Failed to fetch unnichat connections');
+            return await response.json();
+        },
+        create: async (data: Omit<UnnichatConnection, 'id' | 'created_at'>): Promise<UnnichatConnection> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/unnichat-connections', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to create unnichat connection');
+            }
+            return await response.json();
+        },
+        update: async (id: string | number, data: Partial<UnnichatConnection>): Promise<UnnichatConnection> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/unnichat-connections/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to update unnichat connection');
+            }
+            return await response.json();
+        },
+        delete: async (id: string | number): Promise<void> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/unnichat-connections/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders
+            });
+            if (!response.ok) throw new Error('Failed to delete unnichat connection');
         }
     };
 

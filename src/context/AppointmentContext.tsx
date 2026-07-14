@@ -5,7 +5,7 @@ import { api } from '../services/api';
 interface AppointmentContextType {
     appointments: Appointment[];
     loading: boolean;
-    refresh: () => Promise<void>;
+    refresh: (params?: { startDate?: string; endDate?: string }) => Promise<void>;
     createAppointment: (data: Omit<Appointment, 'id'>) => Promise<void>;
     updateAppointment: (id: string, data: Partial<Appointment>) => Promise<void>;
 }
@@ -16,10 +16,10 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const refresh = async () => {
+    const refresh = async (params?: { startDate?: string; endDate?: string }) => {
         setLoading(true);
         try {
-            const data = await api.appointments.list();
+            const data = await api.appointments.list(params);
             setAppointments(data);
         } catch (error) {
             console.error('Failed to fetch appointments', error);
