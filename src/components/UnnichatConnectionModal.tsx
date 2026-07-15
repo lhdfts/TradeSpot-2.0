@@ -133,7 +133,7 @@ export const UnnichatConnectionModal: React.FC<UnnichatConnectionModalProps> = (
                     <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
                         Cancelar
                     </Button>
-                    <Button type="submit" variant="primary" disabled={saving}>
+                    <Button type="submit" variant="default" disabled={saving}>
                         {saving ? 'Salvando...' : 'Salvar'}
                     </Button>
                 </div>

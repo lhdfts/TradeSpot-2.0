@@ -84,7 +84,7 @@ export const UnnichatConnections: React.FC = () => {
     return (
         <div className="space-y-6">
             {portalContainer && canManageConnections && createPortal(
-                <Button onClick={handleAddNew} variant="primary">
+                <Button onClick={handleAddNew} variant="default">
                     <Plus size={18} className="mr-2" /> Nova Conexão
                 </Button>,
                 portalContainer
