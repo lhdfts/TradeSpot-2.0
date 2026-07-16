@@ -38,20 +38,33 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, to, collapsed }) => (
 
 export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
     const [isCollapsed, setIsCollapsed] = React.useState(false);
+    const [isHovered, setIsHovered] = React.useState(false);
     const [isAgendamentosOpen, setIsAgendamentosOpen] = React.useState(true);
     const { user, logout } = useAuth();
     const { theme } = useTheme();
 
+    const effectiveCollapsed = isCollapsed && !isHovered;
+
     return (
         <aside
+            onMouseEnter={() => {
+                if (isCollapsed) {
+                    setIsHovered(true);
+                }
+            }}
+            onMouseLeave={() => {
+                if (isCollapsed) {
+                    setIsHovered(false);
+                }
+            }}
             className={cn(
                 "bg-black border-r border-white/10 flex flex-col transition-all duration-300 ease-in-out relative text-white",
-                isCollapsed ? "w-20 p-4" : "w-64 p-6"
+                effectiveCollapsed ? "w-20 p-4" : "w-64 p-6"
             )}
         >
             <div className="mb-8 flex items-center justify-center">
                 <NavLink to="/">
-                    {isCollapsed ? (
+                    {effectiveCollapsed ? (
                         <LogoIcon className="h-8 w-auto text-white transition-all duration-300" />
                     ) : (
                         <Logo className="h-8 w-auto text-white transition-all duration-300" />
@@ -66,13 +79,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                         onClick={() => setIsAgendamentosOpen(!isAgendamentosOpen)}
                         className={cn(
                             'w-full flex items-center rounded-lg transition-colors text-sm font-medium relative text-left',
-                            isCollapsed ? 'justify-center p-3' : 'justify-start py-3 pl-12 pr-4',
+                            effectiveCollapsed ? 'justify-center p-3' : 'justify-start py-3 pl-12 pr-4',
                             'text-gray-400 hover:bg-white/10 hover:text-white border border-transparent'
                         )}
-                        title={isCollapsed ? "Agendamentos" : undefined}
+                        title={effectiveCollapsed ? "Agendamentos" : undefined}
                     >
-                        {isCollapsed ? <Calendar size={20} /> : <div className="absolute left-4 top-1/2 -translate-y-1/2"><Calendar size={20} /></div>}
-                        {!isCollapsed && (
+                        {effectiveCollapsed ? <Calendar size={20} /> : <div className="absolute left-4 top-1/2 -translate-y-1/2"><Calendar size={20} /></div>}
+                        {!effectiveCollapsed && (
                             <>
                                 <span className="w-full">Agendamentos</span>
                                 <div className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -89,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                     </button>
 
                     {/* Submenu */}
-                    {(!isCollapsed && isAgendamentosOpen) && (
+                    {(!effectiveCollapsed && isAgendamentosOpen) && (
                         <div className="mt-1 space-y-1 relative">
                             {/* Straight vertical line */}
                             <div className="absolute left-[25px] top-0 bottom-2 w-[2px] bg-gray-800" />
@@ -128,35 +141,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                     onClick={onCreateClick}
                     className={({ isActive }) => cn(
                         'w-full flex items-center rounded-lg transition-colors text-sm font-medium relative text-left',
-                        isCollapsed ? 'justify-center p-3' : 'justify-start py-3 pl-12 pr-4',
+                        effectiveCollapsed ? 'justify-center p-3' : 'justify-start py-3 pl-12 pr-4',
                         isActive
                             ? 'bg-white/10 text-white border border-transparent'
                             : 'text-gray-400 hover:bg-white/10 hover:text-white border border-transparent'
                     )}
-                    title={isCollapsed ? "Criar agendamento" : undefined}
+                    title={effectiveCollapsed ? "Criar agendamento" : undefined}
                 >
-                    {isCollapsed ? <Plus size={20} /> : <div className="absolute left-4 top-1/2 -translate-y-1/2"><Plus size={20} /></div>}
-                    {!isCollapsed && <span className="w-full">Criar agendamento</span>}
+                    {effectiveCollapsed ? <Plus size={20} /> : <div className="absolute left-4 top-1/2 -translate-y-1/2"><Plus size={20} /></div>}
+                    {!effectiveCollapsed && <span className="w-full">Criar agendamento</span>}
                 </NavLink>
 
                 {/* Metrics - usually for managers */}
                 {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Co-líder' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
                     <NavItem
                         icon={<PieChart size={20} />}
-                        label={isCollapsed ? "" : "Métricas"}
+                        label={effectiveCollapsed ? "" : "Métricas"}
                         to="/metrics"
-                        collapsed={isCollapsed}
+                        collapsed={effectiveCollapsed}
                     />
                 )}
 
-                {/* Attendants & Events - Admin/Líder only */}
-                {/* Attendants - Admin/Líder/Dev only (Co-lider and Qualidade EXCLUDED) */}
+                {/* Atendentes & Events - Admin/Líder only */}
+                {/* Atendentes - Admin/Líder/Dev only (Co-lider and Qualidade EXCLUDED) */}
                 {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.role === 'Co-líder' || user?.role === 'Qualidade') && (
                     <NavItem
                         icon={<Users size={20} />}
-                        label={isCollapsed ? "" : "Atendentes"}
+                        label={effectiveCollapsed ? "" : "Atendentes"}
                         to="/attendants"
-                        collapsed={isCollapsed}
+                        collapsed={effectiveCollapsed}
                     />
                 )}
 
@@ -164,9 +177,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.role === 'Co-líder' || user?.role === 'Qualidade' || user?.role === 'Colaborador') && (
                     <NavItem
                         icon={<Ticket size={20} />}
-                        label={isCollapsed ? "" : "Eventos"}
+                        label={effectiveCollapsed ? "" : "Eventos"}
                         to="/events"
-                        collapsed={isCollapsed}
+                        collapsed={effectiveCollapsed}
                     />
                 )}
 
@@ -174,9 +187,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Dev' || user?.sector === 'TEI') && (
                     <NavItem
                         icon={<Webhook size={20} />}
-                        label={isCollapsed ? "" : "Conexões Unnichat"}
+                        label={effectiveCollapsed ? "" : "Conexões Unnichat"}
                         to="/unnichat-connections"
-                        collapsed={isCollapsed}
+                        collapsed={effectiveCollapsed}
                     />
                 )}
 
@@ -184,9 +197,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 {(user?.role === 'Admin') && (
                     <NavItem
                         icon={<Calendar size={20} />}
-                        label={isCollapsed ? "" : "Agenda CEO"}
+                        label={effectiveCollapsed ? "" : "Agenda CEO"}
                         to="/ceo-scheduler"
-                        collapsed={isCollapsed}
+                        collapsed={effectiveCollapsed}
                     />
                 )}
             </nav>
@@ -194,27 +207,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
             <div className="mt-auto mb-2 flex flex-col gap-2">
                 <ThemeToggle
                     className="w-full"
-                    collapsed={isCollapsed}
-                    label={isCollapsed ? null : (theme === 'dark' ? 'Modo Claro' : 'Modo Escuro')}
+                    collapsed={effectiveCollapsed}
+                    label={effectiveCollapsed ? null : (theme === 'dark' ? 'Modo Claro' : 'Modo Escuro')}
                 />
                 <button
-                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    onClick={() => {
+                        setIsCollapsed(!isCollapsed);
+                        setIsHovered(false);
+                    }}
                     className={cn(
                         "w-full flex items-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-2 relative text-left",
-                        isCollapsed ? "justify-center" : "!justify-start py-3 pl-12 pr-4"
+                        effectiveCollapsed ? "justify-center" : "!justify-start py-3 pl-12 pr-4"
                     )}
                 >
-                    {isCollapsed ? <ChevronRight size={20} /> : <div className="absolute left-4 top-1/2 -translate-y-1/2"><ChevronLeft size={20} /></div>}
-                    {!isCollapsed && <span className="text-sm font-medium">Ocultar Menu</span>}
+                    {effectiveCollapsed ? <ChevronRight size={20} /> : <div className="absolute left-4 top-1/2 -translate-y-1/2"><ChevronLeft size={20} /></div>}
+                    {!effectiveCollapsed && <span className="text-sm font-medium">{isCollapsed ? "Fixar Menu" : "Ocultar Menu"}</span>}
                 </button>
             </div>
 
             <div className="pt-4 border-t border-white/10">
-                <div className={cn("flex items-center gap-3", isCollapsed ? "justify-center px-0" : "px-2")}>
+                <div className={cn("flex items-center gap-3", effectiveCollapsed ? "justify-center px-0" : "px-2")}>
                     <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0">
                         <User size={16} />
                     </div>
-                    {!isCollapsed && (
+                    {!effectiveCollapsed && (
                         <>
                             <div className="flex flex-col overflow-hidden transition-opacity duration-300 flex-1">
                                 <span className="text-sm font-medium text-white truncate">{user?.name || 'Usuário'}</span>

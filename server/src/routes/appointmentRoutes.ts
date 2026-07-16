@@ -1133,6 +1133,13 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
         if (req.body.updatedBy) updatePayload.updatedBy = req.body.updatedBy;
 
+        const isStatusChanged = updates.status && currentApp.status !== updates.status;
+        const isAttendantChanged = updates.attendantId && currentApp.attendant_id !== updates.attendantId;
+
+        if (isStatusChanged || isAttendantChanged || req.body.updatedBy) {
+            updatePayload.updatedAt = new Date().toISOString();
+        }
+
         if (updates.status && currentApp.status !== updates.status) {
             updatePayload.oldStatus = currentApp.status;
 

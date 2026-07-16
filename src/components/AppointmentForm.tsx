@@ -232,11 +232,22 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 : attendants; // For other types like 'Agendamento Pessoal', 'Fora da agenda', show all
 
             const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
-            const filteredAttendantsForBlock = shouldBlock
+            let filteredAttendantsForBlock = shouldBlock
                 ? filteredAttendants.filter(a =>
                     a.id !== BLOCKED_CLOSER_ID || a.id === initialData?.attendantId
                 )
                 : filteredAttendants;
+
+            if (
+                user &&
+                (user.role === 'Co-líder' || user.role === 'Líder') &&
+                user.sector !== 'TEI' &&
+                user.sector !== 'Suporte'
+            ) {
+                filteredAttendantsForBlock = filteredAttendantsForBlock.filter(
+                    a => a.sector === user.sector || a.id === initialData?.attendantId
+                );
+            }
 
             if (isAction14Dias && formData.type === 'Ligação Closer') {
                 return filteredAttendantsForBlock
@@ -254,6 +265,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 .filter(a => {
                     const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
                     if (shouldBlock && a.id === BLOCKED_CLOSER_ID) return false;
+
+                    if (
+                        user &&
+                        (user.role === 'Co-líder' || user.role === 'Líder') &&
+                        user.sector !== 'TEI' &&
+                        user.sector !== 'Suporte' &&
+                        a.sector !== user.sector
+                    ) {
+                        return false;
+                    }
 
                     if (isAction14Dias && formData.type === 'Ligação Closer') {
                         return a.sector === 'Closer' && a.role === 'Colaborador';
