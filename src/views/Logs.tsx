@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { getAuthHeaders } from '../lib/firebase';
 import { 
-    History, 
-    Search, 
     ChevronDown, 
     ChevronUp, 
     CheckCircle2, 
@@ -18,6 +17,9 @@ import {
     RefreshCw
 } from 'lucide-react';
 import { cn } from '../components/ui/button';
+import { Button } from '../components/ui/button';
+import { FloatingInput } from '../components/FloatingInput';
+import { FloatingSelect } from '../components/FloatingSelect';
 
 export interface CheckLogItem {
     name: string;
@@ -46,11 +48,16 @@ export const Logs: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+    const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
 
     // Filtros
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [executionTypeFilter, setExecutionTypeFilter] = useState<string>('all');
     const [dateFilter, setDateFilter] = useState<string>('');
+
+    useEffect(() => {
+        setPortalContainer(document.getElementById('header-actions'));
+    }, []);
 
     const fetchLogs = async () => {
         try {
@@ -59,7 +66,6 @@ export const Logs: React.FC = () => {
             const authHeaders = await getAuthHeaders();
             let url = '/api/execution-logs';
             if (dateFilter) {
-                // If specific date is selected, filter start/end for that day
                 const startOfDay = `${dateFilter}T00:00:00`;
                 const endOfDay = `${dateFilter}T23:59:59`;
                 url += `?startDate=${encodeURIComponent(startOfDay)}&endDate=${encodeURIComponent(endOfDay)}`;
@@ -198,240 +204,200 @@ export const Logs: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-in fade-in duration-300">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-                        <History className="text-primary w-8 h-8 shrink-0" />
-                        Logs de Distribuição
-                    </h1>
-                    <p className="text-muted-foreground text-sm mt-1">
-                        Acompanhe o histórico e a auditoria das decisões de distribuição automática do sistema.
-                    </p>
-                </div>
-
-                <button
-                    onClick={fetchLogs}
-                    disabled={loading}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
-                >
-                    <RefreshCw size={16} className={cn(loading && "animate-spin")} />
+        <div className="space-y-6">
+            {portalContainer && createPortal(
+                <Button onClick={fetchLogs} variant="outline" size="sm" disabled={loading} className="mr-2">
+                    <RefreshCw size={16} className={cn("mr-2", loading && "animate-spin")} />
                     Atualizar Logs
-                </button>
-            </div>
+                </Button>,
+                portalContainer
+            )}
 
-            {/* Filtros e Busca */}
-            <div className="bg-card/80 backdrop-blur-md border border-border/60 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="relative">
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                        <input
-                            type="text"
-                            placeholder="Buscar por aluno, telefone ou atendente..."
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="w-72">
+                        <FloatingInput
+                            label="Pesquisar por aluno, telefone ou atendente"
                             value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background/80 border border-input text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                         />
                     </div>
-
-                    <div className="relative">
-                        <select
-                            value={executionTypeFilter}
-                            onChange={e => setExecutionTypeFilter(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-background/80 border border-input text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
-                        >
-                            <option value="all">Todos os tipos de execução</option>
-                            <option value="Distribuição Automática">Distribuição Automática</option>
-                        </select>
-                    </div>
-
-                    <div className="relative">
-                        <input
+                    <FloatingSelect
+                        label="Tipo de execução"
+                        value={executionTypeFilter}
+                        onChange={(e: any) => setExecutionTypeFilter(e.target.value)}
+                        options={[
+                            { value: 'all', label: 'Todos os Tipos' },
+                            { value: 'Distribuição Automática', label: 'Distribuição Automática' }
+                        ]}
+                        className="w-56"
+                    />
+                    <div className="w-48">
+                        <FloatingInput
+                            label="Filtrar por data"
                             type="date"
                             value={dateFilter}
-                            onChange={e => setDateFilter(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-background/80 border border-input text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDateFilter(e.target.value)}
                         />
-                        {dateFilter && (
-                            <button
-                                onClick={() => setDateFilter('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
-                            >
-                                Limpar
-                            </button>
-                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Tabela de Logs */}
-            <div className="bg-card/90 backdrop-blur-md border border-border/60 rounded-2xl shadow-md overflow-hidden">
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                        <RefreshCw size={28} className="animate-spin text-primary mb-3" />
-                        <p className="text-sm font-medium">Carregando logs de execução...</p>
-                    </div>
-                ) : error ? (
-                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-                        <AlertCircle size={32} className="text-destructive mb-3" />
-                        <p className="text-foreground font-semibold mb-1">Ocorreu um erro</p>
-                        <p className="text-muted-foreground text-sm max-w-md mb-4">{error}</p>
-                        <button
-                            onClick={fetchLogs}
-                            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
-                        >
-                            Tentar Novamente
-                        </button>
-                    </div>
-                ) : filteredLogs.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-                        <History size={36} className="text-muted-foreground/50 mb-3" />
-                        <p className="text-foreground font-semibold">Nenhum log encontrado</p>
-                        <p className="text-muted-foreground text-sm mt-1">
-                            {searchTerm || dateFilter || executionTypeFilter !== 'all'
-                                ? 'Nenhum registro corresponde aos filtros selecionados.'
-                                : 'As distribuições automáticas registradas aparecerão aqui.'}
-                        </p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-border/60 bg-muted/40 text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-                                    <th className="py-3.5 px-5">Data/Hora</th>
-                                    <th className="py-3.5 px-5">Aluno / Telefone</th>
-                                    <th className="py-3.5 px-5">Tipo de Execução</th>
-                                    <th className="py-3.5 px-5">Atendente Selecionado</th>
-                                    <th className="py-3.5 px-5 text-right">Detalhes</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/40 text-sm">
-                                {filteredLogs.map(log => {
-                                    const isExpanded = expandedRowId === log.id;
-                                    return (
-                                        <React.Fragment key={log.id}>
-                                            <tr 
-                                                onClick={() => toggleRow(log.id)}
-                                                className={cn(
-                                                    "hover:bg-muted/30 transition-colors cursor-pointer select-none",
-                                                    isExpanded && "bg-muted/40 font-medium"
-                                                )}
-                                            >
-                                                <td className="py-4 px-5 text-foreground/90 whitespace-nowrap">
-                                                    <div className="flex items-center gap-2">
-                                                        <Calendar size={14} className="text-muted-foreground shrink-0" />
-                                                        <span>{formatDate(log.created_at)}</span>
-                                                    </div>
-                                                </td>
+            <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
+                <table className="w-full text-left">
+                    <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
+                        <tr>
+                            <th className="px-6 py-4">Data/Hora</th>
+                            <th className="px-6 py-4">Aluno / Telefone</th>
+                            <th className="px-6 py-4">Tipo de Execução</th>
+                            <th className="px-6 py-4">Atendente Selecionado</th>
+                            <th className="px-6 py-4 text-right">Detalhes</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                        {loading ? (
+                            <tr>
+                                <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                                    Carregando logs de execução...
+                                </td>
+                            </tr>
+                        ) : error ? (
+                            <tr>
+                                <td colSpan={5} className="px-6 py-8 text-center text-destructive">
+                                    {error}
+                                </td>
+                            </tr>
+                        ) : filteredLogs.length === 0 ? (
+                            <tr>
+                                <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                                    {searchTerm || dateFilter || executionTypeFilter !== 'all'
+                                        ? 'Nenhum registro corresponde aos filtros selecionados.'
+                                        : 'Nenhum log encontrado.'}
+                                </td>
+                            </tr>
+                        ) : (
+                            filteredLogs.map(log => {
+                                const isExpanded = expandedRowId === log.id;
+                                return (
+                                    <React.Fragment key={log.id}>
+                                        <tr 
+                                            onClick={() => toggleRow(log.id)}
+                                            className={cn(
+                                                "hover:bg-background/50 transition-colors cursor-pointer select-none",
+                                                isExpanded && "bg-background/80 font-medium"
+                                            )}
+                                        >
+                                            <td className="px-6 py-4 text-foreground font-medium whitespace-nowrap">
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar size={14} className="text-muted-foreground shrink-0" />
+                                                    <span>{formatDate(log.created_at)}</span>
+                                                </div>
+                                            </td>
 
-                                                <td className="py-4 px-5">
-                                                    <div className="flex flex-col">
-                                                        <span className="font-semibold text-foreground">
-                                                            {log.client?.name || 'Aluno Desconhecido'}
-                                                        </span>
-                                                        <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                                            <Phone size={11} />
-                                                            {formatPhone(log.client?.phone)}
-                                                        </span>
-                                                    </div>
-                                                </td>
-
-                                                <td className="py-4 px-5 whitespace-nowrap">
-                                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                                                        {log.execution_type}
+                                            <td className="px-6 py-4 text-foreground font-medium">
+                                                <div className="flex flex-col">
+                                                    <span>{log.client?.name || 'Aluno Desconhecido'}</span>
+                                                    <span className="text-xs text-muted-foreground font-normal flex items-center gap-1 mt-0.5">
+                                                        <Phone size={11} />
+                                                        {formatPhone(log.client?.phone)}
                                                     </span>
-                                                </td>
+                                                </div>
+                                            </td>
 
-                                                <td className="py-4 px-5 whitespace-nowrap">
-                                                    <div className="flex items-center gap-2">
-                                                        <UserCheck size={16} className="text-emerald-500 shrink-0" />
-                                                        <span className="text-foreground font-medium">
-                                                            {log.selected_attendant_name || 'Não informado'}
-                                                        </span>
-                                                    </div>
-                                                </td>
+                                            <td className="px-6 py-4 text-foreground whitespace-nowrap">
+                                                <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                                                    {log.execution_type}
+                                                </span>
+                                            </td>
 
-                                                <td className="py-4 px-5 text-right whitespace-nowrap">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            toggleRow(log.id);
-                                                        }}
-                                                        className={cn(
-                                                            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all duration-200",
-                                                            isExpanded 
-                                                                ? "bg-primary text-primary-foreground border-primary shadow-sm" 
-                                                                : "bg-background/80 text-foreground hover:bg-muted border-border/80"
+                                            <td className="px-6 py-4 text-foreground font-medium whitespace-nowrap">
+                                                <div className="flex items-center gap-2">
+                                                    <UserCheck size={16} className="text-emerald-500 shrink-0" />
+                                                    <span>{log.selected_attendant_name || 'Não informado'}</span>
+                                                </div>
+                                            </td>
+
+                                            <td className="px-6 py-4 text-right whitespace-nowrap">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleRow(log.id);
+                                                    }}
+                                                    className={cn(
+                                                        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200",
+                                                        isExpanded 
+                                                            ? "bg-primary text-primary-foreground border-primary" 
+                                                            : "bg-background/50 text-foreground hover:bg-background border-border/80"
+                                                    )}
+                                                >
+                                                    <span>{isExpanded ? 'Minimizar' : 'Verificações'}</span>
+                                                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                </Button>
+                                            </td>
+                                        </tr>
+
+                                        {/* Sanfona (Accordion) de Verificações */}
+                                        {isExpanded && (
+                                            <tr className="bg-background/30 border-b border-border">
+                                                <td colSpan={5} className="px-6 py-4 animate-in slide-in-from-top-2 duration-200">
+                                                    <div className="bg-surface rounded-lg p-4 sm:p-5 border border-border shadow-inner space-y-3">
+                                                        <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
+                                                            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                                                <span>Verificações Feitas no Algoritmo para Esta Distribuição</span>
+                                                                <span className="px-2 py-0.5 rounded-full bg-background text-foreground font-normal border border-border/60">
+                                                                    {(log.checks_log || []).length} atendentes analisados
+                                                                </span>
+                                                            </h4>
+                                                            <span className="text-xs text-muted-foreground font-mono">
+                                                                ID: {log.id.slice(0, 8)}...
+                                                            </span>
+                                                        </div>
+
+                                                        {(!log.checks_log || log.checks_log.length === 0) ? (
+                                                            <p className="text-xs text-muted-foreground italic py-2">
+                                                                Nenhum detalhe de verificação foi gravado para esta execução.
+                                                            </p>
+                                                        ) : (
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                                                                {log.checks_log.map((check, index) => {
+                                                                    const isSelected = check.selected || check.name === log.selected_attendant_name;
+                                                                    return (
+                                                                        <div
+                                                                            key={index}
+                                                                            className={cn(
+                                                                                "flex items-center justify-between p-3 rounded-lg border text-sm transition-all",
+                                                                                isSelected 
+                                                                                    ? "bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-500/5" 
+                                                                                    : "bg-background/50 border-border/80 hover:bg-background"
+                                                                            )}
+                                                                        >
+                                                                            <span className="font-semibold text-foreground flex items-center gap-2">
+                                                                                {isSelected && (
+                                                                                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                                                                                )}
+                                                                                {check.name}
+                                                                            </span>
+
+                                                                            <div>
+                                                                                {getReasonBadge(check.reason, check.selected)}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         )}
-                                                    >
-                                                        <span>{isExpanded ? 'Minimizar' : 'Verificações'}</span>
-                                                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                                    </button>
+                                                    </div>
                                                 </td>
                                             </tr>
-
-                                            {/* Sanfona (Accordion) de Verificações */}
-                                            {isExpanded && (
-                                                <tr className="bg-muted/15 border-b border-border/60">
-                                                    <td colSpan={5} className="py-4 px-6 animate-in slide-in-from-top-2 duration-200">
-                                                        <div className="bg-background/90 rounded-xl p-4 sm:p-5 border border-border/70 shadow-inner space-y-3">
-                                                            <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
-                                                                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                                                    <span>Verificações Feitas no Algoritmo para Esta Distribuição</span>
-                                                                    <span className="px-2 py-0.5 rounded-full bg-muted text-foreground font-normal">
-                                                                        {(log.checks_log || []).length} atendentes analisados
-                                                                    </span>
-                                                                </h4>
-                                                                <span className="text-xs text-muted-foreground font-mono">
-                                                                    ID: {log.id.slice(0, 8)}...
-                                                                </span>
-                                                            </div>
-
-                                                            {(!log.checks_log || log.checks_log.length === 0) ? (
-                                                                <p className="text-xs text-muted-foreground italic py-2">
-                                                                    Nenhum detalhe de verificação foi gravado para esta execução.
-                                                                </p>
-                                                            ) : (
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-                                                                    {log.checks_log.map((check, index) => {
-                                                                        const isSelected = check.selected || check.name === log.selected_attendant_name;
-                                                                        return (
-                                                                            <div
-                                                                                key={index}
-                                                                                className={cn(
-                                                                                    "flex items-center justify-between p-3 rounded-xl border text-sm transition-all",
-                                                                                    isSelected 
-                                                                                        ? "bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-500/5" 
-                                                                                        : "bg-card/60 border-border/50 hover:bg-card"
-                                                                                )}
-                                                                            >
-                                                                                <span className="font-semibold text-foreground flex items-center gap-2">
-                                                                                    {isSelected && (
-                                                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                                                                                    )}
-                                                                                    {check.name}
-                                                                                </span>
-
-                                                                                <div>
-                                                                                    {getReasonBadge(check.reason, check.selected)}
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </React.Fragment>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })
+                        )}
+                    </tbody>
+                </table>
             </div>
         </div>
     );

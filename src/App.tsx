@@ -122,6 +122,8 @@ const InternalLayout: React.FC = () => {
                 {currentView === '/events' && 'Gerenciar Eventos'}
                 {currentView === '/ceo-scheduler' && 'Configurações CEO'}
                 {currentView === '/profile' && 'Perfil'}
+                {currentView === '/unnichat-connections' && 'Conexões Unnichat'}
+                {currentView === '/logs' && 'Logs'}
               </h1>
               <div className="flex items-center gap-4">
                 <div id="header-actions" style={{ display: 'flex', alignItems: 'center' }}></div>
