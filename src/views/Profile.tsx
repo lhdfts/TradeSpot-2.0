@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import { cn } from '../components/ui/button';
 import { User, Mail, Clock, Coffee, Shield, BarChart3, Building2 } from 'lucide-react';
-import { APPOINTMENT_STATUSES, AppointmentStatus } from '../types';
+import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { FloatingSelect } from '../components/FloatingSelect';
 
 const DAYS_OF_WEEK = [
