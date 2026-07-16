@@ -227,23 +227,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
 
             <div className="pt-4 border-t border-white/10">
                 <div className={cn("flex items-center gap-3", effectiveCollapsed ? "justify-center px-0" : "px-2")}>
-                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0">
-                        <User size={16} />
-                    </div>
-                    {!effectiveCollapsed && (
-                        <>
+                    <NavLink
+                        to="/profile"
+                        className="flex items-center gap-3 flex-1 overflow-hidden group hover:opacity-80 transition-opacity rounded-lg p-1 text-left"
+                        title="Abrir Perfil"
+                    >
+                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0 group-hover:scale-105 transition-transform">
+                            <User size={16} />
+                        </div>
+                        {!effectiveCollapsed && (
                             <div className="flex flex-col overflow-hidden transition-opacity duration-300 flex-1">
                                 <span className="text-sm font-medium text-white truncate">{user?.name || 'Usuário'}</span>
                                 <span className="text-xs text-gray-400 truncate">{user?.role || 'Guest'}</span>
                             </div>
-                            <button
-                                onClick={logout}
-                                className="text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10"
-                                title="Sair"
-                            >
-                                <LogOut size={16} />
-                            </button>
-                        </>
+                        )}
+                    </NavLink>
+                    {!effectiveCollapsed && (
+                        <button
+                            onClick={logout}
+                            className="text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10 shrink-0"
+                            title="Sair"
+                        >
+                            <LogOut size={16} />
+                        </button>
                     )}
                 </div>
             </div>

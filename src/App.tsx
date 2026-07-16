@@ -9,6 +9,7 @@ import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
 import { UnnichatConnections } from './views/UnnichatConnections';
 import { CeoScheduler } from './views/CeoScheduler';
+import { Profile } from './views/Profile';
 import { Login } from './views/Login';
 import { SelfScheduling } from './views/public/SelfScheduling';
 import { NotFound } from './views/public/NotFound';
@@ -119,6 +120,7 @@ const InternalLayout: React.FC = () => {
                 {currentView === '/attendants' && 'Gerenciar Atendentes'}
                 {currentView === '/events' && 'Gerenciar Eventos'}
                 {currentView === '/ceo-scheduler' && 'Configurações CEO'}
+                {currentView === '/profile' && 'Perfil'}
               </h1>
               <div className="flex items-center gap-4">
                 <div id="header-actions" style={{ display: 'flex', alignItems: 'center' }}></div>
@@ -144,6 +146,7 @@ const InternalLayout: React.FC = () => {
                 <Route path="/my-appointments" element={<Navigate to="/" replace />} />
                 <Route path="/create-appointment" element={<CreateAppointmentWrapper onSuccess={handleSuccess} />} />
                 <Route path="/all-appointments" element={<AllAppointments onEdit={handleEdit} />} />
+                <Route path="/profile" element={<Profile />} />
               </Route>
 
               {/* Metrics - Admin, Líder, Co-líder */}

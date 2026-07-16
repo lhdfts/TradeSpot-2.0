@@ -227,10 +227,11 @@ export const findAvailableCloser = (
     }
 
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento'].includes(appointmentType);
-    const eligibleAttendants =
+    const eligibleAttendants = (
         appointmentType === 'Ligação Equipe Aldeia'
             ? attendants.filter(a => a.sector === 'Aldeia')
-            : (isCloserType ? attendants.filter(a => a.sector === 'Closer') : attendants);
+            : (isCloserType ? attendants.filter(a => ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder') : attendants)
+    ).filter(a => a.role !== 'Líder');
     if (eligibleAttendants.length === 0) return null;
 
     if (appointmentType === 'Fechamento') {

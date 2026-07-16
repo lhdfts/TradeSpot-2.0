@@ -252,7 +252,7 @@ export const findBestAttendant = async (
     options: { ignoreSchedule?: boolean, durationMinutes?: number } = {}
 ): Promise<string | null> => {
     const durationMinutes = options.durationMinutes || 60;
-    let sectors = ['Closer'];
+    let sectors = ['Closer', 'Co-líder'];
     let roleFilters: string[] | null = null;
     let sectorLimitCheck: string | null = null;
 
@@ -269,7 +269,7 @@ export const findBestAttendant = async (
     }
 
     if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
-        roleFilters = ['Colaborador'];
+        roleFilters = ['Colaborador', 'Co-líder'];
     }
 
     if (eventId && !isCloserType && type !== 'Ligação Equipe Aldeia') {
@@ -290,14 +290,16 @@ export const findBestAttendant = async (
             } else if (eventData.sector === 'SDR') {
                 sectors = ['SDR'];
                 roleFilters = ['Colaborador', 'Co-líder'];
+            } else if (eventData.sector === 'Closer') {
+                sectors = ['Closer', 'Co-líder'];
             } else {
                 sectors = [eventData.sector];
             }
         }
     }
 
-    // 1. Fetch Attendants filtered by sector (and role if needed)
-    let attendantsQuery = supabase.from('user').select('*').in('sector', sectors);
+    // 1. Fetch Attendants filtered by sector (and role if needed, always excluding Líder)
+    let attendantsQuery = supabase.from('user').select('*').in('sector', sectors).neq('role', 'Líder');
     if (roleFilters) {
         attendantsQuery = attendantsQuery.in('role', roleFilters);
     }
@@ -308,8 +310,8 @@ export const findBestAttendant = async (
         return null;
     }
 
-    // 2.5. Apply event-specific blocklist to prevent assigning blocked closers
-    const attendantsForEvent = attendants.filter(a => !isAttendantBlockedForEvent(a, eventId, type));
+    // 2.5. Apply event-specific blocklist and ensure no Líder is assigned
+    const attendantsForEvent = attendants.filter(a => a.role !== 'Líder' && !isAttendantBlockedForEvent(a, eventId, type));
 
     // 2. Fetch Appointments for this day to check load/conflicts
     const { data: appointments, error: appError } = await supabase

@@ -698,18 +698,24 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
+            if (attendant.role === 'Líder') {
+                return res.status(409).json({
+                    error: 'Líderes não podem receber agendamentos.'
+                });
+            }
+
             // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
             if (data.eventId === ACTION_14_DIAS_EVENT_ID && data.type === 'Ligação Closer') {
-                if (attendant.sector !== 'Closer' || attendant.role !== 'Colaborador') {
+                if (!['Closer', 'Co-líder'].includes(attendant.sector) || !['Colaborador', 'Co-líder'].includes(attendant.role)) {
                     return res.status(409).json({
-                        error: `Para este evento, o atendente deve ser um Colaborador do setor Closer (atual: ${attendant.role} - ${attendant.sector}).`
+                        error: `Para este evento, o atendente deve ser um Colaborador ou Co-líder do setor Closer (atual: ${attendant.role} - ${attendant.sector}).`
                     });
                 }
             }
 
             // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
             const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
-            const closerSectors = ['Closer', 'Líder', 'Co-líder'];
+            const closerSectors = ['Closer', 'Co-líder'];
             if (data.type === 'Gold Call') {
                 closerSectors.push('Perpétuos');
             }
@@ -1038,12 +1044,18 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
+            if (targetAttendant && targetAttendant.role === 'Líder') {
+                return res.status(409).json({
+                    error: 'Líderes não podem receber agendamentos.'
+                });
+            }
+
             // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
             const currentType = updates.type || currentApp.type;
             if (targetEventId === ACTION_14_DIAS_EVENT_ID && currentType === 'Ligação Closer') {
-                if (targetAttendant && (targetAttendant.sector !== 'Closer' || targetAttendant.role !== 'Colaborador')) {
+                if (targetAttendant && (!['Closer', 'Co-líder'].includes(targetAttendant.sector) || !['Colaborador', 'Co-líder'].includes(targetAttendant.role))) {
                     return res.status(409).json({
-                        error: `Para este evento, o atendente deve ser um Colaborador do setor Closer (atual: ${targetAttendant.role} - ${targetAttendant.sector}).`
+                        error: `Para este evento, o atendente deve ser um Colaborador ou Co-líder do setor Closer (atual: ${targetAttendant.role} - ${targetAttendant.sector}).`
                     });
                 }
             }
@@ -1058,6 +1070,10 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             const { data: attendant } = await supabase.from('user').select('*').eq('id', merged.attendant_id).single();
 
             if (attendant) {
+                if (attendant.role === 'Líder') {
+                    return res.status(409).json({ error: 'Líderes não podem receber agendamentos.' });
+                }
+
                 console.log(`[DEBUG] Checking Schedule for ${attendant.name} (${attendant.id})`);
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 

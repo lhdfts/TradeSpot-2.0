@@ -181,8 +181,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
         console.log('[AVAILABLE-TIMES] Using sectors:', sectors, '| Type:', APPOINTMENT_TYPE);
 
-        // 1. Fetch Attendants based on sector
-        let attendantsQuery = supabase.from('user').select('*');
+        // 1. Fetch Attendants based on sector (excluding Líder role)
+        let attendantsQuery = supabase.from('user').select('*').neq('role', 'Líder');
         
         if (attendantId && typeof attendantId === 'string') {
             // If specific attendant ID is provided, fetch that attendant regardless of sector
@@ -511,8 +511,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
                 .single();
 
             // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI/CEO), resetamos
-            const allowedSectors = ['Closer', 'Líder', 'Co-líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia', 'SDR'];
-            const isValidSector = attendantData && allowedSectors.includes(attendantData.sector);
+            const allowedSectors = ['Closer', 'Co-líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia', 'SDR'];
+            const isValidSector = attendantData && allowedSectors.includes(attendantData.sector) && attendantData.role !== 'Líder';
             if (!attendantData || !isValidSector) {
                 finalAttendantId = 'distribuicao_automatica';
             } else {
