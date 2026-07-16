@@ -1,6 +1,6 @@
 import React from 'react';
 import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut, Webhook } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { cn } from './ui/button';
 import { Logo } from './Logo';
 import { LogoIcon } from './LogoIcon';
@@ -42,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
     const [isAgendamentosOpen, setIsAgendamentosOpen] = React.useState(true);
     const { user, logout } = useAuth();
     const { theme } = useTheme();
+    const navigate = useNavigate();
 
     const effectiveCollapsed = isCollapsed && !isHovered;
 
@@ -229,10 +230,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 <div className={cn("flex items-center gap-3", effectiveCollapsed ? "justify-center px-0" : "px-2")}>
                     <NavLink
                         to="/profile"
-                        className="flex items-center gap-3 flex-1 overflow-hidden group hover:opacity-80 transition-opacity rounded-lg p-1 text-left"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            navigate('/profile');
+                        }}
+                        className="flex items-center gap-3 flex-1 overflow-hidden group hover:opacity-80 transition-opacity rounded-lg p-1 text-left cursor-pointer"
                         title="Abrir Perfil"
                     >
-                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0 group-hover:scale-105 transition-transform">
+                        <div
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate('/profile');
+                            }}
+                            className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0 group-hover:scale-105 transition-transform cursor-pointer"
+                            title="Abrir Perfil"
+                        >
                             <User size={16} />
                         </div>
                         {!effectiveCollapsed && (
