@@ -12,7 +12,7 @@ import {
     LabelList
 } from 'recharts';
 import { cn } from '../components/ui/button';
-import { User, Mail, Clock, Coffee, Shield, BarChart3, Building2 } from 'lucide-react';
+import { User, Mail, Clock, Coffee, BarChart3, Building2 } from 'lucide-react';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { FloatingSelect } from '../components/FloatingSelect';
 
@@ -43,7 +43,6 @@ export const Profile: React.FC = () => {
 
     const displayName = user?.name || myAttendant?.name || 'Não informado';
     const displayEmail = user?.email || myAttendant?.email || 'Não informado';
-    const displayRole = user?.role || myAttendant?.role || 'Colaborador';
     const displaySector = user?.sector || myAttendant?.sector || 'Não informado';
 
     // Opções de Mês e Ano
@@ -172,14 +171,6 @@ export const Profile: React.FC = () => {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-center gap-2 bg-background px-4 py-2 rounded-lg border border-border">
-                            <Shield size={16} className="text-primary" />
-                            <div className="text-xs">
-                                <span className="text-muted-foreground block">Cargo / Perfil</span>
-                                <span className="font-semibold text-foreground">{displayRole}</span>
-                            </div>
-                        </div>
-
                         <div className="flex items-center gap-2 bg-background px-4 py-2 rounded-lg border border-border">
                             <Building2 size={16} className="text-[#3D719D]" />
                             <div className="text-xs">

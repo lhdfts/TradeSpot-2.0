@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
+import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
 import { getAppointmentWebhooks, getGlobalAppointmentWebhook } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 import { supabase } from '../utils/supabaseClient.js';
@@ -524,8 +524,11 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         // Se não houver ID ou se for explicitamente para distribuição automática
+        let distributionChecksLog: CheckLogItem[] | null = null;
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            finalAttendantId = await findBestAttendant(data.date, data.time, APPOINTMENT_TYPE, eventId);
+            const resDist = await findBestAttendantWithLogs(data.date, data.time, APPOINTMENT_TYPE, eventId);
+            finalAttendantId = resDist.attendantId;
+            distributionChecksLog = resDist.checksLog;
         }
 
         if (!finalAttendantId) {
@@ -682,6 +685,21 @@ router.post('/appointments', async (req: Request, res: Response) => {
         if (appError) {
             console.error("Supabase Write Error:", appError);
             return res.status(500).json({ error: 'Erro ao salvar agendamento' });
+        }
+
+        if (distributionChecksLog && finalAttendantId && createdAppointment && clientId) {
+            const { data: selectedUser } = await supabase.from('user').select('name').eq('id', finalAttendantId).maybeSingle();
+            const attName = selectedUser?.name || 'Atendente Selecionado';
+            supabase.from('execution_logs').insert({
+                client_id: clientId,
+                execution_type: 'Distribuição Automática',
+                selected_attendant_id: finalAttendantId,
+                selected_attendant_name: attName,
+                appointment_id: createdAppointment.id,
+                checks_log: distributionChecksLog
+            }).then(({ error: logErr }) => {
+                if (logErr) console.error('[EXECUTION LOGS] Error inserting log in publicRoutes:', logErr);
+            });
         }
 
         // 7. Webhook Trigger

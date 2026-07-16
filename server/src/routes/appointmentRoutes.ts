@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook, getGlobalAppointmentWebhook, getSyncEventsWebhook } from '../config/webhooks.js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
+import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
@@ -672,14 +672,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         let finalAttendantId = data.attendantId;
 
         // Agent Logic
+        let distributionChecksLog: CheckLogItem[] | null = null;
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
             const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(data.type);
             const ignoreSched = isAldeiaOrTribo && !isCloserAppt;
-            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
-            if (!availableId) {
+            const resDist = await findBestAttendantWithLogs(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
+            if (!resDist.attendantId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
             }
-            finalAttendantId = availableId;
+            finalAttendantId = resDist.attendantId;
+            distributionChecksLog = resDist.checksLog;
         } else {
             const { data: attendant, error: attError } = await supabase
                 .from('user')
@@ -902,6 +904,21 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         if (appError) {
             console.error("Supabase Write Error:", appError);
             return res.status(500).json({ error: 'Erro no Banco de Dados' });
+        }
+
+        if (distributionChecksLog && finalAttendantId && createdAppointment && clientId) {
+            const { data: selectedUser } = await supabase.from('user').select('name').eq('id', finalAttendantId).maybeSingle();
+            const attName = selectedUser?.name || 'Atendente Selecionado';
+            supabase.from('execution_logs').insert({
+                client_id: clientId,
+                execution_type: 'Distribuição Automática',
+                selected_attendant_id: finalAttendantId,
+                selected_attendant_name: attName,
+                appointment_id: createdAppointment.id,
+                checks_log: distributionChecksLog
+            }).then(({ error: logErr }) => {
+                if (logErr) console.error('[EXECUTION LOGS] Error inserting log in appointmentRoutes:', logErr);
+            });
         }
 
         // Response

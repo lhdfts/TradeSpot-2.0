@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut, Webhook } from 'lucide-react';
+import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut, Webhook, History } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { cn } from './ui/button';
 import { Logo } from './Logo';
@@ -190,6 +190,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                         icon={<Webhook size={20} />}
                         label={effectiveCollapsed ? "" : "Conexões Unnichat"}
                         to="/unnichat-connections"
+                        collapsed={effectiveCollapsed}
+                    />
+                )}
+
+                {/* Logs de Execução / Distribuição - Admin, Dev */}
+                {(user?.role === 'Admin' || user?.role === 'Dev') && (
+                    <NavItem
+                        icon={<History size={20} />}
+                        label={effectiveCollapsed ? "" : "Logs"}
+                        to="/logs"
                         collapsed={effectiveCollapsed}
                     />
                 )}
