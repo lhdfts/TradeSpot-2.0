@@ -19,6 +19,9 @@ const calendar = google.calendar({ version: 'v3', auth });
 
 export const createGoogleMeetLink = async (summary: string, startTime: string, endTime: string, attendeeEmails: string[] = []) => {
     try {
+        const MANDATORY_GUEST = 'reuniao@tradestars.com.br';
+        const finalAttendees = Array.from(new Set([...attendeeEmails, MANDATORY_GUEST])).filter(Boolean);
+
         const event = {
             summary: summary,
             description: 'Agendamento TradeStars',
@@ -30,7 +33,7 @@ export const createGoogleMeetLink = async (summary: string, startTime: string, e
                 dateTime: endTime,
                 timeZone: 'America/Sao_Paulo',
             },
-            attendees: attendeeEmails.map(email => ({ email })),
+            attendees: finalAttendees.map(email => ({ email })),
             conferenceData: {
                 createRequest: {
                     requestId: `sample-${Date.now()}`,
@@ -77,7 +80,9 @@ export const updateGoogleMeetEvent = async (eventId: string, attendeeEmails?: st
         const resource: any = {};
 
         if (attendeeEmails) {
-            resource.attendees = attendeeEmails.map(email => ({ email }));
+            const MANDATORY_GUEST = 'reuniao@tradestars.com.br';
+            const finalAttendees = Array.from(new Set([...attendeeEmails, MANDATORY_GUEST])).filter(Boolean);
+            resource.attendees = finalAttendees.map(email => ({ email }));
         }
 
         if (startTime && endTime) {
