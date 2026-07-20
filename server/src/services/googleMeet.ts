@@ -19,7 +19,7 @@ const calendar = google.calendar({ version: 'v3', auth });
 
 export const createGoogleMeetLink = async (summary: string, startTime: string, endTime: string, attendeeEmails: string[] = []) => {
     try {
-        const MANDATORY_GUEST = 'reuniao@tradestars.com.br';
+        const MANDATORY_GUEST = 'di01@tradestars.com.br';
         const finalAttendees = Array.from(new Set([...attendeeEmails, MANDATORY_GUEST])).filter(Boolean);
 
         const event = {
@@ -80,7 +80,7 @@ export const updateGoogleMeetEvent = async (eventId: string, attendeeEmails?: st
         const resource: any = {};
 
         if (attendeeEmails) {
-            const MANDATORY_GUEST = 'reuniao@tradestars.com.br';
+            const MANDATORY_GUEST = 'di01@tradestars.com.br';
             const finalAttendees = Array.from(new Set([...attendeeEmails, MANDATORY_GUEST])).filter(Boolean);
             resource.attendees = finalAttendees.map(email => ({ email }));
         }

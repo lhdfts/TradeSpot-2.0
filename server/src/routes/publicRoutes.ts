@@ -638,8 +638,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
         if (attendantUser && attendantUser.email) {
             attendees.push(attendantUser.email);
         }
-        if (!attendees.includes('reuniao@tradestars.com.br')) {
-            attendees.push('reuniao@tradestars.com.br');
+        if (!attendees.includes('di01@tradestars.com.br')) {
+            attendees.push('di01@tradestars.com.br');
         }
 
         // Create Event
