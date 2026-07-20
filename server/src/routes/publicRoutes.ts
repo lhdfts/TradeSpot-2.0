@@ -641,6 +641,9 @@ router.post('/appointments', async (req: Request, res: Response) => {
         if (attendantUser && attendantUser.email) {
             attendees.push(attendantUser.email);
         }
+        if (!attendees.includes('reuniao@tradestars.com.br')) {
+            attendees.push('reuniao@tradestars.com.br');
+        }
 
         // Create Event
         const googleData = await createGoogleMeetLink(
