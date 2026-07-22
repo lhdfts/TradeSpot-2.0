@@ -858,8 +858,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                     });
                 }
             }
-            if (!attendees.includes('reuniao@tradestars.com.br')) {
-                attendees.push('reuniao@tradestars.com.br');
+            if (!attendees.includes('di01@tradestars.com.br')) {
+                attendees.push('di01@tradestars.com.br');
             }
 
             const googleData = await createGoogleMeetLink(`Reunião com ${clientPayload.name}`, startIso, endIso, attendees);
@@ -1220,8 +1220,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             const attendees: string[] = [];
             if (clientData?.email) attendees.push(clientData.email);
             if (usersData) usersData.forEach((u: any) => { if (u.email) attendees.push(u.email) });
-            if (!attendees.includes('reuniao@tradestars.com.br')) {
-                attendees.push('reuniao@tradestars.com.br');
+            if (!attendees.includes('di01@tradestars.com.br')) {
+                attendees.push('di01@tradestars.com.br');
             }
             updateGoogleMeetEvent(currentApp.google_event_id, attendees);
         }
