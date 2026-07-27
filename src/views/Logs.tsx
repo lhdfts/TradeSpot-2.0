@@ -120,7 +120,7 @@ export const Logs: React.FC = () => {
             if (searchTerm.trim() !== '') {
                 const term = searchTerm.toLowerCase();
                 const clientName = log.client?.name?.toLowerCase() || '';
-                const clientPhone = log.client?.phone?.toLowerCase() || '';
+                const clientPhone = log.client?.phone ? String(log.client.phone).toLowerCase() : '';
                 const attendantName = log.selected_attendant_name?.toLowerCase() || '';
                 if (!clientName.includes(term) && !clientPhone.includes(term) && !attendantName.includes(term)) {
                     return false;
