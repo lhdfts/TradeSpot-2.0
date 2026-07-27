@@ -284,7 +284,7 @@ export const findBestAttendantWithLogs = async (
         roleFilters = ['Colaborador', 'Co-líder'];
     }
 
-    if (eventId && !isCloserType && type !== 'Ligação Equipe Aldeia') {
+    if (eventId && type !== 'Ligação Equipe Aldeia') {
         const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
         if (eventData) {
             if (eventData.sector === 'Perpétuos') {
@@ -303,7 +303,7 @@ export const findBestAttendantWithLogs = async (
                 sectors = ['SDR'];
                 roleFilters = ['Colaborador', 'Co-líder'];
             } else if (eventData.sector === 'Closer') {
-                sectors = ['Closer', 'Co-líder'];
+                sectors = ['Closer'];
             } else {
                 sectors = [eventData.sector];
             }

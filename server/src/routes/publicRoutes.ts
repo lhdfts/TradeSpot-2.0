@@ -498,7 +498,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // Força distribuição automática, ignorando qualquer attendantId enviado
         let distributionChecksLog: CheckLogItem[] | null = null;
         
-        const resDist = await findBestAttendantWithLogs(data.date, data.time, APPOINTMENT_TYPE, eventId);
+        const resDist = await findBestAttendantWithLogs(data.date, data.time, APPOINTMENT_TYPE, eventId, { durationMinutes });
         let finalAttendantId = resDist.attendantId;
         distributionChecksLog = resDist.checksLog;
 
