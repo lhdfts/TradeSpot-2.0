@@ -238,14 +238,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 )
                 : filteredAttendants;
 
-            if (
-                user &&
-                (user.role === 'Co-líder' || user.role === 'Líder') &&
-                user.sector !== 'TEI' &&
-                user.sector !== 'Suporte'
-            ) {
+            const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
+            
+            if (!isGlobalViewer && user?.sector) {
                 filteredAttendantsForBlock = filteredAttendantsForBlock.filter(
-                    a => a.sector === user.sector || a.role === user.role || a.id === initialData?.attendantId
+                    a => a.sector === user.sector || a.id === initialData?.attendantId
                 );
             }
 
@@ -267,14 +264,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
                     if (shouldBlock && a.id === BLOCKED_CLOSER_ID) return false;
 
-                    if (
-                        user &&
-                        (user.role === 'Co-líder' || user.role === 'Líder') &&
-                        user.sector !== 'TEI' &&
-                        user.sector !== 'Suporte' &&
-                        a.sector !== user.sector &&
-                        a.role !== user.role
-                    ) {
+                    if (a.sector === 'Desativado') return false;
+
+                    const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
+                    
+                    if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
                         return false;
                     }
 
@@ -296,7 +290,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     }
 
                     if (user?.sector === 'TEI') return true;
-                    return user?.sector ? (a.sector === user.sector || a.role === user.role) : true;
+                    return user?.sector ? a.sector === user.sector : true;
                 })
                 .map(a => ({ value: a.id, label: a.name }))
         ];
