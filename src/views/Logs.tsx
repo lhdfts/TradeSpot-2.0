@@ -92,13 +92,13 @@ export const Logs: React.FC = () => {
     };
 
     useEffect(() => {
-        if (user && ['Admin', 'Dev'].includes(user.role)) {
+        if (user && ['Admin', 'Dev', 'Líder'].includes(user.role)) {
             fetchLogs();
         }
     }, [user, dateFilter]);
 
     // Verificação de permissão
-    if (!user || !['Admin', 'Dev'].includes(user.role)) {
+    if (!user || !['Admin', 'Dev', 'Líder'].includes(user.role)) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
                 <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center text-destructive mb-4">
@@ -106,7 +106,7 @@ export const Logs: React.FC = () => {
                 </div>
                 <h2 className="text-2xl font-bold text-foreground mb-2">Acesso Restrito</h2>
                 <p className="text-muted-foreground max-w-md">
-                    Esta tela é restrita exclusivamente a administradores e desenvolvedores do sistema.
+                    Esta tela é restrita a administradores, líderes e desenvolvedores do sistema.
                 </p>
             </div>
         );

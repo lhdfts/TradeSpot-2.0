@@ -11,8 +11,8 @@ const router = Router();
  */
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
-        if (!req.user || !['Admin', 'Dev'].includes(req.user.role)) {
-            return res.status(403).json({ error: 'Acesso negado. Apenas Admin e Dev têm permissão.' });
+        if (!req.user || !['Admin', 'Dev', 'Líder'].includes(req.user.role)) {
+            return res.status(403).json({ error: 'Acesso negado. Apenas Admin, Dev e Líder têm permissão.' });
         }
 
         const { startDate, endDate, executionType, limit = '200' } = req.query;
@@ -35,6 +35,17 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             `)
             .order('created_at', { ascending: false })
             .limit(parseInt(limit as string, 10) || 200);
+
+        // Se for Líder, filtra para ver apenas logs de atendentes do seu próprio setor
+        if (req.user.role === 'Líder' && req.user.sector) {
+            const { data: sectorUsers } = await supabase.from('user').select('id').eq('sector', req.user.sector);
+            if (sectorUsers && sectorUsers.length > 0) {
+                const sectorUserIds = sectorUsers.map(u => u.id);
+                query = query.in('selected_attendant_id', sectorUserIds);
+            } else {
+                query = query.in('selected_attendant_id', ['none']);
+            }
+        }
 
         if (startDate && typeof startDate === 'string' && startDate.trim() !== '') {
             query = query.gte('created_at', startDate);

@@ -194,8 +194,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                     />
                 )}
 
-                {/* Logs de Execução / Distribuição - Admin, Dev */}
-                {(user?.role === 'Admin' || user?.role === 'Dev') && (
+                {/* Logs de Execução / Distribuição - Admin, Dev, Líder */}
+                {(user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Líder') && (
                     <NavItem
                         icon={<History size={20} />}
                         label={effectiveCollapsed ? "" : "Logs"}

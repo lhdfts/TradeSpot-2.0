@@ -133,7 +133,7 @@ app.use('/api/auth', publicRateLimiter, authRoutes);
 app.use('/api/appointments', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), appointmentRoutes);
 app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), pipedriveRoutes);
 app.use('/api/unnichat-connections', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), unnichatRoutes);
-app.use('/api/execution-logs', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev'), executionLogRoutes);
+app.use('/api/execution-logs', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder'), executionLogRoutes);
 
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../../dist')));
