@@ -68,7 +68,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const filteredAttendants = (user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade'
         ? attendants
         : user?.sector === 'Suporte'
-            ? attendants.filter(att => ['Tribo', 'Aldeia', 'SDR', 'Closer'].includes(att.sector))
+            ? attendants.filter(att => getAllowedSectors(user).includes(att.sector))
             : attendants.filter(att => att.sector === user?.sector))
         .sort((a, b) => a.name.localeCompare(b.name));
 

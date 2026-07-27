@@ -51,8 +51,9 @@ export const isMedinaUser = (user: { email?: string; id?: string } | null | unde
     return user.email === 'medina@tradestars.com.br' || user.id === '216557f7-03be-447c-ab6a-094460504da1';
 };
 
-export const getAllowedSectors = (user: { email?: string; sector?: string; id?: string } | null | undefined) => {
+export const getAllowedSectors = (user: { email?: string; sector?: string; id?: string; role?: string } | null | undefined) => {
     if (!user) return [];
+    if (user.sector === 'Suporte') return ['Aldeia', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller'];
     if (canViewAllSectors(user)) return ['Aldeia', 'Closer', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller'];
     if (isMedinaUser(user)) return ['SDR', 'Aldeia', 'Tribo'];
     return user.sector ? [user.sector] : [];

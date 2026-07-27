@@ -240,6 +240,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
             const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
             
+            if (user?.sector === 'Suporte') {
+                filteredAttendantsForBlock = filteredAttendantsForBlock.filter(a => a.sector !== 'Closer');
+            }
+
             if (!isGlobalViewer && user?.sector) {
                 filteredAttendantsForBlock = filteredAttendantsForBlock.filter(
                     a => a.sector === user.sector || a.id === initialData?.attendantId
@@ -268,6 +272,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
                     const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
                     
+                    if (user?.sector === 'Suporte' && a.sector === 'Closer') {
+                        return false;
+                    }
+
                     if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
                         return false;
                     }
