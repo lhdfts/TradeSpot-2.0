@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
-import { getAppointmentWebhooks, getUpdateWebhook } from '../config/webhooks.js';
+import { getAppointmentWebhooks, getUpdateWebhook, getGlobalAppointmentWebhook, getSyncEventsWebhook } from '../config/webhooks.js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
+import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
@@ -34,6 +34,18 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             .order('date', { ascending: false })
             .order('time', { ascending: false });
 
+        // Filtro de data no Backend (Solução 1 - Recomendada)
+        const { startDate, endDate } = req.query;
+        const hasDateFilter = (startDate && typeof startDate === 'string' && startDate.trim() !== '') ||
+                              (endDate && typeof endDate === 'string' && endDate.trim() !== '');
+
+        if (startDate && typeof startDate === 'string' && startDate.trim() !== '') {
+            query = query.gte('date', startDate);
+        }
+        if (endDate && typeof endDate === 'string' && endDate.trim() !== '') {
+            query = query.lte('date', endDate);
+        }
+
         // Correção VULN-006: Data Minimization & Least Privilege
         const userRole = req.user?.role;
         const userSector = req.user?.sector;
@@ -41,11 +53,11 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
         if (userSector === 'TEI' || userSector === 'Suporte') {
             // Regra 1: TEI e Suporte podem ver tudo de todos os setores
-            query = query.limit(2000);
+            query = query.limit(hasDateFilter ? 5000 : 2000);
         } else if (userSector === 'Closer' && userRole === 'Colaborador') {
             // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos
             query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
-            query = query.limit(500);
+            query = query.limit(hasDateFilter ? 2000 : 500);
         } else {
             // Regra 3: Outros setores (e Líderes/Admins do Closer) podem ver todos do SEU PRÓPRIO setor
             const { data: sectorUsers } = await supabase.from('user').select('id').eq('sector', userSector);
@@ -58,7 +70,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
                 // Fallback de segurança 
                 query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
             }
-            query = query.limit(1000);
+            query = query.limit(hasDateFilter ? 3000 : 1000);
         }
 
         const { data, error } = await query;
@@ -267,7 +279,7 @@ router.delete('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (r
 // GET /api/events - List all events
 router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { data, error } = await supabase.from('events').select('*, sector, duration_minutes');
+        const { data, error } = await supabase.from('events').select('*, sector, duration_minutes, unnichat_url');
 
         if (error) throw new Error(error.message);
 
@@ -280,7 +292,8 @@ router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
             created_at: event.created_at,
             sector: event.sector,
             self_scheduling_link: event.self_scheduling_link,
-            duration_minutes: event.duration_minutes
+            duration_minutes: event.duration_minutes,
+            unnichat_url: event.unnichat_url
         }));
 
         res.json(mappedData);
@@ -302,12 +315,21 @@ router.post('/events', requireRole('Admin', 'Dev', 'Líder'), async (req: Authen
                 status: req.body.status,
                 sector: req.body.sector,
                 self_scheduling_link: req.body.self_scheduling_link,
-                duration_minutes: req.body.duration_minutes
+                duration_minutes: req.body.duration_minutes,
+                unnichat_url: req.body.unnichat_url || null
             })
             .select()
             .single();
 
         if (error) throw new Error(error.message);
+
+        const syncWebhook = getSyncEventsWebhook();
+        if (syncWebhook) {
+            axios.post(syncWebhook, {
+                action: 'create',
+                event: eventData
+            }).catch(err => console.error("Error firing sync events webhook:", err.message));
+        }
 
         res.status(201).json({
             id: eventData.id,
@@ -318,7 +340,8 @@ router.post('/events', requireRole('Admin', 'Dev', 'Líder'), async (req: Authen
             created_at: eventData.created_at,
             sector: eventData.sector,
             self_scheduling_link: eventData.self_scheduling_link,
-            duration_minutes: eventData.duration_minutes
+            duration_minutes: eventData.duration_minutes,
+            unnichat_url: eventData.unnichat_url
         });
     } catch (err: any) {
         console.error("Create Event Error:", err);
@@ -339,13 +362,22 @@ router.put('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: Aut
                 status: req.body.status,
                 sector: req.body.sector,
                 self_scheduling_link: req.body.self_scheduling_link,
-                duration_minutes: req.body.duration_minutes
+                duration_minutes: req.body.duration_minutes,
+                unnichat_url: req.body.unnichat_url || null
             })
             .eq('id', id)
             .select()
             .single();
 
         if (error) throw new Error(error.message);
+
+        const syncWebhook = getSyncEventsWebhook();
+        if (syncWebhook) {
+            axios.post(syncWebhook, {
+                action: 'update',
+                event: eventData
+            }).catch(err => console.error("Error firing sync events webhook:", err.message));
+        }
 
         res.json({
             id: eventData.id,
@@ -356,7 +388,8 @@ router.put('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: Aut
             created_at: eventData.created_at,
             sector: eventData.sector,
             self_scheduling_link: eventData.self_scheduling_link,
-            duration_minutes: eventData.duration_minutes
+            duration_minutes: eventData.duration_minutes,
+            unnichat_url: eventData.unnichat_url
         });
     } catch (err: any) {
         console.error("Update Event Error:", err);
@@ -372,9 +405,120 @@ router.delete('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: 
 
         if (error) throw new Error(error.message);
 
+        const syncWebhook = getSyncEventsWebhook();
+        if (syncWebhook) {
+            axios.post(syncWebhook, {
+                action: 'delete',
+                event: { id }
+            }).catch(err => console.error("Error firing sync events webhook:", err.message));
+        }
+
         res.status(204).send();
     } catch (err: any) {
         console.error("Delete Event Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// POST /api/events/sync - Sincroniza todos os eventos com a Data Table do n8n
+router.post('/events/sync', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const syncWebhook = getSyncEventsWebhook();
+        if (!syncWebhook) {
+            return res.status(400).json({ error: 'WEBHOOK_SYNC_EVENTS não configurado nas variáveis de ambiente (.env)' });
+        }
+
+        const { data: events, error } = await supabase.from('events').select('*');
+        if (error) throw new Error(error.message);
+
+        await axios.post(syncWebhook, {
+            action: 'sync_all',
+            events: events || []
+        });
+
+        res.json({ message: 'Sincronização com n8n disparada com sucesso!', total: events?.length || 0 });
+    } catch (err: any) {
+        console.error("Sync Events Error:", err);
+        res.status(500).json({ error: 'Erro ao sincronizar eventos com n8n' });
+    }
+});
+
+// CRUD para Conexões Unnichat (unnichat_connections)
+router.get('/unnichat-connections', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { data, error } = await supabase.from('unnichat_connections').select('*').order('name', { ascending: true });
+        if (error) throw new Error(error.message);
+        res.json(data || []);
+    } catch (err: any) {
+        console.error("List Unnichat Connections Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+router.post('/unnichat-connections', requireRole('Admin', 'Dev', 'Líder', 'TEI'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { name, unnichat_url, sector } = req.body;
+        if (!name || !unnichat_url) {
+            return res.status(400).json({ error: 'Nome da Conexão e Link do Webhook são obrigatórios' });
+        }
+        
+        let finalSector = sector || null;
+        if (req.user?.role === 'Líder' && req.user?.sector !== 'TEI') {
+            finalSector = req.user.sector;
+        }
+
+        const { data, error } = await supabase
+            .from('unnichat_connections')
+            .insert({ name, unnichat_url, sector: finalSector })
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+        res.status(201).json(data);
+    } catch (err: any) {
+        console.error("Create Unnichat Connection Error:", err);
+        res.status(500).json({ error: err.message || 'Erro Interno' });
+    }
+});
+
+router.put('/unnichat-connections/:id', requireRole('Admin', 'Dev', 'Líder', 'TEI'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name, unnichat_url, sector } = req.body;
+        if (!name || !unnichat_url) {
+            return res.status(400).json({ error: 'Nome da Conexão e Link do Webhook são obrigatórios' });
+        }
+
+        let updatePayload: any = { name, unnichat_url };
+        if (req.user?.role === 'Admin' || req.user?.role === 'Dev' || req.user?.sector === 'TEI') {
+            updatePayload.sector = sector || null;
+        } else if (req.user?.role === 'Líder') {
+            updatePayload.sector = req.user.sector;
+        }
+
+        const { data, error } = await supabase
+            .from('unnichat_connections')
+            .update(updatePayload)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+        res.json(data);
+    } catch (err: any) {
+        console.error("Update Unnichat Connection Error:", err);
+        res.status(500).json({ error: err.message || 'Erro Interno' });
+    }
+});
+
+router.delete('/unnichat-connections/:id', requireRole('Admin', 'Dev', 'Líder', 'TEI'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase.from('unnichat_connections').delete().eq('id', id);
+        if (error) throw new Error(error.message);
+        res.status(204).send();
+    } catch (err: any) {
+        console.error("Delete Unnichat Connection Error:", err);
         res.status(500).json({ error: 'Erro Interno' });
     }
 });
@@ -528,14 +672,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         let finalAttendantId = data.attendantId;
 
         // Agent Logic
+        let distributionChecksLog: CheckLogItem[] | null = null;
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
             const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(data.type);
             const ignoreSched = isAldeiaOrTribo && !isCloserAppt;
-            const availableId = await findBestAttendant(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
-            if (!availableId) {
+            const resDist = await findBestAttendantWithLogs(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
+            if (!resDist.attendantId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
             }
-            finalAttendantId = availableId;
+            finalAttendantId = resDist.attendantId;
+            distributionChecksLog = resDist.checksLog;
         } else {
             const { data: attendant, error: attError } = await supabase
                 .from('user')
@@ -554,18 +700,24 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
+            if (attendant.role === 'Líder') {
+                return res.status(409).json({
+                    error: 'Líderes não podem receber agendamentos.'
+                });
+            }
+
             // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
             if (data.eventId === ACTION_14_DIAS_EVENT_ID && data.type === 'Ligação Closer') {
-                if (attendant.sector !== 'Closer' || attendant.role !== 'Colaborador') {
+                if (!['Closer', 'Co-líder'].includes(attendant.sector) || !['Colaborador', 'Co-líder'].includes(attendant.role)) {
                     return res.status(409).json({
-                        error: `Para este evento, o atendente deve ser um Colaborador do setor Closer (atual: ${attendant.role} - ${attendant.sector}).`
+                        error: `Para este evento, o atendente deve ser um Colaborador ou Co-líder do setor Closer (atual: ${attendant.role} - ${attendant.sector}).`
                     });
                 }
             }
 
             // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
             const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
-            const closerSectors = ['Closer', 'Líder', 'Co-líder'];
+            const closerSectors = ['Closer', 'Co-líder'];
             if (data.type === 'Gold Call') {
                 closerSectors.push('Perpétuos');
             }
@@ -757,6 +909,21 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             return res.status(500).json({ error: 'Erro no Banco de Dados' });
         }
 
+        if (distributionChecksLog && finalAttendantId && createdAppointment && clientId) {
+            const { data: selectedUser } = await supabase.from('user').select('name').eq('id', finalAttendantId).maybeSingle();
+            const attName = selectedUser?.name || 'Atendente Selecionado';
+            supabase.from('execution_logs').insert({
+                client_id: clientId,
+                execution_type: 'Distribuição Automática',
+                selected_attendant_id: finalAttendantId,
+                selected_attendant_name: attName,
+                appointment_id: createdAppointment.id,
+                checks_log: distributionChecksLog
+            }).then(({ error: logErr }) => {
+                if (logErr) console.error('[EXECUTION LOGS] Error inserting log in appointmentRoutes:', logErr);
+            });
+        }
+
         // Response
         const responseData = {
             ...createdAppointment,
@@ -775,13 +942,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         };
 
         // Webhook
-        const names: any = { attendant_name: null, created_by_name: null, creator_sector: null, event_name: null };
+        const names: any = { attendant_name: null, attendant_sector: null, created_by_name: null, creator_sector: null, event_name: null };
         const idsToFetch = [finalAttendantId, appointmentPayload.created_by].filter(Boolean) as string[];
         if (idsToFetch.length > 0) {
             const { data: users } = await supabase.from('user').select('id, name, sector').in('id', idsToFetch);
             if (users) {
                 const att = users.find(u => u.id === finalAttendantId);
-                if (att) names.attendant_name = att.name;
+                if (att) {
+                    names.attendant_name = att.name;
+                    names.attendant_sector = att.sector;
+                }
                 const cr = users.find(u => u.id === appointmentPayload.created_by);
                 if (cr) {
                     names.created_by_name = cr.name;
@@ -801,6 +971,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             ...responseData,
             type: data.type,
             attendant_name: names.attendant_name,
+            attendant_sector: names.attendant_sector || names.event_sector || null,
             created_by_name: names.created_by_name,
             creator_sector: names.creator_sector,
             event_name: names.event_name,
@@ -821,6 +992,18 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
         } else {
             console.log(`No webhook configured for type: ${data.type}`);
+        }
+
+        // Global / Unified Webhook Trigger (Todos os agendamentos criados)
+        const globalWebhookUrl = getGlobalAppointmentWebhook();
+        if (globalWebhookUrl) {
+            console.log(`Sending Global Webhook to ${globalWebhookUrl}`);
+            try {
+                await axios.post(globalWebhookUrl, webhookResponse);
+                console.log('Global Webhook sent successfully');
+            } catch (err: any) {
+                console.error(`Global Webhook Failed:`, err.message, err.response?.data);
+            }
         }
 
         // Log successful action
@@ -881,12 +1064,18 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
+            if (targetAttendant && targetAttendant.role === 'Líder') {
+                return res.status(409).json({
+                    error: 'Líderes não podem receber agendamentos.'
+                });
+            }
+
             // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
             const currentType = updates.type || currentApp.type;
             if (targetEventId === ACTION_14_DIAS_EVENT_ID && currentType === 'Ligação Closer') {
-                if (targetAttendant && (targetAttendant.sector !== 'Closer' || targetAttendant.role !== 'Colaborador')) {
+                if (targetAttendant && (!['Closer', 'Co-líder'].includes(targetAttendant.sector) || !['Colaborador', 'Co-líder'].includes(targetAttendant.role))) {
                     return res.status(409).json({
-                        error: `Para este evento, o atendente deve ser um Colaborador do setor Closer (atual: ${targetAttendant.role} - ${targetAttendant.sector}).`
+                        error: `Para este evento, o atendente deve ser um Colaborador ou Co-líder do setor Closer (atual: ${targetAttendant.role} - ${targetAttendant.sector}).`
                     });
                 }
             }
@@ -901,6 +1090,10 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             const { data: attendant } = await supabase.from('user').select('*').eq('id', merged.attendant_id).single();
 
             if (attendant) {
+                if (attendant.role === 'Líder') {
+                    return res.status(409).json({ error: 'Líderes não podem receber agendamentos.' });
+                }
+
                 console.log(`[DEBUG] Checking Schedule for ${attendant.name} (${attendant.id})`);
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
@@ -975,6 +1168,13 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         if (req.body.updatedBy) updatePayload.updatedBy = req.body.updatedBy;
+
+        const isStatusChanged = updates.status && currentApp.status !== updates.status;
+        const isAttendantChanged = updates.attendantId && currentApp.attendant_id !== updates.attendantId;
+
+        if (isStatusChanged || isAttendantChanged || req.body.updatedBy) {
+            updatePayload.updatedAt = new Date().toISOString();
+        }
 
         if (updates.status && currentApp.status !== updates.status) {
             updatePayload.oldStatus = currentApp.status;

@@ -216,31 +216,43 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         // When EDITING, filter attendants by appointment type strictly
         if (isEditing) {
             const typeToSectors: Record<string, string[]> = {
-                'Ligação Closer': ['Closer'],
+                'Ligação Closer': ['Closer', 'Co-líder'],
                 'Ligação Equipe Aldeia': ['Aldeia'],
-                'Gold Call': ['Closer'],
-                'Reagendamento Closer': ['Closer', 'Aldeia'],
-                'Upgrade': ['Closer'],
+                'Gold Call': ['Closer', 'Co-líder', 'Perpétuos'],
+                'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
+                'Upgrade': ['Closer', 'Co-líder'],
                 'Ligação SDR': ['SDR']
             };
 
             const requiredSectors = typeToSectors[formData.type];
 
-            // Filter attendants by sector if type requires it
-            const filteredAttendants = requiredSectors
-                ? attendants.filter(a => requiredSectors.includes(a.sector))
-                : attendants; // For other types like 'Agendamento Pessoal', 'Fora da agenda', show all
+            // Filter attendants by sector if type requires it, excluding Líder role
+            const filteredAttendants = (requiredSectors
+                ? attendants.filter(a => requiredSectors.includes(a.sector) || (requiredSectors.includes('Closer') && a.role === 'Co-líder'))
+                : attendants).filter(a => a.role !== 'Líder');
 
             const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
-            const filteredAttendantsForBlock = shouldBlock
+            let filteredAttendantsForBlock = shouldBlock
                 ? filteredAttendants.filter(a =>
                     a.id !== BLOCKED_CLOSER_ID || a.id === initialData?.attendantId
                 )
                 : filteredAttendants;
 
+            const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
+            
+            if (user?.sector === 'Suporte') {
+                filteredAttendantsForBlock = filteredAttendantsForBlock.filter(a => a.sector !== 'Closer');
+            }
+
+            if (!isGlobalViewer && user?.sector) {
+                filteredAttendantsForBlock = filteredAttendantsForBlock.filter(
+                    a => a.sector === user.sector || a.id === initialData?.attendantId
+                );
+            }
+
             if (isAction14Dias && formData.type === 'Ligação Closer') {
                 return filteredAttendantsForBlock
-                    .filter(a => a.role === 'Colaborador' && a.sector === 'Closer')
+                    .filter(a => (a.role === 'Colaborador' || a.role === 'Co-líder') && ['Closer', 'Co-líder'].includes(a.sector))
                     .map(a => ({ value: a.id, label: a.name }));
             }
 
@@ -252,24 +264,37 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
             ...attendants
                 .filter(a => {
+                    if (a.role === 'Líder') return false;
                     const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
                     if (shouldBlock && a.id === BLOCKED_CLOSER_ID) return false;
 
+                    if (a.sector === 'Desativado') return false;
+
+                    const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
+                    
+                    if (user?.sector === 'Suporte' && a.sector === 'Closer') {
+                        return false;
+                    }
+
+                    if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
+                        return false;
+                    }
+
                     if (isAction14Dias && formData.type === 'Ligação Closer') {
-                        return a.sector === 'Closer' && a.role === 'Colaborador';
+                        return ['Closer', 'Co-líder'].includes(a.sector) && (a.role === 'Colaborador' || a.role === 'Co-líder');
                     }
 
                     const selectedEvent = events.find(e => e.id === formData.eventId);
                     const eventSector = selectedEvent?.sector;
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
-                    if (formData.type === 'Fora da agenda') return a.sector === 'Closer' && (a.role === 'Colaborador' || a.role === 'Co-líder');
-                    if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return a.sector === 'Closer';
-                    if (formData.type === 'Reagendamento Closer') return a.sector === 'Closer' || a.sector === 'Aldeia';
-                    if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia';
+                    if (formData.type === 'Fora da agenda') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
+                    if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
+                    if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder', 'Aldeia'].includes(a.sector) || a.role === 'Co-líder';
+                    if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia' || (a.sector === 'Aldeia' && a.role === 'Co-líder');
 
                     if (isAdministrative) {
-                        return eventSector ? a.sector === eventSector : true;
+                        return eventSector ? (a.sector === eventSector || (eventSector === 'Closer' && (a.role === 'Co-líder' || a.sector === 'Co-líder'))) : true;
                     }
 
                     if (user?.sector === 'TEI') return true;
@@ -709,7 +734,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     : freshAttendants;
 
                 if (formData.eventId === ACTION_14_DIAS_EVENT_ID && formData.type === 'Ligação Closer') {
-                    freshAttendantsForEvent = freshAttendantsForEvent.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
+                    freshAttendantsForEvent = freshAttendantsForEvent.filter(a => (a.role === 'Colaborador' || a.role === 'Co-líder') && ['Closer', 'Co-líder'].includes(a.sector));
                 }
 
                 const selectedEvent = events.find(e => e.id === formData.eventId);

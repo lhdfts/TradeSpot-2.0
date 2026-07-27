@@ -5,7 +5,7 @@ import { CustomSelect } from './CustomSelect';
 import { Button } from './ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
-import type { Event, Attendant } from '../types';
+import type { Event, Attendant, UnnichatConnection } from '../types';
 import { api } from '../services/api';
 
 import { useAuth } from '../context/AuthContext';
@@ -37,12 +37,21 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
 
     const [attendants, setAttendants] = useState<Attendant[]>([]);
     const [allowedAttendants, setAllowedAttendants] = useState<string[]>([]);
+    const [connections, setConnections] = useState<UnnichatConnection[]>([]);
     const [loadingAttendants, setLoadingAttendants] = useState(false);
     const [saving, setSaving] = useState(false);
 
     const isSuperUser = user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.sector === 'TEI';
     const isSuporte = user?.sector === 'Suporte';
     const canEditSector = isSuperUser || isSuporte;
+
+    useEffect(() => {
+        if (isOpen) {
+            api.unnichatConnections.list().then(data => {
+                setConnections(data || []);
+            }).catch(err => console.error('Failed to fetch connections for modal:', err));
+        }
+    }, [isOpen]);
 
     useEffect(() => {
         if (event) {
@@ -54,7 +63,9 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                 event_name: '',
                 status: true,
                 sector: initialSector,
-                duration_minutes: 60
+                duration_minutes: 60,
+                end_date: '',
+                unnichat_url: ''
             });
             setAttendants([]);
             setAllowedAttendants([]);
@@ -240,6 +251,27 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                             options={[
                                 { value: '30', label: '30 minutos' },
                                 { value: '60', label: '60 minutos' }
+                            ]}
+                        />
+
+                        <Input
+                            label="Data de Encerramento (opcional)"
+                            type="date"
+                            value={formData.end_date || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, end_date: e.target.value })}
+                            className="text-foreground"
+                        />
+
+                        <Select
+                            label="Conexão Unnichat"
+                            value={formData.unnichat_url || ''}
+                            onChange={(e: any) => setFormData({ ...formData, unnichat_url: e.target.value })}
+                            options={[
+                                { value: '', label: 'Selecione uma conexão (ou nenhuma)' },
+                                ...connections.map(conn => ({
+                                    value: conn.unnichat_url,
+                                    label: `${conn.name}${conn.sector ? ` (${conn.sector})` : ''}`
+                                }))
                             ]}
                         />
 

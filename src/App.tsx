@@ -7,7 +7,10 @@ import { AllAppointments } from './views/AllAppointments';
 import { Metrics } from './views/Metrics';
 import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
+import { UnnichatConnections } from './views/UnnichatConnections';
 import { CeoScheduler } from './views/CeoScheduler';
+import { Profile } from './views/Profile';
+import { Logs } from './views/Logs';
 import { Login } from './views/Login';
 import { SelfScheduling } from './views/public/SelfScheduling';
 import { NotFound } from './views/public/NotFound';
@@ -118,6 +121,9 @@ const InternalLayout: React.FC = () => {
                 {currentView === '/attendants' && 'Gerenciar Atendentes'}
                 {currentView === '/events' && 'Gerenciar Eventos'}
                 {currentView === '/ceo-scheduler' && 'Configurações CEO'}
+                {currentView === '/profile' && 'Perfil'}
+                {currentView === '/unnichat-connections' && 'Conexões Unnichat'}
+                {currentView === '/logs' && 'Logs'}
               </h1>
               <div className="flex items-center gap-4">
                 <div id="header-actions" style={{ display: 'flex', alignItems: 'center' }}></div>
@@ -143,6 +149,7 @@ const InternalLayout: React.FC = () => {
                 <Route path="/my-appointments" element={<Navigate to="/" replace />} />
                 <Route path="/create-appointment" element={<CreateAppointmentWrapper onSuccess={handleSuccess} />} />
                 <Route path="/all-appointments" element={<AllAppointments onEdit={handleEdit} />} />
+                <Route path="/profile" element={<Profile />} />
               </Route>
 
               {/* Metrics - Admin, Líder, Co-líder */}
@@ -157,6 +164,16 @@ const InternalLayout: React.FC = () => {
 
               <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-líder', 'Qualidade', 'Colaborador']} />}>
                 <Route path="/events" element={<Events />} />
+              </Route>
+
+              {/* Conexões Unnichat - Admin, Dev, Líder */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev', 'Líder']} />}>
+                <Route path="/unnichat-connections" element={<UnnichatConnections />} />
+              </Route>
+
+              {/* Logs de Execução / Distribuição - Admin, Dev */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev']} />}>
+                <Route path="/logs" element={<Logs />} />
               </Route>
 
               {/* CEO Only Management */}

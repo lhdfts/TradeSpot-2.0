@@ -22,6 +22,15 @@ export interface Event {
     sector?: string;
     self_scheduling_link?: string;
     duration_minutes?: number;
+    unnichat_url?: string;
+}
+
+export interface UnnichatConnection {
+    id: string | number;
+    name: string;
+    unnichat_url: string;
+    sector?: string;
+    created_at?: string;
 }
 
 export interface Attendant {

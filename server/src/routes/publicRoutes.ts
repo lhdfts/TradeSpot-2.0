@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
-import { getAppointmentWebhooks } from '../config/webhooks.js';
+import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
+import { getAppointmentWebhooks, getGlobalAppointmentWebhook } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 import { supabase } from '../utils/supabaseClient.js';
 
@@ -181,19 +181,14 @@ router.get('/available-times', async (req: Request, res: Response) => {
 
         console.log('[AVAILABLE-TIMES] Using sectors:', sectors, '| Type:', APPOINTMENT_TYPE);
 
-        // 1. Fetch Attendants based on sector
-        let attendantsQuery = supabase.from('user').select('*');
+        // 1. Fetch Attendants based on sector (excluding Líder role)
+        let attendantsQuery = supabase.from('user').select('*').neq('role', 'Líder');
         
-        if (attendantId && typeof attendantId === 'string') {
-            // If specific attendant ID is provided, fetch that attendant regardless of sector
-            attendantsQuery = attendantsQuery.eq('id', attendantId);
-        } else {
-            // Otherwise, fetch by sectors
-            attendantsQuery = attendantsQuery.in('sector', sectors);
-            // SDR events: Colaborador and Co-líder roles
-            if (sectors.includes('SDR')) {
-                attendantsQuery = attendantsQuery.in('role', ['Colaborador', 'Co-líder']);
-            }
+        // Always fetch by sectors, ignoring any attendantId from public links to enforce automatic distribution
+        attendantsQuery = attendantsQuery.in('sector', sectors);
+        // SDR events: Colaborador and Co-líder roles
+        if (sectors.includes('SDR')) {
+            attendantsQuery = attendantsQuery.in('role', ['Colaborador', 'Co-líder']);
         }
         
         const { data: attendants, error: attError } = await attendantsQuery;
@@ -500,33 +495,12 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         // 4. Distribution Logic
-        let finalAttendantId = req.body.attendantId; // Pega o ID enviado pelo link
-
-        // Validação extra: se um ID foi enviado, verificar se o atendente é um Closer
-        if (finalAttendantId && finalAttendantId !== 'distribuicao_automatica') {
-            const { data: attendantData } = await supabase
-                .from('user')
-                .select('*') // Buscar tudo para ter schedule e pauses
-                .eq('id', finalAttendantId)
-                .single();
-
-            // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI/CEO), resetamos
-            const allowedSectors = ['Closer', 'Líder', 'Co-líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia', 'SDR'];
-            const isValidSector = attendantData && allowedSectors.includes(attendantData.sector);
-            if (!attendantData || !isValidSector) {
-                finalAttendantId = 'distribuicao_automatica';
-            } else {
-                // VALIDAR ESCALA
-                if (!isAttendantWithinSchedule(attendantData, data.date, data.time, APPOINTMENT_TYPE, durationMinutes)) {
-                    return res.status(409).json({ error: 'O atendente selecionado não está disponível neste horário.' });
-                }
-            }
-        }
-
-        // Se não houver ID ou se for explicitamente para distribuição automática
-        if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            finalAttendantId = await findBestAttendant(data.date, data.time, APPOINTMENT_TYPE, eventId);
-        }
+        // Força distribuição automática, ignorando qualquer attendantId enviado
+        let distributionChecksLog: CheckLogItem[] | null = null;
+        
+        const resDist = await findBestAttendantWithLogs(data.date, data.time, APPOINTMENT_TYPE, eventId, { durationMinutes });
+        let finalAttendantId = resDist.attendantId;
+        distributionChecksLog = resDist.checksLog;
 
         if (!finalAttendantId) {
             return res.status(409).json({
@@ -594,15 +568,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
         const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
 
         // Dynamic created_by Attribution
-        const senderId = req.body.attendantId;
+        // Always assign system user for public links
         let validatedSenderId = 'a6127506-db64-4ac9-ba09-7eac663b0b31'; // Default system user
-
-        if (senderId && senderId !== 'distribuicao_automatica') {
-            const { data: userExists } = await supabase.from('user').select('id').eq('id', senderId).maybeSingle();
-            if (userExists) {
-                validatedSenderId = senderId;
-            }
-        }
 
         // Get Event ID from Link (we expect the link to be passed or we need the ID)
         // Actually, the Frontend should probably pass the Event ID explicitly if it has it, 
@@ -687,45 +654,65 @@ router.post('/appointments', async (req: Request, res: Response) => {
             return res.status(500).json({ error: 'Erro ao salvar agendamento' });
         }
 
+        if (distributionChecksLog && finalAttendantId && createdAppointment && clientId) {
+            const { data: selectedUser } = await supabase.from('user').select('name').eq('id', finalAttendantId).maybeSingle();
+            const attName = selectedUser?.name || 'Atendente Selecionado';
+            supabase.from('execution_logs').insert({
+                client_id: clientId,
+                execution_type: 'Distribuição Automática',
+                selected_attendant_id: finalAttendantId,
+                selected_attendant_name: attName,
+                appointment_id: createdAppointment.id,
+                checks_log: distributionChecksLog
+            }).then(({ error: logErr }) => {
+                if (logErr) console.error('[EXECUTION LOGS] Error inserting log in publicRoutes:', logErr);
+            });
+        }
+
         // 7. Webhook Trigger
-        const webhookUrl = getAppointmentWebhooks()[APPOINTMENT_TYPE];
-        if (webhookUrl) {
-            // Fetch names for webhook
-            let attendantName = '';
-            let creatorName = 'Sistema (Link Público)';
+        // Fetch names and sectors for webhooks
+        let attendantName = '';
+        let attendantSector = '';
+        let creatorName = 'Sistema (Link Público)';
 
-            const idsToFetch = [finalAttendantId, validatedSenderId].filter(Boolean) as string[];
-            if (idsToFetch.length > 0) {
-                const { data: users } = await supabase.from('user').select('id, name').in('id', idsToFetch);
-                if (users) {
-                    const att = users.find(u => u.id === finalAttendantId);
-                    if (att) attendantName = att.name;
+        const idsToFetch = [finalAttendantId, validatedSenderId].filter(Boolean) as string[];
+        if (idsToFetch.length > 0) {
+            const { data: users } = await supabase.from('user').select('id, name, sector').in('id', idsToFetch);
+            if (users) {
+                const att = users.find(u => u.id === finalAttendantId);
+                if (att) {
+                    attendantName = att.name;
+                    attendantSector = att.sector || '';
+                }
 
-                    const creator = users.find(u => u.id === validatedSenderId);
-                    if (creator) {
-                        creatorName = (validatedSenderId === 'a6127506-db64-4ac9-ba09-7eac663b0b31')
-                            ? 'Sistema (Link Público)'
-                            : creator.name || 'Sistema (Link Público)';
-                    }
+                const creator = users.find(u => u.id === validatedSenderId);
+                if (creator) {
+                    creatorName = (validatedSenderId === 'a6127506-db64-4ac9-ba09-7eac663b0b31')
+                        ? 'Sistema (Link Público)'
+                        : creator.name || 'Sistema (Link Público)';
                 }
             }
+        }
 
-            const webhookPayload = {
-                ...createdAppointment,
-                lead: clientPayload.name,
-                phone: clientPayload.phone,
-                email: clientPayload.email,
-                student_profile: {
-                    interest: 'Desconhecido',
-                    knowledge: 'Iniciante',
-                    financial: { currency: 'BRL', amount: 0 }
-                },
-                attendant_name: attendantName,
-                event_name: eventData.event_name,
-                event_sector: eventData.sector,
-                created_by_name: creatorName
-            };
+        const webhookPayload = {
+            ...createdAppointment,
+            lead: clientPayload.name,
+            phone: clientPayload.phone,
+            email: clientPayload.email,
+            student_profile: {
+                interest: 'Desconhecido',
+                knowledge: 'Iniciante',
+                financial: { currency: 'BRL', amount: 0 }
+            },
+            attendant_name: attendantName,
+            attendant_sector: attendantSector || eventData.sector || '',
+            event_name: eventData.event_name,
+            event_sector: eventData.sector,
+            created_by_name: creatorName
+        };
 
+        const webhookUrl = getAppointmentWebhooks()[APPOINTMENT_TYPE];
+        if (webhookUrl) {
             console.log(`[Webhook Debug] Disparando webhook para tipo: ${APPOINTMENT_TYPE}`);
             console.log(`[Webhook Debug] URL resolvida: ${webhookUrl}`);
             
@@ -739,6 +726,18 @@ router.post('/appointments', async (req: Request, res: Response) => {
             }
         } else {
             console.warn(`[Webhook Debug] Nenhuma URL configurada para o tipo: ${APPOINTMENT_TYPE}`);
+        }
+
+        // Global / Unified Webhook Trigger (Todos os agendamentos criados)
+        const globalWebhookUrl = getGlobalAppointmentWebhook();
+        if (globalWebhookUrl) {
+            console.log(`[Webhook Debug] Disparando webhook global unificado: ${globalWebhookUrl}`);
+            try {
+                await axios.post(globalWebhookUrl, webhookPayload);
+                console.log(`[Webhook Debug] Webhook global disparado com sucesso`);
+            } catch (err: any) {
+                console.error(`[Webhook Debug] Falha no disparo do webhook global (${globalWebhookUrl}):`, err.message);
+            }
         }
 
         res.status(201).json({ message: 'Agendamento realizado com sucesso!', id: createdAppointment.id });

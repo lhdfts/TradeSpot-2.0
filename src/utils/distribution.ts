@@ -214,53 +214,105 @@ export const hasSectorTimeLimit = (
     return concurrentCount >= 2;
 };
 
-export const findAvailableCloser = (
+export interface CheckLogItem {
+    name: string;
+    reason: string;
+    selected?: boolean;
+}
+
+export const findAvailableCloserWithLogs = (
     dateStr: string,
     timeStr: string,
     appointmentType: string,
     attendants: Attendant[],
     allAppointments: Appointment[],
     options: { ignoreSchedule?: boolean, sectorLimit?: string, durationMinutes?: number } = {}
-): Attendant | null => {
+): { attendant: Attendant | null, checksLog: CheckLogItem[] } => {
+    const checksLog: CheckLogItem[] = [];
     if (options.sectorLimit && hasSectorTimeLimit(options.sectorLimit, dateStr, timeStr, appointmentType, allAppointments, attendants)) {
-        return null;
+        for (const att of attendants) {
+            checksLog.push({ name: att.name, reason: "Limite diário de agendamentos do setor atingido" });
+        }
+        return { attendant: null, checksLog };
     }
 
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento'].includes(appointmentType);
-    const eligibleAttendants =
+    const eligibleAttendants = (
         appointmentType === 'Ligação Equipe Aldeia'
             ? attendants.filter(a => a.sector === 'Aldeia')
-            : (isCloserType ? attendants.filter(a => a.sector === 'Closer') : attendants);
-    if (eligibleAttendants.length === 0) return null;
+            : (isCloserType ? attendants.filter(a => ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder') : attendants)
+    ).filter(a => a.role !== 'Líder');
+
+    if (eligibleAttendants.length === 0) return { attendant: null, checksLog };
 
     if (appointmentType === 'Fechamento') {
         const sortedAlphabetical = [...eligibleAttendants].sort((a, b) => a.name.localeCompare(b.name));
-
-        // Count existing "Fechamento" appointments to determine next position in round-robin
         const existingCount = allAppointments.filter(appt => appt.type === 'Fechamento').length;
         const startIndex = existingCount % sortedAlphabetical.length;
 
+        let selectedCandidate: Attendant | null = null;
         for (let i = 0; i < sortedAlphabetical.length; i++) {
             const candidateIdx = (startIndex + i) % sortedAlphabetical.length;
             const candidate = sortedAlphabetical[candidateIdx];
 
-            if (options.ignoreSchedule || isAttendantWithinSchedule(candidate, dateStr, timeStr, appointmentType, options.durationMinutes)) {
-                return candidate;
+            if (!selectedCandidate && (options.ignoreSchedule || isAttendantWithinSchedule(candidate, dateStr, timeStr, appointmentType, options.durationMinutes))) {
+                selectedCandidate = candidate;
+                checksLog.push({ name: candidate.name, reason: "Recebeu o agendamento (rodízio Fechamento)", selected: true });
+            } else if (!selectedCandidate) {
+                checksLog.push({ name: candidate.name, reason: "Fora da escala" });
+            } else {
+                checksLog.push({ name: candidate.name, reason: "Disponível (próximo no rodízio)" });
             }
         }
-
-        return null;
+        return { attendant: selectedCandidate, checksLog };
     }
 
-    const attendantsWithSchedule = options.ignoreSchedule
-        ? eligibleAttendants
-        : eligibleAttendants.filter(attendant =>
-            isAttendantWithinSchedule(attendant, dateStr, timeStr, appointmentType, options.durationMinutes)
-        );
+    const available: Attendant[] = [];
+    for (const a of eligibleAttendants) {
+        if (!options.ignoreSchedule) {
+            const within = isAttendantWithinSchedule(a, dateStr, timeStr, appointmentType, options.durationMinutes);
+            if (!within) {
+                let year: number, month: number, day: number;
+                if (dateStr.includes('/')) {
+                    [day, month, year] = dateStr.split('/').map(Number);
+                } else {
+                    [year, month, day] = dateStr.split('-').map(Number);
+                }
+                const dateObj = new Date(year, month - 1, day);
+                const dayKey = DAY_MAP[dateObj.getDay()];
+                const apptStart = timeToMinutes(timeStr);
+                const duration = getDuration(appointmentType, options.durationMinutes);
+                const apptEnd = apptStart + duration;
 
-    if (attendantsWithSchedule.length === 0) return null;
+                let isPause = false;
+                if (a.pauses && a.pauses[dayKey]) {
+                    for (const pause of a.pauses[dayKey]) {
+                        const pauseStart = timeToMinutes(pause.start);
+                        let pauseEnd = timeToMinutes(pause.end);
+                        if (pauseEnd <= pauseStart && pauseEnd !== 0) pauseEnd += 1440;
+                        else if (pauseEnd === 0) pauseEnd = 1440;
 
-    const attendantsWithLoad = attendantsWithSchedule.map(attendant => {
+                        if (apptStart < pauseEnd && apptEnd > pauseStart) {
+                            isPause = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isPause) {
+                    checksLog.push({ name: a.name, reason: "Em pausa" });
+                } else {
+                    checksLog.push({ name: a.name, reason: "Fora da escala" });
+                }
+                continue;
+            }
+        }
+        available.push(a);
+    }
+
+    if (available.length === 0) return { attendant: null, checksLog };
+
+    const attendantsWithLoad = available.map(attendant => {
         const count = allAppointments.filter(appt =>
             appt.attendantId === attendant.id &&
             appt.date === dateStr &&
@@ -276,11 +328,29 @@ export const findAvailableCloser = (
         return Math.random() - 0.5;
     });
 
+    let selectedAtt: Attendant | null = null;
     for (const attendant of attendantsWithLoad) {
-        if (!hasConflictingAppointment(attendant.id, dateStr, timeStr, appointmentType, allAppointments, undefined, options.durationMinutes)) {
-            return attendant;
+        if (!selectedAtt && !hasConflictingAppointment(attendant.id, dateStr, timeStr, appointmentType, allAppointments, undefined, options.durationMinutes)) {
+            selectedAtt = attendant;
+            checksLog.push({ name: attendant.name, reason: "Recebeu o último agendamento", selected: true });
+        } else if (!selectedAtt) {
+            checksLog.push({ name: attendant.name, reason: "Já possuia agendamento para o horario escolhido" });
+        } else {
+            checksLog.push({ name: attendant.name, reason: "Disponível (menor prioridade/carga maior)" });
         }
     }
 
-    return null;
+    return { attendant: selectedAtt, checksLog };
+};
+
+export const findAvailableCloser = (
+    dateStr: string,
+    timeStr: string,
+    appointmentType: string,
+    attendants: Attendant[],
+    allAppointments: Appointment[],
+    options: { ignoreSchedule?: boolean, sectorLimit?: string, durationMinutes?: number } = {}
+): Attendant | null => {
+    const res = findAvailableCloserWithLogs(dateStr, timeStr, appointmentType, attendants, allAppointments, options);
+    return res.attendant;
 };

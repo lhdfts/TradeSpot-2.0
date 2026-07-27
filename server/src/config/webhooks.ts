@@ -14,3 +14,11 @@ export const getAppointmentWebhooks = (): Record<string, string> => ({
 export const getUpdateWebhook = (): string => {
     return process.env.APPOINTMENT_UPDATE_WEBHOOK_URL || '';
 };
+
+export const getGlobalAppointmentWebhook = (): string => {
+    return process.env.WEBHOOK_GLOBAL_APPOINTMENTS || process.env.WEBHOOK_NEW_APPOINTMENT_GLOBAL || 'https://n8n.tradestars.com.br/webhook/ace01ef3-db47-4e62-ba23-2812e5d65e11';
+};
+
+export const getSyncEventsWebhook = (): string => {
+    return process.env.WEBHOOK_SYNC_EVENTS || '';
+};

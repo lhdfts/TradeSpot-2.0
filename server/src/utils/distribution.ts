@@ -244,15 +244,27 @@ export const hasSectorTimeLimit = (
     return concurrentCount >= 2;
 };
 
-export const findBestAttendant = async (
+export interface CheckLogItem {
+    name: string;
+    reason: string;
+    selected?: boolean;
+}
+
+export interface DistributionResultWithLogs {
+    attendantId: string | null;
+    checksLog: CheckLogItem[];
+}
+
+export const findBestAttendantWithLogs = async (
     date: string,
     time: string,
     type: string,
     eventId?: string,
     options: { ignoreSchedule?: boolean, durationMinutes?: number } = {}
-): Promise<string | null> => {
+): Promise<DistributionResultWithLogs> => {
+    const checksLog: CheckLogItem[] = [];
     const durationMinutes = options.durationMinutes || 60;
-    let sectors = ['Closer'];
+    let sectors = ['Closer', 'Co-líder'];
     let roleFilters: string[] | null = null;
     let sectorLimitCheck: string | null = null;
 
@@ -269,10 +281,10 @@ export const findBestAttendant = async (
     }
 
     if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
-        roleFilters = ['Colaborador'];
+        roleFilters = ['Colaborador', 'Co-líder'];
     }
 
-    if (eventId && !isCloserType && type !== 'Ligação Equipe Aldeia') {
+    if (eventId && type !== 'Ligação Equipe Aldeia') {
         const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
         if (eventData) {
             if (eventData.sector === 'Perpétuos') {
@@ -290,14 +302,16 @@ export const findBestAttendant = async (
             } else if (eventData.sector === 'SDR') {
                 sectors = ['SDR'];
                 roleFilters = ['Colaborador', 'Co-líder'];
+            } else if (eventData.sector === 'Closer') {
+                sectors = ['Closer'];
             } else {
                 sectors = [eventData.sector];
             }
         }
     }
 
-    // 1. Fetch Attendants filtered by sector (and role if needed)
-    let attendantsQuery = supabase.from('user').select('*').in('sector', sectors);
+    // 1. Fetch Attendants filtered by sector (and role if needed, always excluding Líder)
+    let attendantsQuery = supabase.from('user').select('*').in('sector', sectors).neq('role', 'Líder');
     if (roleFilters) {
         attendantsQuery = attendantsQuery.in('role', roleFilters);
     }
@@ -305,11 +319,8 @@ export const findBestAttendant = async (
 
     if (attError || !attendants) {
         console.error("Error fetching attendants:", attError);
-        return null;
+        return { attendantId: null, checksLog: [] };
     }
-
-    // 2.5. Apply event-specific blocklist to prevent assigning blocked closers
-    const attendantsForEvent = attendants.filter(a => !isAttendantBlockedForEvent(a, eventId, type));
 
     // 2. Fetch Appointments for this day to check load/conflicts
     const { data: appointments, error: appError } = await supabase
@@ -320,21 +331,71 @@ export const findBestAttendant = async (
 
     if (appError || !appointments) {
         console.error("Error fetching appointments:", appError);
-        return null;
+        return { attendantId: null, checksLog: [] };
     }
 
-    // 3. Filter by Schedule
-    let available = attendantsForEvent;
-    if (!options.ignoreSchedule) {
-        available = attendantsForEvent.filter(a => isAttendantWithinSchedule(a, date, time, type, durationMinutes));
-    }
-    if (available.length === 0) return null;
-
-    // Sector limits check
+    // Check Sector limits before anything else
     if (sectorLimitCheck) {
         if (hasSectorTimeLimit(sectorLimitCheck, date, time, type, appointments, attendants, undefined, durationMinutes)) {
-            return null;
+            for (const att of attendants) {
+                checksLog.push({ name: att.name, reason: "Limite diário de agendamentos do setor atingido" });
+            }
+            return { attendantId: null, checksLog };
         }
+    }
+
+    const available: typeof attendants = [];
+    for (const a of attendants) {
+        if (a.role === 'Líder') {
+            checksLog.push({ name: a.name, reason: "Líderes não recebem agendamentos" });
+            continue;
+        }
+        if (isAttendantBlockedForEvent(a, eventId, type)) {
+            checksLog.push({ name: a.name, reason: "Bloqueado para este evento" });
+            continue;
+        }
+        if (!options.ignoreSchedule) {
+            const within = isAttendantWithinSchedule(a, date, time, type, durationMinutes);
+            if (!within) {
+                let year: number, month: number, day: number;
+                if (date.includes('/')) {
+                    [day, month, year] = date.split('/').map(Number);
+                } else {
+                    [year, month, day] = date.split('-').map(Number);
+                }
+                const dateObj = new Date(year, month - 1, day);
+                const dayKey = DAY_MAP[dateObj.getDay()];
+                const apptStart = timeToMinutes(time);
+                const apptEnd = apptStart + getDuration(type, durationMinutes);
+
+                let isPause = false;
+                if (a.pauses && a.pauses[dayKey]) {
+                    for (const pause of a.pauses[dayKey]) {
+                        const pauseStart = timeToMinutes(pause.start);
+                        let pauseEnd = timeToMinutes(pause.end);
+                        if (pauseEnd <= pauseStart && pauseEnd !== 0) pauseEnd += 1440;
+                        else if (pauseEnd === 0) pauseEnd = 1440;
+
+                        if (apptStart < pauseEnd && apptEnd > pauseStart) {
+                            isPause = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isPause) {
+                    checksLog.push({ name: a.name, reason: "Em pausa" });
+                } else {
+                    checksLog.push({ name: a.name, reason: "Fora da escala" });
+                }
+                continue;
+            }
+        }
+        available.push(a);
+    }
+
+    if (available.length === 0) {
+        return { attendantId: null, checksLog };
     }
 
     // 4. Calculate Load
@@ -353,12 +414,29 @@ export const findBestAttendant = async (
         return Math.random() - 0.5;
     });
 
-    // 6. Check Conflicts
+    // 6. Check Conflicts and Select
+    let selectedId: string | null = null;
     for (const attendant of withLoad) {
-        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments, undefined, durationMinutes)) {
-            return attendant.id;
+        if (!selectedId && !hasConflictingAppointment(attendant.id, date, time, type, appointments, undefined, durationMinutes)) {
+            selectedId = attendant.id;
+            checksLog.push({ name: attendant.name, reason: "Recebeu o agendamento (menor carga / rodízio)", selected: true });
+        } else if (!selectedId) {
+            checksLog.push({ name: attendant.name, reason: "Já possuia agendamento para o horario escolhido" });
+        } else {
+            checksLog.push({ name: attendant.name, reason: "Disponível (não selecionado - carga ou rodízio)" });
         }
     }
 
-    return null;
+    return { attendantId: selectedId, checksLog };
+};
+
+export const findBestAttendant = async (
+    date: string,
+    time: string,
+    type: string,
+    eventId?: string,
+    options: { ignoreSchedule?: boolean, durationMinutes?: number } = {}
+): Promise<string | null> => {
+    const res = await findBestAttendantWithLogs(date, time, type, eventId, options);
+    return res.attendantId;
 };
