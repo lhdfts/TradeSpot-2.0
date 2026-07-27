@@ -53,6 +53,24 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             return res.status(500).json({ error: 'Erro ao buscar logs de execução.' });
         }
 
+        // Fetch sectors manually
+        if (logs && logs.length > 0) {
+            const attendantIds = [...new Set(logs.map((l: any) => l.selected_attendant_id).filter(Boolean))];
+            if (attendantIds.length > 0) {
+                const { data: users } = await supabase.from('user').select('id, sector').in('id', attendantIds);
+                if (users) {
+                    const sectorMap = users.reduce((acc, u) => {
+                        acc[u.id] = u.sector;
+                        return acc;
+                    }, {} as Record<string, string>);
+                    
+                    logs.forEach((l: any) => {
+                        l.selected_attendant_sector = sectorMap[l.selected_attendant_id] || 'Não definido';
+                    });
+                }
+            }
+        }
+
         return res.json(logs || []);
     } catch (error: any) {
         console.error('[EXECUTION LOGS] Unexpected error:', error);

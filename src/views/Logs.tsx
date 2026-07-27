@@ -34,11 +34,12 @@ export interface ExecutionLog {
     execution_type: string;
     selected_attendant_id: string;
     selected_attendant_name: string;
+    selected_attendant_sector?: string;
     appointment_id?: string;
     checks_log: CheckLogItem[];
     client?: {
         name: string;
-        phone: string;
+        phone: string | number;
     } | null;
 }
 
@@ -150,15 +151,8 @@ export const Logs: React.FC = () => {
     };
 
     const formatPhone = (phone?: string | null | number) => {
-        if (!phone || typeof phone !== 'string') return 'Não informado';
-        const cleaned = phone.replace(/\D/g, '');
-        if (cleaned.length === 11) {
-            return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
-        }
-        if (cleaned.length === 10) {
-            return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
-        }
-        return phone;
+        if (!phone) return 'Não informado';
+        return String(phone);
     };
 
     const getReasonBadge = (reason: string, selected?: boolean) => {
@@ -250,6 +244,7 @@ export const Logs: React.FC = () => {
                             <th className="px-6 py-4">Data/Hora</th>
                             <th className="px-6 py-4">Aluno / Telefone</th>
                             <th className="px-6 py-4">Tipo de Execução</th>
+                            <th className="px-6 py-4">Setor</th>
                             <th className="px-6 py-4">Atendente Selecionado</th>
                             <th className="px-6 py-4 text-right">Detalhes</th>
                         </tr>
@@ -257,19 +252,19 @@ export const Logs: React.FC = () => {
                     <tbody className="divide-y divide-border">
                         {loading ? (
                             <tr>
-                                <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                                <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                                     Carregando logs de execução...
                                 </td>
                             </tr>
                         ) : error ? (
                             <tr>
-                                <td colSpan={5} className="px-6 py-8 text-center text-destructive">
+                                <td colSpan={6} className="px-6 py-8 text-center text-destructive">
                                     {error}
                                 </td>
                             </tr>
                         ) : filteredLogs.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                                <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                                     {searchTerm || dateFilter || executionTypeFilter !== 'all'
                                         ? 'Nenhum registro corresponde aos filtros selecionados.'
                                         : 'Nenhum log encontrado.'}
@@ -324,6 +319,12 @@ export const Logs: React.FC = () => {
                                                 </span>
                                             </td>
 
+                                            <td className="px-6 py-4 text-foreground whitespace-nowrap">
+                                                <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-secondary/10 text-secondary border border-secondary/20">
+                                                    {log.selected_attendant_sector || 'Não definido'}
+                                                </span>
+                                            </td>
+
                                             <td className="px-6 py-4 text-foreground font-medium whitespace-nowrap">
                                                 <div className="flex items-center gap-2">
                                                     <UserCheck size={16} className="text-emerald-500 shrink-0" />
@@ -355,7 +356,7 @@ export const Logs: React.FC = () => {
                                         {/* Sanfona (Accordion) de Verificações */}
                                         {isExpanded && (
                                             <tr className="bg-background/30 border-b border-border">
-                                                <td colSpan={5} className="px-6 py-4 animate-in slide-in-from-top-2 duration-200">
+                                                <td colSpan={6} className="px-6 py-4 animate-in slide-in-from-top-2 duration-200">
                                                     <div className="bg-surface rounded-lg p-4 sm:p-5 border border-border shadow-inner space-y-3">
                                                         <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
                                                             <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
