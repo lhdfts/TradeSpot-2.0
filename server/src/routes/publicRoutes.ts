@@ -184,16 +184,11 @@ router.get('/available-times', async (req: Request, res: Response) => {
         // 1. Fetch Attendants based on sector (excluding Líder role)
         let attendantsQuery = supabase.from('user').select('*').neq('role', 'Líder');
         
-        if (attendantId && typeof attendantId === 'string') {
-            // If specific attendant ID is provided, fetch that attendant regardless of sector
-            attendantsQuery = attendantsQuery.eq('id', attendantId);
-        } else {
-            // Otherwise, fetch by sectors
-            attendantsQuery = attendantsQuery.in('sector', sectors);
-            // SDR events: Colaborador and Co-líder roles
-            if (sectors.includes('SDR')) {
-                attendantsQuery = attendantsQuery.in('role', ['Colaborador', 'Co-líder']);
-            }
+        // Always fetch by sectors, ignoring any attendantId from public links to enforce automatic distribution
+        attendantsQuery = attendantsQuery.in('sector', sectors);
+        // SDR events: Colaborador and Co-líder roles
+        if (sectors.includes('SDR')) {
+            attendantsQuery = attendantsQuery.in('role', ['Colaborador', 'Co-líder']);
         }
         
         const { data: attendants, error: attError } = await attendantsQuery;
@@ -500,36 +495,12 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         // 4. Distribution Logic
-        let finalAttendantId = req.body.attendantId; // Pega o ID enviado pelo link
-
-        // Validação extra: se um ID foi enviado, verificar se o atendente é um Closer
-        if (finalAttendantId && finalAttendantId !== 'distribuicao_automatica') {
-            const { data: attendantData } = await supabase
-                .from('user')
-                .select('*') // Buscar tudo para ter schedule e pauses
-                .eq('id', finalAttendantId)
-                .single();
-
-            // Se o atendente não existir ou não for do setor Closer (ou Perpétuos/TEI/CEO), resetamos
-            const allowedSectors = ['Closer', 'Co-líder', 'Perpétuos', 'TEI', 'CEO', 'Tribo', 'Aldeia', 'SDR'];
-            const isValidSector = attendantData && allowedSectors.includes(attendantData.sector) && attendantData.role !== 'Líder';
-            if (!attendantData || !isValidSector) {
-                finalAttendantId = 'distribuicao_automatica';
-            } else {
-                // VALIDAR ESCALA
-                if (!isAttendantWithinSchedule(attendantData, data.date, data.time, APPOINTMENT_TYPE, durationMinutes)) {
-                    return res.status(409).json({ error: 'O atendente selecionado não está disponível neste horário.' });
-                }
-            }
-        }
-
-        // Se não houver ID ou se for explicitamente para distribuição automática
+        // Força distribuição automática, ignorando qualquer attendantId enviado
         let distributionChecksLog: CheckLogItem[] | null = null;
-        if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            const resDist = await findBestAttendantWithLogs(data.date, data.time, APPOINTMENT_TYPE, eventId);
-            finalAttendantId = resDist.attendantId;
-            distributionChecksLog = resDist.checksLog;
-        }
+        
+        const resDist = await findBestAttendantWithLogs(data.date, data.time, APPOINTMENT_TYPE, eventId);
+        let finalAttendantId = resDist.attendantId;
+        distributionChecksLog = resDist.checksLog;
 
         if (!finalAttendantId) {
             return res.status(409).json({
@@ -597,15 +568,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
         const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
 
         // Dynamic created_by Attribution
-        const senderId = req.body.attendantId;
+        // Always assign system user for public links
         let validatedSenderId = 'a6127506-db64-4ac9-ba09-7eac663b0b31'; // Default system user
-
-        if (senderId && senderId !== 'distribuicao_automatica') {
-            const { data: userExists } = await supabase.from('user').select('id').eq('id', senderId).maybeSingle();
-            if (userExists) {
-                validatedSenderId = senderId;
-            }
-        }
 
         // Get Event ID from Link (we expect the link to be passed or we need the ID)
         // Actually, the Frontend should probably pass the Event ID explicitly if it has it, 

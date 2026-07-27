@@ -69,9 +69,8 @@ export const SelfScheduling = () => {
 
             setLoadingTimes(true);
             try {
-                const attendantId = searchParams.get('attendantId') || '';
                 const eventIdParam = event ? `&eventId=${event.id}` : '';
-                const response = await fetch(`/api/public/available-times?date=${formData.date}&attendantId=${attendantId}${eventIdParam}`);
+                const response = await fetch(`/api/public/available-times?date=${formData.date}${eventIdParam}`);
                 if (!response.ok) {
                     throw new Error('Erro ao buscar horários');
                 }
@@ -127,8 +126,6 @@ export const SelfScheduling = () => {
 
         setSubmitting(true);
 
-        const attendantId = searchParams.get('attendantId');
-
         try {
             const response = await fetch('/api/public/appointments', {
                 method: 'POST',
@@ -142,7 +139,7 @@ export const SelfScheduling = () => {
                     date: formData.date,
                     time: formData.time,
                     eventId: event.id,
-                    attendantId: attendantId || 'distribuicao_automatica'
+                    attendantId: 'distribuicao_automatica'
                 })
             });
 

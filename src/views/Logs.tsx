@@ -2,17 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { getAuthHeaders } from '../lib/firebase';
-import { 
-    ChevronDown, 
-    ChevronUp, 
-    CheckCircle2, 
-    XCircle, 
-    AlertCircle, 
-    Coffee, 
-    Clock, 
-    UserCheck, 
-    Phone, 
-    ShieldAlert, 
+import {
+    ChevronDown,
+    ChevronUp,
+    CheckCircle2,
+    XCircle,
+    AlertCircle,
+    Coffee,
+    Clock,
+    UserCheck,
+    Phone,
+    ShieldAlert,
     Calendar,
     RefreshCw
 } from 'lucide-react';
@@ -217,7 +217,7 @@ export const Logs: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="w-72">
                         <FloatingInput
-                            label="Pesquisar por aluno, telefone ou atendente"
+                            label="Pesquisar"
                             value={searchTerm}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                         />
@@ -280,7 +280,7 @@ export const Logs: React.FC = () => {
                                 const isExpanded = expandedRowId === log.id;
                                 return (
                                     <React.Fragment key={log.id}>
-                                        <tr 
+                                        <tr
                                             onClick={() => toggleRow(log.id)}
                                             className={cn(
                                                 "hover:bg-background/50 transition-colors cursor-pointer select-none",
@@ -327,8 +327,8 @@ export const Logs: React.FC = () => {
                                                     }}
                                                     className={cn(
                                                         "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200",
-                                                        isExpanded 
-                                                            ? "bg-primary text-primary-foreground border-primary" 
+                                                        isExpanded
+                                                            ? "bg-primary text-primary-foreground border-primary"
                                                             : "bg-background/50 text-foreground hover:bg-background border-border/80"
                                                     )}
                                                 >
@@ -368,8 +368,8 @@ export const Logs: React.FC = () => {
                                                                             key={index}
                                                                             className={cn(
                                                                                 "flex items-center justify-between p-3 rounded-lg border text-sm transition-all",
-                                                                                isSelected 
-                                                                                    ? "bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-500/5" 
+                                                                                isSelected
+                                                                                    ? "bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-500/5"
                                                                                     : "bg-background/50 border-border/80 hover:bg-background"
                                                                             )}
                                                                         >
