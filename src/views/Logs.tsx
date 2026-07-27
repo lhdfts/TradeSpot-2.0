@@ -149,8 +149,8 @@ export const Logs: React.FC = () => {
         }
     };
 
-    const formatPhone = (phone?: string) => {
-        if (!phone) return 'Não informado';
+    const formatPhone = (phone?: string | null | number) => {
+        if (!phone || typeof phone !== 'string') return 'Não informado';
         const cleaned = phone.replace(/\D/g, '');
         if (cleaned.length === 11) {
             return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
@@ -278,6 +278,20 @@ export const Logs: React.FC = () => {
                         ) : (
                             filteredLogs.map(log => {
                                 const isExpanded = expandedRowId === log.id;
+                                
+                                // Safely handle checks_log if it was stored as a string or null
+                                let safeChecksLog: CheckLogItem[] = [];
+                                if (Array.isArray(log.checks_log)) {
+                                    safeChecksLog = log.checks_log;
+                                } else if (typeof log.checks_log === 'string') {
+                                    try {
+                                        safeChecksLog = JSON.parse(log.checks_log);
+                                        if (!Array.isArray(safeChecksLog)) safeChecksLog = [];
+                                    } catch {
+                                        safeChecksLog = [];
+                                    }
+                                }
+
                                 return (
                                     <React.Fragment key={log.id}>
                                         <tr
@@ -347,7 +361,7 @@ export const Logs: React.FC = () => {
                                                             <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                                                 <span>Verificações Feitas no Algoritmo para Esta Distribuição</span>
                                                                 <span className="px-2 py-0.5 rounded-full bg-background text-foreground font-normal border border-border/60">
-                                                                    {(log.checks_log || []).length} atendentes analisados
+                                                                    {safeChecksLog.length} atendentes analisados
                                                                 </span>
                                                             </h4>
                                                             <span className="text-xs text-muted-foreground font-mono">
@@ -355,13 +369,13 @@ export const Logs: React.FC = () => {
                                                             </span>
                                                         </div>
 
-                                                        {(!log.checks_log || log.checks_log.length === 0) ? (
+                                                        {safeChecksLog.length === 0 ? (
                                                             <p className="text-xs text-muted-foreground italic py-2">
                                                                 Nenhum detalhe de verificação foi gravado para esta execução.
                                                             </p>
                                                         ) : (
                                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-                                                                {log.checks_log.map((check, index) => {
+                                                                {safeChecksLog.map((check, index) => {
                                                                     const isSelected = check.selected || check.name === log.selected_attendant_name;
                                                                     return (
                                                                         <div
