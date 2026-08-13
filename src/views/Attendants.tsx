@@ -8,7 +8,7 @@ import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingInput } from '../components/FloatingInput';
 
 import { useAuth } from '../context/AuthContext';
-import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
 
 export const Attendants: React.FC = () => {
     const { user } = useAuth();
@@ -26,7 +26,7 @@ export const Attendants: React.FC = () => {
             const data = await api.attendants.list();
             const allowedSectors = getAllowedSectors(user);
 
-            if (canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev') {
+            if (canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || isDualLeader(user)) {
                 setAttendants(data.filter(a => allowedSectors.includes(a.sector)));
             } else if (user?.sector) {
                 setAttendants(data.filter(a => a.sector === user.sector));
@@ -95,7 +95,7 @@ export const Attendants: React.FC = () => {
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    {(canViewAllSectors(user) || isMedinaUser(user)) && (
+                    {(canViewAllSectors(user) || isMedinaUser(user) || isDualLeader(user)) && (
                         <FloatingSelect
                             label="Setor"
                             value={sectorFilter}

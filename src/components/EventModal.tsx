@@ -229,7 +229,8 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                                 { value: 'CEO', label: 'CEO' },
                                 { value: 'SDR', label: 'SDR' },
                                 { value: 'Tribo', label: 'Tribo' },
-                                { value: 'Social Seller', label: 'Social Seller' }
+                                { value: 'Social Seller', label: 'Social Seller' },
+                                { value: 'Presencial', label: 'Presencial' }
                             ]}
                             disabled={!canEditSector}
                         />

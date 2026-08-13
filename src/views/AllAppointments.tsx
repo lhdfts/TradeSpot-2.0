@@ -13,7 +13,7 @@ import { FloatingSelect } from '../components/FloatingSelect';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { CalendarView } from '../components/CalendarView';
 import { toastManager } from '../components/ui/toast';
-import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
+import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
 
 interface AllAppointmentsProps {
     onEdit: (appt: Appointment) => void;
@@ -272,7 +272,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         ]}
                     />
 
-                    {(canViewAllSectors(user) || isMedinaUser(user)) && (
+                    {(canViewAllSectors(user) || isMedinaUser(user) || isDualLeader(user)) && (
                         <FloatingSelect
                             label="Setor"
                             value={sectorFilter}

@@ -51,11 +51,17 @@ export const isMedinaUser = (user: { email?: string; id?: string } | null | unde
     return user.email === 'medina@tradestars.com.br' || user.id === '216557f7-03be-447c-ab6a-094460504da1';
 };
 
+export const isDualLeader = (user: { id?: string } | null | undefined) => {
+    if (!user) return false;
+    return user.id === 'ac060268-4e06-4afb-8689-7ea71c6fad1f';
+};
+
 export const getAllowedSectors = (user: { email?: string; sector?: string; id?: string; role?: string } | null | undefined) => {
     if (!user) return [];
-    if (user.sector === 'Suporte') return ['Aldeia', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller'];
-    if (canViewAllSectors(user)) return ['Aldeia', 'Closer', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller'];
+    if (user.sector === 'Suporte') return ['Aldeia', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller', 'Presencial'];
+    if (canViewAllSectors(user)) return ['Aldeia', 'Closer', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller', 'Presencial'];
     if (isMedinaUser(user)) return ['SDR', 'Aldeia', 'Tribo'];
+    if (isDualLeader(user)) return ['Perpétuos', 'Presencial'];
     return user.sector ? [user.sector] : [];
 };
 
