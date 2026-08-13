@@ -23,7 +23,8 @@ const SECTOR_OPTIONS = [
     { value: 'CEO', label: 'CEO' },
     { value: 'SDR', label: 'SDR' },
     { value: 'Tribo', label: 'Tribo' },
-    { value: 'Social Seller', label: 'Social Seller' }
+    { value: 'Social Seller', label: 'Social Seller' },
+    { value: 'Presencial', label: 'Presencial' }
 ];
 
 interface UnnichatConnectionModalProps {

@@ -11,7 +11,7 @@ import { EventModal } from '../components/EventModal';
 import { ExportIcon } from '../components/ExportIcon';
 
 import { useAuth } from '../context/AuthContext';
-import { canViewAllSectors, isMedinaUser, getAllowedSectors, escapeCsvValue } from '../utils/security';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors, escapeCsvValue, isDualLeader } from '../utils/security';
 
 export const Events: React.FC = () => {
     const navigate = useNavigate();
@@ -158,7 +158,7 @@ export const Events: React.FC = () => {
             )}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                {(user?.sector === 'Closer' || canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev') && (
+                {(user?.sector === 'Closer' || canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || isDualLeader(user)) && (
                     <div className="flex gap-2 p-1 bg-muted/30 rounded-lg w-fit">
                         <button
                             onClick={() => setActiveTab('meus')}
@@ -183,7 +183,7 @@ export const Events: React.FC = () => {
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    {(canViewAllSectors(user) || isMedinaUser(user)) && (
+                    {(canViewAllSectors(user) || isMedinaUser(user) || isDualLeader(user)) && (
                         <FloatingSelect
                             label="Setor"
                             value={sectorFilter}

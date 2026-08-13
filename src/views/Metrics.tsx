@@ -8,7 +8,7 @@ import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
 import { Input as BaseInput } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
-import { canViewAllSectors, isMedinaUser, getAllowedSectors, escapeCsvValue } from '../utils/security';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors, escapeCsvValue, isDualLeader } from '../utils/security';
 import {
     ComposedChart,
     Bar,
@@ -62,7 +62,7 @@ export const Metrics: React.FC = () => {
 
     // --- UI STATE ---
     const { user } = useAuth();
-    const isPrivilegedUser = canViewAllSectors(user) || user?.role === 'Admin' || user?.role === 'Dev';
+    const isPrivilegedUser = canViewAllSectors(user) || user?.role === 'Admin' || user?.role === 'Dev' || isDualLeader(user);
     const [sectorFilter, setSectorFilter] = useState(() => {
         if (isPrivilegedUser) return 'all';
         return user?.sector || 'all';
@@ -108,7 +108,7 @@ export const Metrics: React.FC = () => {
     // --- DATA CALCULATION ---
     const { rankings, chartData, filteredAppointments, chartTotal } = useMemo(() => {
         const allowedSectors = getAllowedSectors(user);
-        const isGlobalViewer = canViewAllSectors(user);
+        const isGlobalViewer = canViewAllSectors(user) || isDualLeader(user);
 
         // 1. Filter Appointments by Date, Event, Type
         let filtered = appointments.filter(a => {
@@ -389,7 +389,7 @@ export const Metrics: React.FC = () => {
         } else if (displaySector === 'Social Seller') {
             allowed = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
         } else if (displaySector === 'Perpétuos') {
-            allowed = ['Gold Call', 'Fechamento'];
+            allowed = ['Gold Call', 'Fechamento', 'Agendamento Pessoal'];
         } else {
             allowed = [...allTypes];
         }
@@ -430,7 +430,7 @@ export const Metrics: React.FC = () => {
                     </div>
 
                     {/* Sector Filter */}
-                    {(canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
+                    {(canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || isDualLeader(user)) && (
                         <FloatingSelect
                             label="Setor"
                             value={sectorFilter}
