@@ -245,27 +245,7 @@ export const findAvailableCloserWithLogs = (
 
     if (eligibleAttendants.length === 0) return { attendant: null, checksLog };
 
-    if (appointmentType === 'Fechamento') {
-        const sortedAlphabetical = [...eligibleAttendants].sort((a, b) => a.name.localeCompare(b.name));
-        const existingCount = allAppointments.filter(appt => appt.type === 'Fechamento').length;
-        const startIndex = existingCount % sortedAlphabetical.length;
 
-        let selectedCandidate: Attendant | null = null;
-        for (let i = 0; i < sortedAlphabetical.length; i++) {
-            const candidateIdx = (startIndex + i) % sortedAlphabetical.length;
-            const candidate = sortedAlphabetical[candidateIdx];
-
-            if (!selectedCandidate && (options.ignoreSchedule || isAttendantWithinSchedule(candidate, dateStr, timeStr, appointmentType, options.durationMinutes))) {
-                selectedCandidate = candidate;
-                checksLog.push({ name: candidate.name, reason: "Recebeu o agendamento (rodízio Fechamento)", selected: true });
-            } else if (!selectedCandidate) {
-                checksLog.push({ name: candidate.name, reason: "Fora da escala" });
-            } else {
-                checksLog.push({ name: candidate.name, reason: "Disponível (próximo no rodízio)" });
-            }
-        }
-        return { attendant: selectedCandidate, checksLog };
-    }
 
     const available: Attendant[] = [];
     for (const a of eligibleAttendants) {

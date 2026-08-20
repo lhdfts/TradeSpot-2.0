@@ -97,7 +97,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         const selectedEvent = events.find(e => e.id === formData.eventId);
         const eventDurationMinutes = selectedEvent?.duration_minutes || 60;
         const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
-        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(formData.type);
+        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento'].includes(formData.type);
 
         const filtered = allTimes.filter(time => {
             const isEditing = !!initialData;
@@ -221,7 +221,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 'Gold Call': ['Closer', 'Co-líder', 'Perpétuos'],
                 'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
                 'Upgrade': ['Closer', 'Co-líder'],
-                'Ligação SDR': ['SDR']
+                'Ligação SDR': ['SDR'],
+                'Fechamento': ['Closer', 'Co-líder']
             };
 
             const requiredSectors = typeToSectors[formData.type];
@@ -289,7 +290,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
                     if (formData.type === 'Fora da agenda') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
-                    if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
+                    if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fechamento') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder', 'Aldeia'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia' || (a.sector === 'Aldeia' && a.role === 'Co-líder');
 
@@ -308,6 +309,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             if (isAction14Dias && formData.type === 'Ligação Closer') {
                 return options;
             }
+            return options.filter(opt => opt.value === 'distribuicao_automatica');
+        }
+
+        if (!isEditing && formData.type === 'Fechamento') {
             return options.filter(opt => opt.value === 'distribuicao_automatica');
         }
 
@@ -739,7 +744,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
                 const selectedEvent = events.find(e => e.id === formData.eventId);
                 const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
-                const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(formData.type);
+                const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento'].includes(formData.type);
                 const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
 
                 const bestCloser = findAvailableCloser(
