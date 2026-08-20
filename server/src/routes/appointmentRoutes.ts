@@ -128,9 +128,13 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
 
         let query = supabase.from('user').select('id, name, email, role, sector, schedule, pauses, denied_events');
 
-        // Colaboradores only see attendants from their own sector
+        // Colaboradores only see attendants from their own sector, plus the Closer
+        // sector — most appointment types (Fechamento, Gold Call, Ligação Closer,
+        // Upgrade, etc.) are auto-distributed/fulfilled by Closers regardless of
+        // which sector books them, so hiding that sector breaks scheduling for
+        // everyone else. Email/PII stays hidden below for non-management viewers.
         if (!isManagement && !hasCrossSectorAccess) {
-            query = query.eq('sector', userSector);
+            query = query.in('sector', [userSector, 'Closer']);
         }
 
         const { data, error } = await query;
