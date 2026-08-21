@@ -102,7 +102,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
         const selectedEvent = events.find(e => e.id === formData.eventId);
         const eventDurationMinutes = selectedEvent?.duration_minutes || 60;
         const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
-        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(formData.type);
+        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento'].includes(formData.type);
 
         const filtered = allTimes.filter(time => {
             const isEditing = !!initialData;
@@ -744,7 +744,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
                 const selectedEvent = events.find(e => e.id === formData.eventId);
                 const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
-                const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(formData.type);
+                const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento'].includes(formData.type);
                 const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
 
                 const bestCloser = findAvailableCloser(
