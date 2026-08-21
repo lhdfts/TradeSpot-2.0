@@ -10,16 +10,14 @@ import {
     AlertCircle,
     Coffee,
     Clock,
-    UserCheck,
-    Phone,
     ShieldAlert,
-    Calendar,
     RefreshCw
 } from 'lucide-react';
 import { cn } from '../components/ui/button';
 import { Button } from '../components/ui/button';
 import { FloatingInput } from '../components/FloatingInput';
 import { FloatingSelect } from '../components/FloatingSelect';
+import { Pagination } from '../components/ui/pagination';
 
 export interface CheckLogItem {
     name: string;
@@ -34,14 +32,18 @@ export interface ExecutionLog {
     execution_type: string;
     selected_attendant_id: string;
     selected_attendant_name: string;
-    selected_attendant_sector?: string;
     appointment_id?: string;
     checks_log: CheckLogItem[];
+    old_value?: string | null;
+    new_value?: string | null;
+    changed_by_name?: string | null;
     client?: {
         name: string;
         phone: string | number;
     } | null;
 }
+
+const EXECUTION_TYPES = ['Distribuição Automática', 'Alteração de Status', 'Alteração de Atendente'];
 
 export const Logs: React.FC = () => {
     const { user } = useAuth();
@@ -55,6 +57,10 @@ export const Logs: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [executionTypeFilter, setExecutionTypeFilter] = useState<string>('all');
     const [dateFilter, setDateFilter] = useState<string>('');
+
+    // Paginação
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     useEffect(() => {
         setPortalContainer(document.getElementById('header-actions'));
@@ -97,6 +103,11 @@ export const Logs: React.FC = () => {
         }
     }, [user, dateFilter]);
 
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, executionTypeFilter, dateFilter]);
+
     // Verificação de permissão
     if (!user || !['Admin', 'Dev', 'Líder'].includes(user.role)) {
         return (
@@ -122,7 +133,17 @@ export const Logs: React.FC = () => {
                 const clientName = log.client?.name?.toLowerCase() || '';
                 const clientPhone = log.client?.phone ? String(log.client.phone).toLowerCase() : '';
                 const attendantName = log.selected_attendant_name?.toLowerCase() || '';
-                if (!clientName.includes(term) && !clientPhone.includes(term) && !attendantName.includes(term)) {
+                const changedBy = log.changed_by_name?.toLowerCase() || '';
+                const oldValue = log.old_value?.toLowerCase() || '';
+                const newValue = log.new_value?.toLowerCase() || '';
+                if (
+                    !clientName.includes(term) &&
+                    !clientPhone.includes(term) &&
+                    !attendantName.includes(term) &&
+                    !changedBy.includes(term) &&
+                    !oldValue.includes(term) &&
+                    !newValue.includes(term)
+                ) {
                     return false;
                 }
             }
@@ -130,29 +151,56 @@ export const Logs: React.FC = () => {
         });
     }, [logs, executionTypeFilter, searchTerm]);
 
+    // Pagination Logic
+    const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+    const paginatedLogs = filteredLogs.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
     const toggleRow = (id: string) => {
         setExpandedRowId(prev => (prev === id ? null : id));
     };
 
-    const formatDate = (isoString: string) => {
+    const formatDatePart = (isoString: string) => {
         try {
-            const date = new Date(isoString);
-            return new Intl.DateTimeFormat('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            }).format(date);
+            return new Date(isoString).toLocaleDateString('pt-BR');
         } catch {
             return isoString;
+        }
+    };
+
+    const formatTimePart = (isoString: string) => {
+        try {
+            return new Date(isoString).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } catch {
+            return '';
         }
     };
 
     const formatPhone = (phone?: string | null | number) => {
         if (!phone) return 'Não informado';
         return String(phone);
+    };
+
+    const getExecutionTypeBadge = (type: string) => {
+        const styles: Record<string, string> = {
+            'Distribuição Automática': 'bg-primary/10 text-primary border-primary/20',
+            'Alteração de Status': 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+            'Alteração de Atendente': 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20'
+        };
+        return styles[type] || 'bg-muted text-muted-foreground border-border/50';
+    };
+
+    const getActionText = (log: ExecutionLog) => {
+        switch (log.execution_type) {
+            case 'Alteração de Status':
+                return `${log.old_value || 'Não informado'} → ${log.new_value || 'Não informado'}`;
+            case 'Alteração de Atendente':
+                return `${log.old_value || 'Não informado'} → ${log.new_value || 'Não informado'}`;
+            default:
+                return `Atribuído para ${log.selected_attendant_name || 'Não informado'}`;
+        }
     };
 
     const getReasonBadge = (reason: string, selected?: boolean) => {
@@ -222,7 +270,7 @@ export const Logs: React.FC = () => {
                         onChange={(e: any) => setExecutionTypeFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos os Tipos' },
-                            { value: 'Distribuição Automática', label: 'Distribuição Automática' }
+                            ...EXECUTION_TYPES.map(type => ({ value: type, label: type }))
                         ]}
                         className="w-56"
                     />
@@ -238,120 +286,115 @@ export const Logs: React.FC = () => {
             </div>
 
             <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
-                <table className="w-full text-left">
-                    <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
-                        <tr>
-                            <th className="px-6 py-4">Data/Hora</th>
-                            <th className="px-6 py-4">Aluno / Telefone</th>
-                            <th className="px-6 py-4">Tipo de Execução</th>
-                            <th className="px-6 py-4">Setor</th>
-                            <th className="px-6 py-4">Atendente Selecionado</th>
-                            <th className="px-6 py-4 text-right">Detalhes</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                        {loading ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[900px]">
+                        <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                             <tr>
-                                <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
-                                    Carregando logs de execução...
-                                </td>
+                                <th className="px-6 py-4">Data/Hora</th>
+                                <th className="px-6 py-4">Aluno(a)</th>
+                                <th className="px-6 py-4">Tipo</th>
+                                <th className="px-6 py-4">Realizado Por</th>
+                                <th className="px-6 py-4">Ação Realizada</th>
+                                <th className="px-6 py-4 text-right">Detalhes</th>
                             </tr>
-                        ) : error ? (
-                            <tr>
-                                <td colSpan={6} className="px-6 py-8 text-center text-destructive">
-                                    {error}
-                                </td>
-                            </tr>
-                        ) : filteredLogs.length === 0 ? (
-                            <tr>
-                                <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
-                                    {searchTerm || dateFilter || executionTypeFilter !== 'all'
-                                        ? 'Nenhum registro corresponde aos filtros selecionados.'
-                                        : 'Nenhum log encontrado.'}
-                                </td>
-                            </tr>
-                        ) : (
-                            filteredLogs.map(log => {
-                                const isExpanded = expandedRowId === log.id;
-                                
-                                // Safely handle checks_log if it was stored as a string or null
-                                let safeChecksLog: CheckLogItem[] = [];
-                                if (Array.isArray(log.checks_log)) {
-                                    safeChecksLog = log.checks_log;
-                                } else if (typeof log.checks_log === 'string') {
-                                    try {
-                                        safeChecksLog = JSON.parse(log.checks_log);
-                                        if (!Array.isArray(safeChecksLog)) safeChecksLog = [];
-                                    } catch {
-                                        safeChecksLog = [];
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
+                                        Carregando logs de execução...
+                                    </td>
+                                </tr>
+                            ) : error ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-8 text-center text-destructive">
+                                        {error}
+                                    </td>
+                                </tr>
+                            ) : filteredLogs.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
+                                        {searchTerm || dateFilter || executionTypeFilter !== 'all'
+                                            ? 'Nenhum registro corresponde aos filtros selecionados.'
+                                            : 'Nenhum log encontrado.'}
+                                    </td>
+                                </tr>
+                            ) : (
+                                paginatedLogs.map(log => {
+                                    const isExpanded = expandedRowId === log.id;
+                                    const isDistribution = log.execution_type === 'Distribuição Automática';
+
+                                    // Safely handle checks_log if it was stored as a string or null
+                                    let safeChecksLog: CheckLogItem[] = [];
+                                    if (Array.isArray(log.checks_log)) {
+                                        safeChecksLog = log.checks_log;
+                                    } else if (typeof log.checks_log === 'string') {
+                                        try {
+                                            safeChecksLog = JSON.parse(log.checks_log);
+                                            if (!Array.isArray(safeChecksLog)) safeChecksLog = [];
+                                        } catch {
+                                            safeChecksLog = [];
+                                        }
                                     }
-                                }
 
-                                return (
-                                    <React.Fragment key={log.id}>
-                                        <tr
-                                            onClick={() => toggleRow(log.id)}
-                                            className={cn(
-                                                "hover:bg-background/50 transition-colors cursor-pointer select-none",
-                                                isExpanded && "bg-background/80 font-medium"
-                                            )}
-                                        >
-                                            <td className="px-6 py-4 text-foreground font-medium whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar size={14} className="text-muted-foreground shrink-0" />
-                                                    <span>{formatDate(log.created_at)}</span>
-                                                </div>
-                                            </td>
+                                    return (
+                                        <React.Fragment key={log.id}>
+                                            <tr
+                                                onClick={isDistribution ? () => toggleRow(log.id) : undefined}
+                                                className={cn(
+                                                    "transition-colors",
+                                                    isDistribution ? "hover:bg-background/50 cursor-pointer select-none" : "hover:bg-background/50",
+                                                    isExpanded && "bg-background/80 font-medium"
+                                                )}
+                                            >
+                                                <td className="px-6 py-4">
+                                                    <div className="text-foreground font-medium">{formatDatePart(log.created_at)}</div>
+                                                    <div className="text-sm text-secondary">{formatTimePart(log.created_at)}</div>
+                                                </td>
 
-                                            <td className="px-6 py-4 text-foreground font-medium">
-                                                <div className="flex flex-col">
-                                                    <span>{log.client?.name || 'Aluno Desconhecido'}</span>
-                                                    <span className="text-xs text-muted-foreground font-normal flex items-center gap-1 mt-0.5">
-                                                        <Phone size={11} />
-                                                        {formatPhone(log.client?.phone)}
+                                                <td className="px-6 py-4">
+                                                    <div className="text-foreground font-medium">{log.client?.name || 'Aluno Desconhecido'}</div>
+                                                    <div className="text-sm text-secondary">{formatPhone(log.client?.phone)}</div>
+                                                </td>
+
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={cn("px-2.5 py-1 rounded-md text-xs font-semibold border", getExecutionTypeBadge(log.execution_type))}>
+                                                        {log.execution_type}
                                                     </span>
-                                                </div>
-                                            </td>
+                                                </td>
 
-                                            <td className="px-6 py-4 text-foreground whitespace-nowrap">
-                                                <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                                                    {log.execution_type}
-                                                </span>
-                                            </td>
+                                                <td className="px-6 py-4 text-sm text-foreground whitespace-nowrap">
+                                                    {log.changed_by_name || 'Sistema'}
+                                                </td>
 
-                                            <td className="px-6 py-4 text-foreground whitespace-nowrap">
-                                                <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-secondary/10 text-secondary border border-secondary/20">
-                                                    {log.selected_attendant_sector || 'Não definido'}
-                                                </span>
-                                            </td>
+                                                <td className="px-6 py-4 text-sm text-foreground">
+                                                    {getActionText(log)}
+                                                </td>
 
-                                            <td className="px-6 py-4 text-foreground font-medium whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    <UserCheck size={16} className="text-emerald-500 shrink-0" />
-                                                    <span>{log.selected_attendant_name || 'Não informado'}</span>
-                                                </div>
-                                            </td>
-
-                                            <td className="px-6 py-4 text-right whitespace-nowrap">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        toggleRow(log.id);
-                                                    }}
-                                                    className={cn(
-                                                        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200",
-                                                        isExpanded
-                                                            ? "bg-primary text-primary-foreground border-primary"
-                                                            : "bg-background/50 text-foreground hover:bg-background border-border/80"
+                                                <td className="px-6 py-4 text-right whitespace-nowrap">
+                                                    {isDistribution ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleRow(log.id);
+                                                            }}
+                                                            className={cn(
+                                                                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200",
+                                                                isExpanded
+                                                                    ? "bg-primary text-primary-foreground border-primary"
+                                                                    : "bg-background/50 text-foreground hover:bg-background border-border/80"
+                                                            )}
+                                                        >
+                                                            <span>{isExpanded ? 'Minimizar' : 'Verificações'}</span>
+                                                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                        </Button>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">—</span>
                                                     )}
-                                                >
-                                                    <span>{isExpanded ? 'Minimizar' : 'Verificações'}</span>
-                                                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                                </Button>
-                                            </td>
-                                        </tr>
+                                                </td>
+                                            </tr>
 
                                         {/* Sanfona (Accordion) de Verificações */}
                                         {isExpanded && (
@@ -412,7 +455,17 @@ export const Logs: React.FC = () => {
                             })
                         )}
                     </tbody>
-                </table>
+                    </table>
+                </div>
+                {filteredLogs.length > 0 && totalPages > 1 && (
+                    <div className="p-4 border-t border-border">
+                        <Pagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            onPageChange={setCurrentPage}
+                        />
+                    </div>
+                )}
             </div>
         </div>
     );

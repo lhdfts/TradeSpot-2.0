@@ -1214,6 +1214,50 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
         if (updateError) return res.status(500).json({ error: 'Falha na Atualização' });
 
+        // Execution Logs: track manual status/attendant changes (fire-and-forget, mirrors distribution logging)
+        if (isStatusChanged) {
+            supabase.from('user').select('name').eq('id', updated.attendant_id).maybeSingle().then(({ data: attendantUser }) => {
+                supabase.from('execution_logs').insert({
+                    client_id: currentApp.client_id,
+                    execution_type: 'Alteração de Status',
+                    selected_attendant_id: updated.attendant_id,
+                    selected_attendant_name: attendantUser?.name || 'Não informado',
+                    appointment_id: id,
+                    old_value: currentApp.status,
+                    new_value: updates.status,
+                    changed_by_name: req.user?.name || null,
+                    checks_log: []
+                }).then(({ error: logErr }) => {
+                    if (logErr) console.error('[EXECUTION LOGS] Error inserting status-change log:', logErr);
+                });
+            });
+        }
+
+        if (isAttendantChanged) {
+            const attendantIdsToName = [currentApp.attendant_id, updates.attendantId].filter(Boolean);
+            supabase.from('user').select('id, name').in('id', attendantIdsToName).then(({ data: attendantUsers, error: usersErr }) => {
+                if (usersErr) {
+                    console.error('[EXECUTION LOGS] Error fetching attendant names for attendant-change log:', usersErr);
+                    return;
+                }
+                const oldAttendantName = attendantUsers?.find((u: any) => u.id === currentApp.attendant_id)?.name || 'Não informado';
+                const newAttendantName = attendantUsers?.find((u: any) => u.id === updates.attendantId)?.name || 'Não informado';
+                supabase.from('execution_logs').insert({
+                    client_id: currentApp.client_id,
+                    execution_type: 'Alteração de Atendente',
+                    selected_attendant_id: updates.attendantId,
+                    selected_attendant_name: newAttendantName,
+                    appointment_id: id,
+                    old_value: oldAttendantName,
+                    new_value: newAttendantName,
+                    changed_by_name: req.user?.name || null,
+                    checks_log: []
+                }).then(({ error: logErr }) => {
+                    if (logErr) console.error('[EXECUTION LOGS] Error inserting attendant-change log:', logErr);
+                });
+            });
+        }
+
         // Google Guests Sync
         if (updates.attendantId && currentApp.attendant_id !== updates.attendantId && currentApp.google_event_id && updated.status !== 'Cancelado') {
             // ... (Skipping verbose sync recreation for brevity, it's non-critical, but should preserve if possible)

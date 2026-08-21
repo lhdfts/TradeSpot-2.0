@@ -509,7 +509,13 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         // Event-specific blocklist: never assign blocked closer for this event
-        if (isAttendantBlockedForEvent(finalAttendantId, eventId)) {
+        const { data: finalAttendantData } = await supabase
+            .from('user')
+            .select('id, name, sector, schedule, pauses, denied_events')
+            .eq('id', finalAttendantId)
+            .single();
+
+        if (isAttendantBlockedForEvent(finalAttendantData, eventId, APPOINTMENT_TYPE)) {
             return res.status(409).json({
                 error: 'Este atendente está bloqueado para este evento.'
             });
