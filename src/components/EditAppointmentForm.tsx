@@ -211,7 +211,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Perpétuos') {
-            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal'].includes(t.value));
+            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer'].includes(t.value));
         }
 
         return allTypes;
