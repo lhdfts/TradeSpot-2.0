@@ -722,7 +722,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
             const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
             const closerSectors = ['Closer', 'Co-líder'];
-            if (data.type === 'Gold Call') {
+            if (data.type === 'Gold Call' || data.type === 'Ligação Closer') {
                 closerSectors.push('Perpétuos');
             }
             

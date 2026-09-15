@@ -100,6 +100,48 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         setCurrentPage(1);
     }, [search, statusFilter, attendantFilter, creatorFilter, eventFilter, sectorFilter, dateRange]);
 
+    // Events that had at least 1 appointment within the selected period (Data Inicial/Data Final),
+    // used to restrict the options shown in the "Evento" filter.
+    const eventIdsInDateRange = new Set(
+        appointments
+            .filter(a => {
+                let matchesDateForEvent;
+                if (!dateRange.start && !dateRange.end) {
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    const safeTodayStr = `${yyyy}-${mm}-${dd}`;
+                    matchesDateForEvent = a.date >= safeTodayStr;
+                } else {
+                    matchesDateForEvent =
+                        (!dateRange.start || a.date >= dateRange.start) &&
+                        (!dateRange.end || a.date <= dateRange.end);
+                }
+
+                if (!matchesDateForEvent) return false;
+
+                const linkedAttendant = attendants.find(att => att.id === a.attendantId);
+                const linkedEvent = events.find(e => e.id === a.eventId);
+                const creatorUser = attendants.find(att => att.id === a.createdBy);
+                const allowedSectors = getAllowedSectors(user);
+                const isGlobalViewer = canViewAllSectors(user);
+
+                return isGlobalViewer ||
+                    (linkedAttendant && linkedAttendant.sector && allowedSectors.includes(linkedAttendant.sector)) ||
+                    (linkedEvent && linkedEvent.sector && allowedSectors.includes(linkedEvent.sector)) ||
+                    (creatorUser && creatorUser.sector && allowedSectors.includes(creatorUser.sector)) ||
+                    (a.attendantId === user?.id) ||
+                    (a.createdBy === user?.id);
+            })
+            .map(a => a.eventId)
+    );
+
+    // Keep the currently selected event selectable even if it has no appointments in range
+    const eventOptions = events.filter(ev =>
+        ev.status === true && (eventIdsInDateRange.has(ev.id) || ev.id === eventFilter)
+    );
+
     // Filter Logic
     const filtered = appointments.filter(a => {
         const matchesSearch =
@@ -300,7 +342,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         onChange={(e: any) => setEventFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos' },
-                            ...events.filter(ev => ev.status === true).map(ev => ({ value: ev.id, label: ev.event_name }))
+                            ...eventOptions.map(ev => ({ value: ev.id, label: ev.event_name }))
                         ]}
                     />
 
