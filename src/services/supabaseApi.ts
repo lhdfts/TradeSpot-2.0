@@ -23,6 +23,23 @@ export class SupabaseApiService implements ApiService {
 
             return await response.json();
         },
+        getAvailableTimes: async (params: { date: string; type: string; eventId?: string; attendantId?: string }): Promise<string[]> => {
+            const authHeaders = await getAuthHeaders();
+            const searchParams = new URLSearchParams({ date: params.date, type: params.type });
+            if (params.eventId) searchParams.append('eventId', params.eventId);
+            if (params.attendantId) searchParams.append('attendantId', params.attendantId);
+
+            const response = await fetch(`/api/appointments/available-times?${searchParams.toString()}`, {
+                headers: authHeaders
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch available times');
+            }
+
+            const data = await response.json();
+            return data.availableTimes || [];
+        },
         create: async (data: Omit<Appointment, 'id'>): Promise<Appointment> => {
             // New Secure Flow (Spec 2.B): Send to Node.js Backend for Validation & Creation
             // Backend URL - uses local proxy or Vercel function

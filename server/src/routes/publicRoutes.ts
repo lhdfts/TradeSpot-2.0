@@ -656,6 +656,13 @@ router.post('/appointments', async (req: Request, res: Response) => {
             .single();
 
         if (appError) {
+            // DB-level guarantee (see supabase/add_no_double_booking_constraint.sql): the
+            // exclusion constraint rejects any overlapping "Pendente" appointment for the
+            // same attendant, closing the check-then-insert race the app-level checks above
+            // can't fully close on their own.
+            if (appError.code === '23P01') {
+                return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
+            }
             console.error("Supabase Write Error:", appError);
             return res.status(500).json({ error: 'Erro ao salvar agendamento' });
         }

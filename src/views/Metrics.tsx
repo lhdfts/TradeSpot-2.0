@@ -370,7 +370,7 @@ export const Metrics: React.FC = () => {
     // Get allowed types for current sector
     const getAllowedTypesForSector = () => {
         const displaySector = sectorFilter === 'all' && user?.sector ? user.sector : sectorFilter;
-        const allTypes = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento'];
+        const allTypes = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento', 'Direcionar Closer'];
         
         if (displaySector === 'all' || !displaySector) {
             return allTypes.map(t => ({ value: t, label: t }));
@@ -389,7 +389,7 @@ export const Metrics: React.FC = () => {
         } else if (displaySector === 'Social Seller') {
             allowed = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
         } else if (displaySector === 'Perpétuos') {
-            allowed = ['Gold Call', 'Fechamento', 'Agendamento Pessoal'];
+            allowed = ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Reagendamento Closer', 'Direcionar Closer'];
         } else {
             allowed = [...allTypes];
         }

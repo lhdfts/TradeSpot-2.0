@@ -2,12 +2,24 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook, getGlobalAppointmentWebhook, getSyncEventsWebhook } from '../config/webhooks.js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
+import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
 
 const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
+const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
+const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
+
+const ALL_TIME_SLOTS: string[] = (() => {
+    const slots: string[] = [];
+    for (let hour = 0; hour < 24; hour++) {
+        for (const minute of [0, 15, 30, 45]) {
+            slots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+        }
+    }
+    return slots;
+})();
 
 const router = Router();
 
@@ -111,6 +123,84 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     } catch (err: any) {
         console.error("List Appointments Error:", err);
         res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// GET /api/appointments/available-times - Live availability check for the time picker.
+// Mirrors the eligibility/schedule/conflict rules used by the create flow (src/utils/distribution.ts),
+// but against fresh Supabase data instead of the client's locally cached appointment list.
+// Response is intentionally minimal (only "HH:MM" strings) — no attendant identities or appointment details.
+router.get('/available-times', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { date, type, eventId, attendantId } = req.query as {
+            date?: string; type?: string; eventId?: string; attendantId?: string;
+        };
+
+        if (!date || typeof date !== 'string' || !type || typeof type !== 'string') {
+            return res.status(400).json({ error: 'date e type são obrigatórios.' });
+        }
+
+        // Legacy hardcoded block: this closer never receives appointments for this event.
+        if (eventId === BLOCKED_EVENT_ID && attendantId === BLOCKED_CLOSER_ID) {
+            return res.json({ availableTimes: [] });
+        }
+
+        let durationMinutes = 60;
+        let eventSector: string | null = null;
+        if (eventId) {
+            const { data: ev } = await supabase.from('events').select('duration_minutes, sector').eq('id', eventId).single();
+            if (ev?.duration_minutes) durationMinutes = ev.duration_minutes;
+            eventSector = ev?.sector || null;
+        }
+
+        const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento', 'Direcionar Closer'].includes(type);
+        const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
+
+        const [{ data: existingAppts, error: apptError }, { data: allAttendants, error: attError }] = await Promise.all([
+            supabase.from('appointments').select('id, attendant_id, date, time, end_time, type, status').eq('date', date).neq('status', 'Cancelado'),
+            supabase.from('user').select('id, name, sector, role, schedule, pauses, denied_events').neq('role', 'Líder')
+        ]);
+
+        if (apptError || attError || !allAttendants) {
+            console.error('[AVAILABLE TIMES] Error fetching data:', apptError || attError);
+            return res.status(500).json({ error: 'Erro ao buscar horários disponíveis.' });
+        }
+
+        let candidates = allAttendants;
+
+        if (attendantId && attendantId !== 'distribuicao_automatica') {
+            candidates = allAttendants.filter(a => a.id === attendantId);
+        } else {
+            if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
+                candidates = candidates.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
+            }
+
+            const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento', 'Direcionar Closer'].includes(type);
+            if (type === 'Ligação Equipe Aldeia') {
+                candidates = candidates.filter(a => a.sector === 'Aldeia');
+            } else if (isCloserType) {
+                candidates = candidates.filter(a => ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder');
+            }
+        }
+
+        const availableTimes = ALL_TIME_SLOTS.filter(time => {
+            if (isAldeiaOrTribo && type !== 'Agendamento Pessoal' &&
+                hasSectorTimeLimit(eventSector as string, date, time, type, existingAppts || [], allAttendants, undefined, durationMinutes)) {
+                return false;
+            }
+
+            return candidates.some(att =>
+                !isAttendantBlockedForEvent(att, eventId, type) &&
+                (ignoreSchedule || isAttendantWithinSchedule(att as any, date, time, type, durationMinutes)) &&
+                !hasConflictingAppointment(att.id, date, time, type, existingAppts || [], undefined, durationMinutes)
+            );
+        });
+
+        res.json({ availableTimes });
+    } catch (err: any) {
+        console.error('[AVAILABLE TIMES] Unexpected error:', err);
+        res.status(500).json({ error: 'Erro ao buscar horários disponíveis.' });
     }
 });
 
@@ -678,7 +768,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         // Agent Logic
         let distributionChecksLog: CheckLogItem[] | null = null;
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(data.type);
+            const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Direcionar Closer'].includes(data.type);
             const ignoreSched = isAldeiaOrTribo && !isCloserAppt;
             const resDist = await findBestAttendantWithLogs(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
             if (!resDist.attendantId) {
@@ -720,12 +810,12 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
 
             // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
-            const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
+            const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Direcionar Closer'];
             const closerSectors = ['Closer', 'Co-líder'];
             if (data.type === 'Gold Call' || data.type === 'Ligação Closer') {
                 closerSectors.push('Perpétuos');
             }
-            
+
             const allowedSectors = [...closerSectors];
             if (data.type === 'Reagendamento Closer') {
                 allowedSectors.push('Aldeia');
@@ -909,6 +999,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             .single();
 
         if (appError) {
+            // DB-level guarantee (see supabase/add_no_double_booking_constraint.sql): the
+            // exclusion constraint rejects any overlapping "Pendente" appointment for the
+            // same attendant, closing the check-then-insert race the app-level checks above
+            // can't fully close on their own.
+            if (appError.code === '23P01') {
+                return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
+            }
             console.error("Supabase Write Error:", appError);
             return res.status(500).json({ error: 'Erro no Banco de Dados' });
         }
@@ -1212,7 +1309,13 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             .select()
             .single();
 
-        if (updateError) return res.status(500).json({ error: 'Falha na Atualização' });
+        if (updateError) {
+            // DB-level guarantee (see supabase/add_no_double_booking_constraint.sql).
+            if (updateError.code === '23P01') {
+                return res.status(409).json({ error: 'Conflito: O atendente está ocupado.' });
+            }
+            return res.status(500).json({ error: 'Falha na Atualização' });
+        }
 
         // Execution Logs: track manual status/attendant changes (fire-and-forget, mirrors distribution logging)
         if (isStatusChanged) {

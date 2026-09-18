@@ -10,7 +10,7 @@ import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
 import { APPOINTMENT_STATUSES } from '../types';
 import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, AppointmentStatus } from '../types';
-import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment, generateAllTimes, hasSectorTimeLimit } from '../utils/distribution';
+import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit } from '../utils/distribution';
 import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
 import { useAuth } from '../context/AuthContext';
@@ -92,71 +92,32 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
     const [availableTimes, setAvailableTimes] = useState<string[] | undefined>(undefined);
 
+    // Fetches live availability from the backend (fresh DB read) instead of filtering the
+    // client's locally cached `appointments`, which can be stale/incomplete depending on
+    // what other screens last loaded into the shared AppointmentContext.
     useEffect(() => {
         if (!formData.date || !formData.type) {
             setAvailableTimes(undefined);
             return;
         }
 
-        const allTimes = generateAllTimes();
-        const selectedEvent = events.find(e => e.id === formData.eventId);
-        const eventDurationMinutes = selectedEvent?.duration_minutes || 60;
-        const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
-        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento'].includes(formData.type);
+        let cancelled = false;
+        setAvailableTimes(undefined);
 
-        const filtered = allTimes.filter(time => {
-            const isEditing = !!initialData;
-            const isSameExistingAssignment = isEditing &&
-                initialData?.attendantId === formData.attendantId &&
-                initialData?.eventId === formData.eventId;
-            const isBlockedForThisEvent = isCloserBlockedForSelectedEvent(formData.eventId, formData.attendantId);
-
-            const now = new Date();
-            const apptDateTime = new Date(`${formData.date}T${time}:00-03:00`);
-            const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
-
-            if (diffMinutes < 0) return false;
-            const isCloserLigacaoCloser = user?.sector === 'Closer' && formData.type === 'Ligação Closer';
-            if (!isCloserLigacaoCloser && formData.type !== 'Fora da agenda' && diffMinutes < 10) return false;
-
-            if (isAldeiaOrTribo && formData.type !== 'Agendamento Pessoal') {
-                if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, time, formData.type, appointments, attendants, initialData?.id)) {
-                    return false;
-                }
-            }
-
-            // 1. Manually Selected Attendant
-            if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
-                if (isBlockedForThisEvent && !isSameExistingAssignment) return false;
-
-                const attendant = attendants.find(a => a.id === formData.attendantId);
-                if (!attendant) return false;
-
-                // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo (unless it's a Closer Appointment)
-                const skipScheduleCheck = isAldeiaOrTribo && !isCloserAppt;
-
-                return (skipScheduleCheck || isAttendantWithinSchedule(attendant, formData.date, time, formData.type, eventDurationMinutes)) &&
-                    !hasConflictingAppointment(attendant.id, formData.date, time, formData.type, appointments, initialData?.id, eventDurationMinutes);
-            }
-
-            // 2. Automatic Distribution (or nothing selected yet)
-            // Returns true if ANY closer is available (findAvailableCloser encapsulates schedule & conflict checks)
-            let attendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
-                ? attendants.filter(a => a.id !== BLOCKED_CLOSER_ID)
-                : attendants;
-
-            if (formData.eventId === ACTION_14_DIAS_EVENT_ID && formData.type === 'Ligação Closer') {
-                attendantsForEvent = attendantsForEvent.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
-            }
-            
-            // Adjustment 3: Internal Link - Ignore schedule for Aldeia/Tribo (unless it's a Closer Appointment)
-            const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
-            const available = findAvailableCloser(formData.date, time, formData.type, attendantsForEvent, appointments, { ignoreSchedule, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined, durationMinutes: eventDurationMinutes });
-            return !!available;
+        api.appointments.getAvailableTimes({
+            date: formData.date,
+            type: formData.type,
+            eventId: formData.eventId || undefined,
+            attendantId: formData.attendantId || undefined
+        }).then(times => {
+            if (!cancelled) setAvailableTimes(times);
+        }).catch(err => {
+            console.error('Failed to fetch available times', err);
+            if (!cancelled) setAvailableTimes([]);
         });
 
-        setAvailableTimes(filtered);
-    }, [formData.date, formData.type, formData.attendantId, formData.eventId, attendants, appointments, initialData, events, user]);
+        return () => { cancelled = true; };
+    }, [formData.date, formData.type, formData.attendantId, formData.eventId]);
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
@@ -176,6 +137,12 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
         const selectedEvent = events.find(e => e.id === formData.eventId);
         if (selectedEvent && (selectedEvent.event_name === 'Primeiro Dólar na Prática' || selectedEvent.event_name === 'Dollar On Demand')) {
             allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
+        }
+
+        // Mantém o rótulo visível ao editar um agendamento que já é desse tipo, seja qual for o
+        // setor de quem abriu a edição.
+        if (formData.type === 'Direcionar Closer' || (user?.sector === 'Perpétuos' && selectedEvent?.event_name === 'Partners')) {
+            allTypes.push({ value: 'Direcionar Closer', label: 'Direcionar Closer' });
         }
 
         if (user?.sector === 'Closer') {
@@ -211,11 +178,11 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Perpétuos') {
-            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer'].includes(t.value));
+            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
         }
 
         return allTypes;
-    }, [user, formData.eventId, events, isAction14Dias]);
+    }, [user, formData.eventId, formData.type, events, isAction14Dias]);
 
     const attendantOptions = React.useMemo(() => {
         // When EDITING, filter attendants by appointment type strictly
@@ -226,7 +193,8 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                 'Gold Call': ['Closer', 'Co-líder', 'Perpétuos'],
                 'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
                 'Upgrade': ['Closer', 'Co-líder'],
-                'Ligação SDR': ['SDR']
+                'Ligação SDR': ['SDR'],
+                'Direcionar Closer': ['Closer']
             };
 
             const requiredSectors = typeToSectors[formData.type];
@@ -730,8 +698,13 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
             // Resolve Automatic Distribution on Submit
             if (formData.attendantId === 'distribuicao_automatica') {
-                // FRESH DATA: Refresh attendants before distribution to avoid stale sector/schedule data
-                const freshAttendants = await refreshAttendants();
+                // FRESH DATA: Refresh attendants and appointments right before distribution to avoid
+                // stale sector/schedule/booking data (the shared AppointmentContext may not reflect
+                // bookings made by other sessions since it was last loaded).
+                const [freshAttendants, freshAppointments] = await Promise.all([
+                    refreshAttendants(),
+                    api.appointments.list().catch(() => appointments)
+                ]);
                 console.log('[DISTRIBUTION] Refreshed attendants before submit:', freshAttendants.length, 'total');
 
                 let freshAttendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
@@ -752,7 +725,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                     formData.time,
                     formData.type,
                     freshAttendantsForEvent,
-                    appointments,
+                    freshAppointments,
                     { ignoreSchedule, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined }
                 );
                 if (bestCloser) {
