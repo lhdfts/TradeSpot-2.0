@@ -8,7 +8,8 @@ export const getAppointmentWebhooks = (): Record<string, string> => ({
     'Gold Call': process.env.WEBHOOK_GOLD_CALL || '',
     'Fora da agenda': process.env.WEBHOOK_FORA_DA_AGENDA || '',
     'Onboarding': process.env.WEBHOOK_ONBOARDING || '',
-    'Fechamento': process.env.WEBHOOK_ATEND_DE_FECHAMENTO || ''
+    'Fechamento': process.env.WEBHOOK_ATEND_DE_FECHAMENTO || '',
+    'Direcionar Closer': process.env.WEBHOOK_DIRECIONAR_CLOSER || ''
 });
 
 export const getUpdateWebhook = (): string => {

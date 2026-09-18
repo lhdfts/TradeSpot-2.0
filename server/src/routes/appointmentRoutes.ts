@@ -154,7 +154,7 @@ router.get('/available-times', async (req: AuthenticatedRequest, res: Response) 
         }
 
         const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
-        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento'].includes(type);
+        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento', 'Direcionar Closer'].includes(type);
         const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
 
         const [{ data: existingAppts, error: apptError }, { data: allAttendants, error: attError }] = await Promise.all([
@@ -176,7 +176,7 @@ router.get('/available-times', async (req: AuthenticatedRequest, res: Response) 
                 candidates = candidates.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
             }
 
-            const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento'].includes(type);
+            const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento', 'Direcionar Closer'].includes(type);
             if (type === 'Ligação Equipe Aldeia') {
                 candidates = candidates.filter(a => a.sector === 'Aldeia');
             } else if (isCloserType) {
@@ -768,7 +768,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         // Agent Logic
         let distributionChecksLog: CheckLogItem[] | null = null;
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
-            const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(data.type);
+            const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Direcionar Closer'].includes(data.type);
             const ignoreSched = isAldeiaOrTribo && !isCloserAppt;
             const resDist = await findBestAttendantWithLogs(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
             if (!resDist.attendantId) {
@@ -810,12 +810,12 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
 
             // SECTOR VALIDATION: Ensure attendant's sector matches appointment type requirements
-            const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
+            const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Direcionar Closer'];
             const closerSectors = ['Closer', 'Co-líder'];
             if (data.type === 'Gold Call' || data.type === 'Ligação Closer') {
                 closerSectors.push('Perpétuos');
             }
-            
+
             const allowedSectors = [...closerSectors];
             if (data.type === 'Reagendamento Closer') {
                 allowedSectors.push('Aldeia');

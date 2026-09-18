@@ -139,6 +139,12 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
             allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
         }
 
+        // Mantém o rótulo visível ao editar um agendamento que já é desse tipo, seja qual for o
+        // setor de quem abriu a edição.
+        if (formData.type === 'Direcionar Closer' || (user?.sector === 'Perpétuos' && selectedEvent?.event_name === 'Partners')) {
+            allTypes.push({ value: 'Direcionar Closer', label: 'Direcionar Closer' });
+        }
+
         if (user?.sector === 'Closer') {
             allTypes.push({ value: 'Ligação Equipe Aldeia', label: 'Ligação Equipe Aldeia' });
         }
@@ -172,11 +178,11 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Perpétuos') {
-            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer'].includes(t.value));
+            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
         }
 
         return allTypes;
-    }, [user, formData.eventId, events, isAction14Dias]);
+    }, [user, formData.eventId, formData.type, events, isAction14Dias]);
 
     const attendantOptions = React.useMemo(() => {
         // When EDITING, filter attendants by appointment type strictly
@@ -187,7 +193,8 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                 'Gold Call': ['Closer', 'Co-líder', 'Perpétuos'],
                 'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
                 'Upgrade': ['Closer', 'Co-líder'],
-                'Ligação SDR': ['SDR']
+                'Ligação SDR': ['SDR'],
+                'Direcionar Closer': ['Closer']
             };
 
             const requiredSectors = typeToSectors[formData.type];

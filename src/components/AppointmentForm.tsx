@@ -117,6 +117,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
     const isAction14Dias = formData.eventId === ACTION_14_DIAS_EVENT_ID;
+    // Em 'Direcionar Closer' a disponibilidade é a agenda de um closer específico, então data e
+    // horário só fazem sentido depois que ele for escolhido.
+    const isCloserDirecionado = !!formData.attendantId && formData.attendantId !== 'distribuicao_automatica';
 
     const allowedTypes = React.useMemo(() => {
         const allTypes: { value: AppointmentType, label: string }[] = [
@@ -132,6 +135,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         const selectedEvent = events.find(e => e.id === formData.eventId);
         if (selectedEvent && (selectedEvent.event_name === 'Primeiro Dólar na Prática' || selectedEvent.event_name === 'Dollar On Demand')) {
             allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
+        }
+
+        // Perpétuos direcionando um lead do Partners para um Closer específico (sem distribuição automática).
+        // O dropdown de eventos já restringe Perpétuos aos eventos do próprio setor, então o Partners
+        // do setor Closer nunca chega aqui.
+        if (user?.sector === 'Perpétuos' && selectedEvent?.event_name === 'Partners') {
+            allTypes.push({ value: 'Direcionar Closer', label: 'Direcionar Closer' });
         }
 
         if (user?.sector === 'Closer') {
@@ -167,7 +177,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
         if (user.sector === 'Perpétuos') {
-            return allTypes.filter(t => ['Gold Call', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer'].includes(t.value));
+            return allTypes.filter(t => ['Gold Call', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
         }
 
         return allTypes;
@@ -238,6 +248,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         return false;
                     }
 
+                    // 'Direcionar Closer' is cross-sector by design (Perpétuos hands the lead to a
+                    // Closer), so it has to be resolved before the own-sector restriction below.
+                    // Líderes já foram descartados no topo do filtro.
+                    if (formData.type === 'Direcionar Closer') {
+                        return a.sector === 'Closer';
+                    }
+
                     if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
                         return false;
                     }
@@ -275,6 +292,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         if (!isEditing && formData.type === 'Fechamento') {
             return options.filter(opt => opt.value === 'distribuicao_automatica');
+        }
+
+        // Direcionamento é sempre manual — sem distribuição automática.
+        if (formData.type === 'Direcionar Closer') {
+            return options.filter(opt => opt.value !== 'distribuicao_automatica');
         }
 
         return options;
@@ -368,6 +390,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             // 3. Agendamento Pessoal
             else if (formData.type === 'Agendamento Pessoal') {
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
+            }
+            // 3b. Direcionar Closer: escolha sempre manual. Descarta um atendente herdado de outro
+            // tipo (inclusive o 'distribuicao_automatica') que não sirva para este direcionamento.
+            else if (formData.type === 'Direcionar Closer') {
+                setFormData(prev => {
+                    if (!prev.attendantId) return prev;
+                    const picked = attendants.find(a => a.id === prev.attendantId);
+                    const isValid = !!picked && picked.sector === 'Closer' && picked.role !== 'Líder';
+                    return isValid ? prev : { ...prev, attendantId: '' };
+                });
             }
 
             // Special case for Tribo, Aldeia and Perpétuos: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
@@ -647,8 +679,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return true;
         };
 
-        // Validate 'Upgrade', 'Reagendamento Closer' and 'Fora da agenda' manual selections
-        if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda') {
+        // Validate 'Upgrade', 'Reagendamento Closer', 'Fora da agenda' and 'Direcionar Closer' manual selections
+        if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda' || formData.type === 'Direcionar Closer') {
             if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
                 // Skip validation if we are editing and the schedule-relevant fields haven't changed
                 const isScheduleChanged = !initialData ||
@@ -964,6 +996,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                     * Preencha o cliente primeiro para liberar a data
                                 </p>
                             )}
+                            {formData.type === 'Direcionar Closer' && !isCloserDirecionado && (
+                                <p className="text-xs text-amber-500 font-medium ml-1">
+                                    * Escolha o Closer primeiro para liberar a data
+                                </p>
+                            )}
                         </div>
 
                         {/* Row 2: Data and Horário */}
@@ -976,7 +1013,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 isEditing ||
                                 !formData.eventId ||
                                 !formData.type ||
-                                (['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && (!formData.phone || !formData.lead))
+                                (['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && (!formData.phone || !formData.lead)) ||
+                                (formData.type === 'Direcionar Closer' && !isCloserDirecionado)
                             }
                         />
                         <div className="grid grid-cols-2 gap-4">
@@ -988,7 +1026,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 disabled={
                                     isEditing ||
                                     !formData.date ||
-                                    (['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && (!formData.phone || !formData.lead))
+                                    (['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && (!formData.phone || !formData.lead)) ||
+                                    (formData.type === 'Direcionar Closer' && !isCloserDirecionado)
                                 }
                                 availableTimes={availableTimes}
                             />
@@ -1028,7 +1067,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         disabled={
                                             isEditing
                                                 ? !(user && ['Co-líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
-                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && !(isAction14Dias && formData.type === 'Ligação Closer'))
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && formData.type !== 'Direcionar Closer' && !(isAction14Dias && formData.type === 'Ligação Closer'))
                                         }
                                         error={errors.attendantId}
                                     />
