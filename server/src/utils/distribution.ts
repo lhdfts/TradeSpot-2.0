@@ -1,5 +1,5 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './supabaseClient.js';
 
 // Types (simplified for backend)
 interface Attendant {
@@ -8,121 +8,402 @@ interface Attendant {
     sector: string;
     schedule: any;
     pauses: any;
+    denied_events?: string[]; // Array of event IDs (UUIDs)
 }
 interface Appointment {
     id: string;
     attendant_id: string;
     date: string;
     time: string;
+    end_time?: string;
     type: string;
     status: string;
 }
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl!, supabaseKey!);
+// Event-specific blocklist: prevent specific closer(s) from receiving appointments
+// for a given event, even if they have schedule availability.
+// MOVED TO DYNAMIC CHECK via user.denied_events
+
+const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
+
+export const isAttendantBlockedForEvent = (
+    attendant: Attendant | null | undefined,
+    eventId?: string | null,
+    appointmentType?: string
+): boolean => {
+    if (!attendant || !eventId) return false;
+
+    // Exception: 'Upgrade' type is NEVER blocked, even if event is in denied_events
+    if (appointmentType === 'Upgrade') return false;
+
+    const deniedEvents = attendant.denied_events;
+    if (!deniedEvents || !Array.isArray(deniedEvents)) return false;
+
+    return deniedEvents.includes(eventId);
+};
 
 const DAY_MAP: Record<number, string> = {
     1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat', 0: 'sun'
 };
 
-const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
-    const [h, m] = time.split(':').map(Number);
+export const timeToMinutes = (time: string): number => {
+    if (!time || typeof time !== 'string') return 0;
+
+    const timePart = time.includes('T') ? time.split('T')[1] : time;
+    const cleanTime = timePart.split(/[Z+-]/)[0];
+    const match = cleanTime.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return 0;
+
+    const h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
     return h * 60 + m;
 };
 
-const getDuration = (type: string): number => {
-    if (['Ligação Closer', 'Reschedule', 'Reagendamento Closer'].includes(type)) return 45;
-    return 30;
+export const getDuration = (_type?: string, durationMinutes: number = 60): number => {
+    return durationMinutes;
 };
 
 // Check if attendant is working at this time
-const isAttendantWithinSchedule = (attendant: Attendant, dateStr: string, timeStr: string): boolean => {
+export const isAttendantWithinSchedule = (
+    attendant: Attendant,
+    dateStr: string,
+    timeStr: string,
+    appointmentType: string,
+    durationMinutes: number = 60
+): boolean => {
     if (!attendant.schedule) return false;
-    const [year, month, day] = dateStr.split('-').map(Number);
+
+    if (attendant.sector === 'CEO') {
+        const customDates = attendant.schedule.custom_dates || {};
+        const timesForDate = customDates[dateStr];
+        // For CEO, they are only available if the exact time is listed in their custom_dates for that day
+        return Array.isArray(timesForDate) && timesForDate.includes(timeStr);
+    }
+
+    let year: number, month: number, day: number;
+    if (dateStr.includes('/')) {
+        [day, month, year] = dateStr.split('/').map(Number);
+    } else {
+        [year, month, day] = dateStr.split('-').map(Number);
+    }
     const date = new Date(year, month - 1, day);
     const dayKey = DAY_MAP[date.getDay()];
+
+    // Check Previous Day for Overnight Spillover
+    const prevDate = new Date(date);
+    prevDate.setDate(date.getDate() - 1);
+    const prevDayKey = DAY_MAP[prevDate.getDay()];
+
     const schedule = attendant.schedule?.[dayKey];
+    const prevSchedule = attendant.schedule?.[prevDayKey];
 
-    if (!schedule) return false;
+    const apptStart = timeToMinutes(timeStr);
+    const duration = getDuration(appointmentType, durationMinutes);
+    const apptEnd = apptStart + duration;
 
-    const apptMinutes = timeToMinutes(timeStr);
-    const startMinutes = timeToMinutes(schedule.start);
-    const endMinutes = timeToMinutes(schedule.end);
+    // 1. Check Previous Day Spillover
+    if (prevSchedule && prevSchedule.start && prevSchedule.end) {
+        const prevStart = timeToMinutes(prevSchedule.start);
+        let prevEnd = timeToMinutes(prevSchedule.end);
+        if (prevEnd === 0) prevEnd = 1440; // Treat 00:00 as 24:00
 
-    if (apptMinutes < startMinutes || apptMinutes >= endMinutes) return false;
+        // If overnight shift yesterday (e.g. 22:00 - 02:00)
+        // Valid for today if time < prevEnd (e.g. 01:00 < 02:00)
+        if (prevStart >= prevEnd) { // Overnight shift condition
+            if (apptStart < prevEnd) {
+                // Check pauses if needed (omitted for overnight spillover simplicity or add later)
+                return true;
+            }
+        }
+    }
+
+    // 2. Check Current Day
+    if (!schedule || !schedule.start || !schedule.end) return false;
+
+    // Special case: 00:00 → 00:00 means 24h availability — skip boundary check
+    const is24h = schedule.start === '00:00' && schedule.end === '00:00';
+
+    if (!is24h) {
+        const startMinutes = timeToMinutes(schedule.start);
+        let endMinutes = timeToMinutes(schedule.end);
+
+        // Apply logic: treat as "crossed midnight" if end <= start
+        if (endMinutes <= startMinutes && endMinutes !== 0) {
+            endMinutes += 1440;
+        } else if (endMinutes === 0) {
+            endMinutes = 1440;
+        }
+
+        // Normal or Overnight Shift (now unified range)
+        if (apptStart < startMinutes || apptEnd > endMinutes) return false;
+    }
 
     if (attendant.pauses && attendant.pauses[dayKey]) {
         for (const pause of attendant.pauses[dayKey]) {
             const pauseStart = timeToMinutes(pause.start);
-            const pauseEnd = timeToMinutes(pause.end);
-            if (apptMinutes >= pauseStart && apptMinutes < pauseEnd) return false;
+            let pauseEnd = timeToMinutes(pause.end);
+
+            // Apply same midnight logic for pauses
+            if (pauseEnd <= pauseStart && pauseEnd !== 0) {
+                pauseEnd += 1440;
+            } else if (pauseEnd === 0) {
+                pauseEnd = 1440;
+            }
+
+            // Check for overlap: (StartA < EndB) and (EndA > StartB)
+            if (apptStart < pauseEnd && apptEnd > pauseStart) return false;
         }
     }
     return true;
 };
 
 // Check for overlapping appointments
-const hasConflictingAppointment = (
+export const hasConflictingAppointment = (
     attendantId: string,
     dateStr: string,
     timeStr: string,
     newType: string,
-    appointments: Appointment[]
+    appointments: Appointment[],
+    excludeId?: string,
+    durationMinutes: number = 60
 ): boolean => {
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newType);
+    const newEnd = newStart + getDuration(newType, durationMinutes);
 
     return appointments.some(appt => {
         if (appt.attendant_id !== attendantId) return false;
         if (appt.status !== 'Pendente') return false; // Only Pendente blocks
+        if (excludeId && appt.id === excludeId) return false; // Exclude self if updating
 
         const existingStart = timeToMinutes(appt.time);
-        const existingEnd = existingStart + getDuration(appt.type);
+        
+        // Use end_time from DB if available, otherwise calculate it
+        let existingEnd: number;
+        if (appt.end_time) {
+            existingEnd = timeToMinutes(appt.end_time);
+            // APPLY USER LOGIC: if end_time <= start_time, it crossed midnight
+            if (existingEnd <= existingStart && existingEnd !== 0) {
+                existingEnd += 1440;
+            } else if (existingEnd === 0 && existingStart > 0) {
+                existingEnd = 1440;
+            }
+        } else {
+            existingEnd = existingStart + getDuration(appt.type);
+        }
+
+        // Conflict if ranges overlap
         return newStart < existingEnd && newEnd > existingStart;
     });
 };
 
-export const findBestAttendant = async (
+export const hasSectorTimeLimit = (
+    sector: string,
+    dateStr: string,
+    timeStr: string,
+    newAppointmentType: string,
+    allAppointments: any[],
+    attendants: any[],
+    excludeAppointmentId?: string,
+    durationMinutes: number = 60
+): boolean => {
+    if (sector !== 'Aldeia' && sector !== 'Tribo') return false;
+    if (newAppointmentType === 'Agendamento Pessoal' || newAppointmentType === 'Personal Appointment') return false;
+
+    const sectorAttendants = new Set(attendants.filter(a => a.sector === sector).map(a => a.id));
+    
+    const newStart = timeToMinutes(timeStr);
+    const newEnd = newStart + getDuration(newAppointmentType, durationMinutes);
+
+    let concurrentCount = 0;
+
+    for (const appt of allAppointments) {
+        if (excludeAppointmentId && appt.id === excludeAppointmentId) continue;
+        if (appt.status !== 'Pendente') continue;
+        if (appt.type === 'Agendamento Pessoal' || appt.type === 'Personal Appointment') continue;
+        if (appt.date !== dateStr) continue;
+        
+        // Handle both frontend (attendantId) and backend (attendant_id) keys
+        const attId = appt.attendant_id || appt.attendantId;
+        if (!sectorAttendants.has(attId)) continue;
+
+        const existingStart = timeToMinutes(appt.time);
+        let existingEnd: number;
+        if (appt.end_time) {
+            existingEnd = timeToMinutes(appt.end_time);
+            if (existingEnd <= existingStart && existingEnd !== 0) existingEnd += 1440;
+            else if (existingEnd === 0 && existingStart > 0) existingEnd = 1440;
+        } else {
+            existingEnd = existingStart + getDuration(appt.type);
+        }
+
+        if (newStart < existingEnd && newEnd > existingStart) {
+            concurrentCount++;
+        }
+    }
+
+    return concurrentCount >= 2;
+};
+
+export interface CheckLogItem {
+    name: string;
+    reason: string;
+    selected?: boolean;
+}
+
+export interface DistributionResultWithLogs {
+    attendantId: string | null;
+    checksLog: CheckLogItem[];
+}
+
+export const findBestAttendantWithLogs = async (
     date: string,
     time: string,
-    type: string
-): Promise<string | null> => {
-    // 1. Fetch Closers
-    // Note: Assuming 'user' table holds attendants.
-    const { data: attendants, error: attError } = await supabase
-        .from('user')
-        .select('*')
-        .in('sector', ['Closer', 'Líder', 'Co-Líder']); // Correct sector logic
+    type: string,
+    eventId?: string,
+    options: { ignoreSchedule?: boolean, durationMinutes?: number } = {}
+): Promise<DistributionResultWithLogs> => {
+    const checksLog: CheckLogItem[] = [];
+    const durationMinutes = options.durationMinutes || 60;
+    let sectors = ['Closer', 'Co-líder'];
+    let roleFilters: string[] | null = null;
+    let sectorLimitCheck: string | null = null;
+
+    const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
+    
+    if (type === 'Reagendamento Closer') {
+        sectors.push('Aldeia');
+    }
+
+    if (type === 'Ligação Equipe Aldeia') {
+        sectors = ['Aldeia'];
+        roleFilters = ['Colaborador', 'Co-líder'];
+        sectorLimitCheck = 'Aldeia';
+    }
+
+    if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
+        roleFilters = ['Colaborador', 'Co-líder'];
+    }
+
+    if (eventId && type !== 'Ligação Equipe Aldeia') {
+        const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
+        if (eventData) {
+            if (eventData.sector === 'Perpétuos') {
+                sectors = ['Perpétuos'];
+            } else if (eventData.sector === 'CEO') {
+                sectors = ['CEO'];
+            } else if (eventData.sector === 'Tribo') {
+                sectors = ['Tribo'];
+                roleFilters = ['Colaborador', 'Co-líder'];
+                sectorLimitCheck = 'Tribo';
+            } else if (eventData.sector === 'Aldeia') {
+                sectors = ['Aldeia'];
+                roleFilters = ['Colaborador', 'Co-líder'];
+                sectorLimitCheck = 'Aldeia';
+            } else if (eventData.sector === 'SDR') {
+                sectors = ['SDR'];
+                roleFilters = ['Colaborador', 'Co-líder'];
+            } else if (eventData.sector === 'Closer') {
+                sectors = ['Closer'];
+            } else {
+                sectors = [eventData.sector];
+            }
+        }
+    }
+
+    // 1. Fetch Attendants filtered by sector (and role if needed, always excluding Líder)
+    let attendantsQuery = supabase.from('user').select('*').in('sector', sectors).neq('role', 'Líder');
+    if (roleFilters) {
+        attendantsQuery = attendantsQuery.in('role', roleFilters);
+    }
+    const { data: attendants, error: attError } = await attendantsQuery;
 
     if (attError || !attendants) {
         console.error("Error fetching attendants:", attError);
-        return null;
+        return { attendantId: null, checksLog: [] };
     }
 
     // 2. Fetch Appointments for this day to check load/conflicts
     const { data: appointments, error: appError } = await supabase
         .from('appointments')
-        .select('id, attendant_id, date, time, type, status')
+        .select('id, attendant_id, date, time, end_time, type, status')
         .eq('date', date)
         .neq('status', 'Cancelado'); // Ignore cancelled
 
     if (appError || !appointments) {
         console.error("Error fetching appointments:", appError);
-        return null;
+        return { attendantId: null, checksLog: [] };
     }
 
-    // 3. Filter by Schedule
-    const available = attendants.filter(a => isAttendantWithinSchedule(a, date, time));
-    if (available.length === 0) return null;
+    // Check Sector limits before anything else
+    if (sectorLimitCheck) {
+        if (hasSectorTimeLimit(sectorLimitCheck, date, time, type, appointments, attendants, undefined, durationMinutes)) {
+            for (const att of attendants) {
+                checksLog.push({ name: att.name, reason: "Limite diário de agendamentos do setor atingido" });
+            }
+            return { attendantId: null, checksLog };
+        }
+    }
+
+    const available: typeof attendants = [];
+    for (const a of attendants) {
+        if (a.role === 'Líder') {
+            checksLog.push({ name: a.name, reason: "Líderes não recebem agendamentos" });
+            continue;
+        }
+        if (isAttendantBlockedForEvent(a, eventId, type)) {
+            checksLog.push({ name: a.name, reason: "Bloqueado para este evento" });
+            continue;
+        }
+        if (!options.ignoreSchedule) {
+            const within = isAttendantWithinSchedule(a, date, time, type, durationMinutes);
+            if (!within) {
+                let year: number, month: number, day: number;
+                if (date.includes('/')) {
+                    [day, month, year] = date.split('/').map(Number);
+                } else {
+                    [year, month, day] = date.split('-').map(Number);
+                }
+                const dateObj = new Date(year, month - 1, day);
+                const dayKey = DAY_MAP[dateObj.getDay()];
+                const apptStart = timeToMinutes(time);
+                const apptEnd = apptStart + getDuration(type, durationMinutes);
+
+                let isPause = false;
+                if (a.pauses && a.pauses[dayKey]) {
+                    for (const pause of a.pauses[dayKey]) {
+                        const pauseStart = timeToMinutes(pause.start);
+                        let pauseEnd = timeToMinutes(pause.end);
+                        if (pauseEnd <= pauseStart && pauseEnd !== 0) pauseEnd += 1440;
+                        else if (pauseEnd === 0) pauseEnd = 1440;
+
+                        if (apptStart < pauseEnd && apptEnd > pauseStart) {
+                            isPause = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isPause) {
+                    checksLog.push({ name: a.name, reason: "Em pausa" });
+                } else {
+                    checksLog.push({ name: a.name, reason: "Fora da escala" });
+                }
+                continue;
+            }
+        }
+        available.push(a);
+    }
+
+    if (available.length === 0) {
+        return { attendantId: null, checksLog };
+    }
 
     // 4. Calculate Load
     const withLoad = available.map(a => {
         const load = appointments.filter(appt =>
             appt.attendant_id === a.id &&
             appt.status === 'Pendente' &&
-            appt.type !== 'Personal Appointment'
+            !['Agendamento Pessoal', 'Personal Appointment'].includes(appt.type)
         ).length;
         return { ...a, load };
     });
@@ -133,12 +414,29 @@ export const findBestAttendant = async (
         return Math.random() - 0.5;
     });
 
-    // 6. Check Conflicts
+    // 6. Check Conflicts and Select
+    let selectedId: string | null = null;
     for (const attendant of withLoad) {
-        if (!hasConflictingAppointment(attendant.id, date, time, type, appointments)) {
-            return attendant.id;
+        if (!selectedId && !hasConflictingAppointment(attendant.id, date, time, type, appointments, undefined, durationMinutes)) {
+            selectedId = attendant.id;
+            checksLog.push({ name: attendant.name, reason: "Recebeu o agendamento (menor carga / rodízio)", selected: true });
+        } else if (!selectedId) {
+            checksLog.push({ name: attendant.name, reason: "Já possuia agendamento para o horario escolhido" });
+        } else {
+            checksLog.push({ name: attendant.name, reason: "Disponível (não selecionado - carga ou rodízio)" });
         }
     }
 
-    return null;
+    return { attendantId: selectedId, checksLog };
+};
+
+export const findBestAttendant = async (
+    date: string,
+    time: string,
+    type: string,
+    eventId?: string,
+    options: { ignoreSchedule?: boolean, durationMinutes?: number } = {}
+): Promise<string | null> => {
+    const res = await findBestAttendantWithLogs(date, time, type, eventId, options);
+    return res.attendantId;
 };

@@ -1,14 +1,14 @@
-export type AppointmentStatus = 'Cancelado' | 'Esquecimento' | 'Não compareceu' | 'Pendente' | 'Realizado' | 'Reagendado';
-export type AppointmentType = 'Ligação SDR' | 'Ligação Closer' | 'Agendamento Pessoal' | 'Reagendamento Closer' | 'Upgrade';
+export type AppointmentStatus = 'Cancelado' | 'Esquecimento' | 'No-show' | 'Pendente' | 'Realizado' | 'Reagendado';
+export type AppointmentType = 'Ligação SDR' | 'Ligação Closer' | 'Ligação Equipe Aldeia' | 'Agendamento Pessoal' | 'Reagendamento Closer' | 'Upgrade' | 'Fora da agenda' | 'Gold Call' | 'Onboarding' | 'Fechamento' | 'Direcionar Closer';
 export type ProfileLevel = 'Alto' | 'Mediano' | 'Desconhecido';
 export type KnowledgeLevel = 'Iniciante' | 'Intermediário' | 'Avançado';
 
 export interface StudentProfile {
-    interest: ProfileLevel;
-    knowledge: KnowledgeLevel;
-    financial: {
-        currency: string;
-        amount: string;
+    interest?: ProfileLevel;
+    knowledge?: KnowledgeLevel;
+    financial?: {
+        currency?: string;
+        amount?: string;
     };
 }
 
@@ -19,20 +19,34 @@ export interface Event {
     end_date: string;
     status: boolean;
     created_at?: string;
+    sector?: string;
+    self_scheduling_link?: string;
+    duration_minutes?: number;
+    unnichat_url?: string;
+}
+
+export interface UnnichatConnection {
+    id: string | number;
+    name: string;
+    unnichat_url: string;
+    sector?: string;
+    created_at?: string;
 }
 
 export interface Attendant {
     id: string;
     name: string;
     email: string;
-    role: 'Suporte' | 'Qualidade' | 'Co-Líder' | 'Líder' | 'Admin' | 'Dev';
+    role: 'Suporte' | 'Qualidade' | 'Co-líder' | 'Líder' | 'Admin' | 'Dev' | 'Colaborador';
     sector: string; // Relaxed to string to match data like "Closer", "TEI"
     schedule: {
-        [key: string]: { start: string; end: string } | null; // key is day of week (mon, tue, etc.)
+        [key: string]: { start: string; end: string } | null | any; // key is day of week (mon, tue, etc.)
+        custom_dates?: { [dateStr: string]: string[] };
     };
     pauses: {
         [key: string]: { start: string; end: string }[];
     };
+    denied_events?: string[]; // Array of event IDs
 }
 
 export interface Appointment {
@@ -42,6 +56,7 @@ export interface Appointment {
     email?: string;
     date: string;
     time: string;
+    end_time?: string;
     type: AppointmentType;
     status: AppointmentStatus;
     attendantId: string;
@@ -65,6 +80,7 @@ export interface Appointment {
         name: string;
         sector?: string;
     };
+    status_edit_count?: number;
 }
 
 export interface User {
@@ -72,7 +88,7 @@ export interface User {
     firebase_id?: string; // New field
     name: string;
     email: string; // Added email as it is in the DB
-    role: 'Suporte' | 'Qualidade' | 'Co-Líder' | 'Líder' | 'Admin' | 'Dev';
+    role: 'Suporte' | 'Qualidade' | 'Co-líder' | 'Líder' | 'Admin' | 'Dev' | 'Colaborador';
     sector?: string; // Added sector
     // Removed level
 }
@@ -89,5 +105,5 @@ export interface Client {
 }
 
 export const APPOINTMENT_STATUSES: AppointmentStatus[] = [
-    'Cancelado', 'Esquecimento', 'Não compareceu', 'Pendente', 'Realizado', 'Reagendado'
+    'Cancelado', 'Esquecimento', 'No-show', 'Pendente', 'Realizado', 'Reagendado'
 ];

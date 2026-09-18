@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
-import { SearchPersonsSchema, SearchDealsSchema } from '../schemas/pipedriveSchemas';
+import { SearchPersonsSchema, SearchDealsSchema } from '../schemas/pipedriveSchemas.js';
 
 const router = Router();
 
@@ -8,7 +8,9 @@ const router = Router();
 const getSettings = () => {
     // Try standard env vars first, then VITE_ prefixed as fallback if sharing .env
     const token = process.env.PIPEDRIVE_API_TOKEN || process.env.VITE_PIPEDRIVE_API_TOKEN;
-    const url = process.env.PIPEDRIVE_API_URL || process.env.VITE_PIPEDRIVE_API_URL || 'https://api.pipedrive.com/v1';
+
+    // FORCE v1 to fix reported v2 error from user env
+    const url = 'https://api.pipedrive.com/v1';
 
     if (!token) {
         throw new Error('Pipedrive API Token not configured');
@@ -48,8 +50,7 @@ router.get('/persons/search', async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error('Pipedrive Search Error:', error.response?.data || error.message);
         res.status(500).json({
-            error: 'Failed to fetch from Pipedrive',
-            details: error.response?.data || error.message
+            error: 'Failed to fetch from Pipedrive'
         });
     }
 });
@@ -57,6 +58,31 @@ router.get('/persons/search', async (req: Request, res: Response) => {
 // Search/List Deals Proxy
 router.get('/deals', async (req: Request, res: Response) => {
     return handleDeals(req, res);
+});
+
+// Get Deals for a specific Person
+router.get('/persons/:id/deals', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { status, limit, start } = req.query;
+        const { token, url } = getSettings();
+
+        const response = await axios.get(`${url}/persons/${id}/deals`, {
+            params: {
+                api_token: token,
+                status: status || 'all_not_deleted',
+                limit: limit || 50,
+                start: start || 0
+            }
+        });
+
+        res.json(response.data);
+    } catch (error: any) {
+        console.error('Pipedrive Person Deals Error:', error.response?.data || error.message);
+        res.status(500).json({
+            error: 'Failed to fetch deals for person'
+        });
+    }
 });
 
 // Alias for search to avoid breaking existing clients strictly
@@ -101,8 +127,7 @@ async function handleDeals(req: Request, res: Response) {
     } catch (error: any) {
         console.error('Pipedrive Deals Error:', error.response?.data || error.message);
         res.status(500).json({
-            error: 'Failed to search/list deals from Pipedrive',
-            details: error.response?.data || error.message
+            error: 'Failed to search/list deals from Pipedrive'
         });
     }
 }

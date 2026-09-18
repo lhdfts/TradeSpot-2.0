@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Attendant } from '../types';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const Input: React.FC<any> = ({ label, ...props }) => (
     <div className="space-y-1">
@@ -24,39 +25,51 @@ interface AttendantModalProps {
 }
 
 export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose, onSuccess, attendant }) => {
+    const { user } = useAuth();
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState<Partial<Attendant>>({
         name: '',
         email: '',
-        sector: 'Suporte',
+        role: 'Colaborador',
+        sector: 'SDR',
         schedule: {
             mon: { start: '09:00', end: '18:00' },
             tue: { start: '09:00', end: '18:00' },
             wed: { start: '09:00', end: '18:00' },
             thu: { start: '09:00', end: '18:00' },
             fri: { start: '09:00', end: '18:00' },
+            sat: { start: '09:00', end: '18:00' },
+            sun: { start: '09:00', end: '18:00' },
         },
         pauses: {
-            mon: [], tue: [], wed: [], thu: [], fri: []
+            mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: []
         }
     });
 
     useEffect(() => {
         if (attendant) {
-            setFormData(attendant);
+            setFormData({
+                ...attendant,
+                role: attendant.role || 'Colaborador',
+                sector: attendant.sector || 'SDR'
+            });
         } else {
             setFormData({
                 name: '',
                 email: '',
-                sector: 'Suporte',
+                role: 'Colaborador',
+                sector: 'SDR',
                 schedule: {
                     mon: { start: '09:00', end: '18:00' },
                     tue: { start: '09:00', end: '18:00' },
                     wed: { start: '09:00', end: '18:00' },
                     thu: { start: '09:00', end: '18:00' },
                     fri: { start: '09:00', end: '18:00' },
+                    sat: { start: '09:00', end: '18:00' },
+                    sun: { start: '09:00', end: '18:00' },
                 },
                 pauses: {
-                    mon: [], tue: [], wed: [], thu: [], fri: []
+                    mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: []
                 }
             });
         }
@@ -64,6 +77,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSubmitting(true);
         try {
             if (attendant) {
                 await api.attendants.update(attendant.id, formData);
@@ -72,19 +86,25 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             }
             onSuccess();
             onClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to save attendant', error);
+            alert(error?.message || 'Erro ao salvar atendente');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     const updateSchedule = (day: string, field: 'start' | 'end', value: string) => {
-        setFormData(prev => ({
-            ...prev,
-            schedule: {
-                ...prev.schedule,
-                [day]: { ...prev.schedule![day]!, [field]: value }
-            }
-        }));
+        setFormData(prev => {
+            const currentDaySchedule = prev.schedule?.[day] || { start: '', end: '' };
+            return {
+                ...prev,
+                schedule: {
+                    ...(prev.schedule || {}),
+                    [day]: { ...currentDaySchedule, [field]: value }
+                }
+            };
+        });
     };
 
     const addPause = (day: string) => {
@@ -95,7 +115,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             return {
                 ...prev,
                 pauses: {
-                    ...prev.pauses,
+                    ...(prev.pauses || {}),
                     [day]: [...currentPauses, { start: '', end: '' }]
                 }
             };
@@ -106,7 +126,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
         setFormData(prev => ({
             ...prev,
             pauses: {
-                ...prev.pauses,
+                ...(prev.pauses || {}),
                 [day]: prev.pauses?.[day]?.filter((_, i) => i !== index) || []
             }
         }));
@@ -120,11 +140,44 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             return {
                 ...prev,
                 pauses: {
-                    ...prev.pauses,
+                    ...(prev.pauses || {}),
                     [day]: currentPauses
                 }
             };
         });
+    };
+
+    const getAvailableRoles = () => {
+        const allRoles = [
+            { value: 'Colaborador', label: 'Colaborador' },
+            { value: 'Qualidade', label: 'Qualidade' },
+            { value: 'Co-líder', label: 'Co-líder' },
+            { value: 'Líder', label: 'Líder' },
+            { value: 'Admin', label: 'Admin' },
+            { value: 'Dev', label: 'Dev' },
+        ];
+
+        if (!user) return [];
+
+        const userRole = user.role;
+
+        if (userRole === 'Dev') {
+            return allRoles;
+        }
+
+        if (userRole === 'Admin') {
+            return allRoles.filter(r => r.value !== 'Dev');
+        }
+
+        if (userRole === 'Líder') {
+            return allRoles.filter(r => ['Colaborador', 'Qualidade', 'Co-líder', 'Líder'].includes(r.value));
+        }
+
+        if (userRole === 'Co-líder' || userRole === 'Qualidade') {
+            return allRoles.filter(r => ['Colaborador', 'Qualidade', 'Co-líder'].includes(r.value));
+        }
+
+        return [];
     };
 
     return (
@@ -143,22 +196,33 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
                     required
                 />
-                <Select
-                    label="Setor"
-                    value={formData.sector}
-                    onChange={e => setFormData({ ...formData, sector: e.target.value as any })}
-                    options={[
-                        { value: 'Suporte', label: 'Suporte' },
-                        { value: 'Qualidade', label: 'Qualidade' },
-                        { value: 'Co-Líder', label: 'Co-Líder' },
-                        { value: 'Líder', label: 'Líder' },
-                        { value: 'Admin', label: 'Admin' }
-                    ]}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                    <Select
+                        label="Função"
+                        value={formData.role}
+                        onChange={(e: any) => setFormData({ ...formData, role: e.target.value as any })}
+                        options={getAvailableRoles()}
+                    />
+                    <Select
+                        label="Setor"
+                        value={formData.sector}
+                        onChange={(e: any) => setFormData({ ...formData, sector: e.target.value as any })}
+                        options={[
+                            { value: 'SDR', label: 'SDR' },
+                            { value: 'Closer', label: 'Closer' },
+                            { value: 'Perpétuos', label: 'Perpétuos' },
+                            { value: 'Tribo', label: 'Tribo' },
+                            { value: 'Aldeia', label: 'Aldeia' },
+                            { value: 'Social Seller', label: 'Social Seller' },
+                            { value: 'CEO', label: 'CEO' },
+                            { value: 'Presencial', label: 'Presencial' }
+                        ]}
+                    />
+                </div>
 
                 <div className="space-y-4">
                     <h4 className="text-sm font-medium text-foreground">Horários e Pausas</h4>
-                    {['mon', 'tue', 'wed', 'thu', 'fri'].map(day => (
+                    {['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map(day => (
                         <div key={day} className="border border-border rounded-lg p-3 space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-medium text-foreground uppercase w-12">{day}</span>
@@ -221,8 +285,10 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                 </div>
 
                 <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-                    <Button type="submit">Salvar</Button>
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? 'Salvando...' : 'Salvar'}
+                    </Button>
                 </div>
             </form>
         </Modal>

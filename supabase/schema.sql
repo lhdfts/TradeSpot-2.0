@@ -68,7 +68,8 @@ alter table public.clients enable row level security;
 alter table public.appointments enable row level security;
 alter table public.events enable row level security;
 
--- Create policies (Allow all for everyone for now - DEV MODE)
+-- RLS policies: see supabase/rls_policies.sql for production-ready policies.
+-- Dev bootstrap (replace with rls_policies.sql before going to production):
 create policy "Enable all access for everyone" on public.user
   for all using (true);
 

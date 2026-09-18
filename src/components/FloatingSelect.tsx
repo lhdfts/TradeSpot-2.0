@@ -8,6 +8,7 @@ interface FloatingSelectProps {
     options: { value: string; label: string }[];
     value: string;
     onChange: (e: { target: { value: string; name?: string } }) => void;
+    onBlur?: () => void;
     name?: string;
     disabled?: boolean;
     className?: string;
@@ -19,6 +20,7 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
     options,
     value,
     onChange,
+    onBlur,
     name,
     disabled,
     className,
@@ -30,7 +32,7 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
     const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
 
     const selectedOption = options.find(opt => opt.value === value);
-    const hasValue = value !== '' && value !== undefined && value !== null;
+    const hasValue = (value !== '' && value !== undefined && value !== null) || !!selectedOption;
 
     useEffect(() => {
         if (isOpen && containerRef.current) {
@@ -114,13 +116,16 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
         <div
             ref={dropdownRef}
             style={dropdownStyle}
-            className="bg-surface border border-border rounded-lg shadow-lg overflow-auto animate-in fade-in zoom-in-95 duration-200"
+            className="bg-surface border border-border rounded-lg shadow-lg overflow-auto animate-in fade-in zoom-in-95 duration-200 max-h-[250px]"
         >
             <ul className="py-1">
                 {options.map(opt => (
                     <li
                         key={opt.value}
-                        onClick={() => handleSelect(opt.value)}
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelect(opt.value);
+                        }}
                         className={cn(
                             "px-3 py-2 cursor-pointer flex items-center justify-between hover:bg-accent transition-colors whitespace-nowrap",
                             value === opt.value ? "text-[#070707] dark:text-white font-bold bg-[#070707]/5 dark:bg-white/10" : "text-foreground"
@@ -134,11 +139,22 @@ export const FloatingSelect: React.FC<FloatingSelectProps> = ({
         </div>
     );
 
+    const handleBlur = () => {
+        // Delay minimal time to allow click event on option to fire first
+        setTimeout(() => {
+            if (!isOpen) {
+                onBlur?.();
+            }
+            setIsOpen(false);
+        }, 150);
+    };
+
     return (
         <div className={cn("relative", className)} ref={containerRef}>
             <button
                 type="button"
                 onClick={() => !disabled && setIsOpen(!isOpen)}
+                onBlur={handleBlur}
                 className={cn(
                     "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-surface text-foreground text-left flex items-center justify-between",
                     error
