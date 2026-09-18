@@ -389,7 +389,7 @@ export const Metrics: React.FC = () => {
         } else if (displaySector === 'Social Seller') {
             allowed = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
         } else if (displaySector === 'Perpétuos') {
-            allowed = ['Gold Call', 'Fechamento', 'Agendamento Pessoal'];
+            allowed = ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Reagendamento Closer'];
         } else {
             allowed = [...allTypes];
         }
