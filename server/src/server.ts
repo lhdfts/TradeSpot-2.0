@@ -16,10 +16,12 @@ import publicRoutes from './routes/publicRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import unnichatRoutes from './routes/unnichatRoutes.js';
 import executionLogRoutes from './routes/executionLogRoutes.js';
+import integrationRoutes from './routes/integrationRoutes.js';
 
 // Middleware
 import { verifyFirebaseToken, requireRole, AuthenticatedRequest } from './middleware/firebaseAuth.js';
 import { apiRateLimiter, publicRateLimiter, strictPublicRateLimiter } from './middleware/rateLimiter.js';
+import { integrationAuth } from './middleware/integrationAuth.js';
 import { sanitizeMiddleware } from './utils/sanitize.js';
 import { generateRoleIntegrity, verifyRoleIntegrity } from './utils/integrity.js';
 
@@ -134,6 +136,8 @@ app.use('/api/appointments', apiRateLimiter, verifyFirebaseToken, requireRole('A
 app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), pipedriveRoutes);
 app.use('/api/unnichat-connections', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), unnichatRoutes);
 app.use('/api/execution-logs', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder'), executionLogRoutes);
+// Integrações máquina-a-máquina (n8n): autenticadas por token + id de workflow, não por Firebase.
+app.use('/api/integrations', publicRateLimiter, integrationAuth, integrationRoutes);
 
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../../dist')));
