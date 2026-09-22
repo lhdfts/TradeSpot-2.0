@@ -10,7 +10,10 @@ interface TimePickerInputProps {
     disabled?: boolean;
     readOnly?: boolean;
     availableTimes?: string[];
-    minTime?: string;
+    minTime?: string; // Format HH:MM - Should be the earliest allowed time slot
+    hideUnavailable?: boolean;
+    pickerGridClass?: string;
+    isPerpetuosEvent?: boolean; // If true, only show :00 and :30 time slots
 }
 
 export const TimePickerInput: React.FC<TimePickerInputProps> = ({
@@ -19,13 +22,25 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     onChange,
     disabled = false,
     readOnly = false,
-    availableTimes: availableTimesParam = [],
+    availableTimes,
     minTime,
+    hideUnavailable = false,
+    pickerGridClass,
+    isPerpetuosEvent = false,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
+
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     // Generate all times (00:00 to 23:45 in 15-minute intervals)
     const generateAllTimes = () => {
@@ -40,7 +55,15 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     };
 
     const allTimes = generateAllTimes();
-    const availableTimesSet = new Set(availableTimesParam.length > 0 ? availableTimesParam : allTimes);
+    // If availableTimes is provided, use it (even if empty). If not (undefined), show all times.
+    // For Perpétuos events, filter to only :00 and :30 slots
+    const filteredAllTimes = isPerpetuosEvent
+        ? allTimes.filter(time => {
+            const minutes = time.split(':')[1];
+            return minutes === '00' || minutes === '30';
+        })
+        : allTimes;
+    const availableTimesSet = new Set(availableTimes !== undefined ? availableTimes : filteredAllTimes);
 
     const updatePosition = () => {
         if (buttonRef.current) {
@@ -53,13 +76,13 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
         }
     };
 
-    // Close dropdown when clicking outside or scrolling
+    // Close dropdown when clicking outside or scrolling (Desktop only)
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && !isMobile) {
             updatePosition();
             const handleScroll = (e: Event) => {
-                const target = e.target as Element;
-                if (!target.closest('.timepicker-portal')) {
+                const target = e.target;
+                if (target instanceof Element && !target.closest('.timepicker-portal')) {
                     setIsOpen(false);
                 }
             };
@@ -70,7 +93,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                 window.removeEventListener('resize', () => setIsOpen(false));
             };
         }
-    }, [isOpen]);
+    }, [isOpen, isMobile]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -97,6 +120,58 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     const isTimeAvailable = (time: string) => (minTime ? time >= minTime : true) && availableTimesSet.has(time);
 
     const hasValue = value !== '' && value !== undefined && value !== null;
+
+
+
+    const timePickerContent = (
+        <div
+            className={cn(
+                "bg-surface border border-border rounded-lg shadow-lg p-4",
+                isMobile
+                    ? "w-full mt-2 relative z-0 max-h-60 overflow-y-auto"
+                    : "timepicker-portal absolute z-[9999] w-[85vw] sm:w-96 max-h-96 overflow-y-auto"
+            )}
+            style={!isMobile ? {
+                top: coords.top,
+                left: coords.left,
+            } : undefined}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className={cn("grid gap-2", pickerGridClass || "grid-cols-4")}>
+                {filteredAllTimes.map(time => {
+                    // For Perpétuos events, hide :15 and :45 time slots
+                    if (isPerpetuosEvent) {
+                        const minutes = time.split(':')[1];
+                        if (minutes === '15' || minutes === '45') {
+                            return null;
+                        }
+                    }
+
+                    const available = isTimeAvailable(time);
+                    if (!available && hideUnavailable) return null;
+
+                    return (
+                        <button
+                            key={time}
+                            type="button"
+                            onClick={() => handleSelectTime(time)}
+                            disabled={!available}
+                            className={cn(
+                                'px-2 py-2 text-sm rounded transition-colors font-medium',
+                                value === time && available
+                                    ? 'bg-[#070707] text-white'
+                                    : available
+                                        ? 'bg-blue-500/20 text-blue-600 dark:text-white hover:bg-blue-500/30 cursor-pointer'
+                                        : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
+                            )}
+                        >
+                            {time}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
 
     return (
         <div className="relative" ref={containerRef}>
@@ -135,7 +210,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                 className={cn(
                     "absolute left-2 bg-surface px-1 transition-all duration-200 pointer-events-none z-10",
                     hasValue || isOpen
-                        ? "-top-2 text-xs text-[#070707] dark:text-gray-400" // Default to primary when active, can adjust based on error/focus
+                        ? "-top-2 text-xs text-[#070707] dark:text-gray-400"
                         : "top-3 text-sm text-muted-foreground",
                     isOpen ? "text-[#070707] dark:text-gray-400" : "text-muted-foreground"
                 )}
@@ -143,40 +218,16 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                 {label}
             </label>
 
-            {isOpen && !disabled && !readOnly && createPortal(
-                <div
-                    className="timepicker-portal absolute z-[9999] bg-surface border border-border rounded-lg shadow-lg p-4 w-96 max-h-96 overflow-y-auto"
-                    style={{
-                        top: coords.top,
-                        left: coords.left,
-                        // We don't force width here to allow it to be wider if needed, but w-96 is fixed width
-                    }}
-                >
-                    <div className="grid grid-cols-4 gap-2">
-                        {allTimes.map(time => {
-                            const available = isTimeAvailable(time);
-                            return (
-                                <button
-                                    key={time}
-                                    type="button"
-                                    onClick={() => handleSelectTime(time)}
-                                    disabled={!available}
-                                    className={cn(
-                                        'px-2 py-2 text-sm rounded transition-colors font-medium',
-                                        value === time && available
-                                            ? 'bg-[#070707] text-white'
-                                            : available
-                                                ? 'bg-blue-500/20 text-blue-600 dark:text-white hover:bg-blue-500/30 cursor-pointer'
-                                                : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
-                                    )}
-                                >
-                                    {time}
-                                </button>
-                            );
-                        })}
+            {isOpen && !disabled && !readOnly && (
+                isMobile ? (
+                    // Inline for Mobile
+                    <div className="w-full">
+                        {timePickerContent}
                     </div>
-                </div>,
-                document.body
+                ) : (
+                    // Portal for Desktop
+                    createPortal(timePickerContent, document.body)
+                )
             )}
         </div>
     );

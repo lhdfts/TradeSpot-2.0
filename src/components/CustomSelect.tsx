@@ -120,11 +120,14 @@ export const CustomSelect: React.FC<SelectProps> = ({ label, options, className,
                             width: 'max-content'
                         }}
                     >
-                        <ul className="max-h-60 overflow-auto py-1">
+                        <ul className="max-h-[250px] overflow-auto py-1">
                             {options.map(opt => (
                                 <li
                                     key={opt.value}
-                                    onClick={() => handleSelect(opt.value)}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleSelect(opt.value);
+                                    }}
                                     className={cn(
                                         "px-3 py-2 cursor-pointer flex items-center justify-between hover:bg-white/10 transition-colors gap-4",
                                         value === opt.value ? "text-black dark:text-white font-medium bg-white/5" : "text-foreground"

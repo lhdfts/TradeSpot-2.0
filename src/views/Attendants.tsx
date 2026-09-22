@@ -4,8 +4,11 @@ import { api } from '../services/api';
 import type { Attendant } from '../types';
 import { Edit, Trash2 } from 'lucide-react';
 import { AttendantModal } from '../components/AttendantModal';
+import { FloatingSelect } from '../components/FloatingSelect';
+import { FloatingInput } from '../components/FloatingInput';
 
 import { useAuth } from '../context/AuthContext';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
 
 export const Attendants: React.FC = () => {
     const { user } = useAuth();
@@ -14,21 +17,20 @@ export const Attendants: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAttendant, setSelectedAttendant] = useState<Attendant | null>(null);
     const [loading, setLoading] = useState(true);
+    const [sectorFilter, setSectorFilter] = useState<string>('all');
+    const [searchTerm, setSearchTerm] = useState<string>('');
 
     const fetchAttendants = async () => {
         setLoading(true);
         try {
             const data = await api.attendants.list();
-            if (user?.role === 'Dev' || user?.sector === 'TEI') {
-                setAttendants(data);
+            const allowedSectors = getAllowedSectors(user);
+
+            if (canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || isDualLeader(user)) {
+                setAttendants(data.filter(a => allowedSectors.includes(a.sector)));
             } else if (user?.sector) {
                 setAttendants(data.filter(a => a.sector === user.sector));
             } else {
-                // Fallback: If no sector defined on user, maybe show none or all? 
-                // Let's assume strict privacy: show none, or maybe just their own if ID matches (but Attendants page is usually for managers).
-                // However, the rule "Colaborador: metrics, attendants and events -> SHOULDNT have access" handles the page access.
-                // The users reaching here are Lider/Admin. Admin usually has no sector or global.
-                // Let's safe default to data for Admin/Lider if they managed to get here.
                 setAttendants(data);
             }
         } catch (error) {
@@ -40,7 +42,7 @@ export const Attendants: React.FC = () => {
 
     useEffect(() => {
         fetchAttendants();
-    }, []);
+    }, [user]);
 
     const handleEdit = (attendant: Attendant) => {
         setSelectedAttendant(attendant);
@@ -49,8 +51,13 @@ export const Attendants: React.FC = () => {
 
     const handleDelete = async (id: string) => {
         if (confirm('Tem certeza que deseja excluir este atendente?')) {
-            await api.attendants.delete(id);
-            fetchAttendants();
+            try {
+                await api.attendants.delete(id);
+                fetchAttendants();
+            } catch (error: any) {
+                console.error('Failed to delete attendant', error);
+                alert(error?.message || 'Erro ao excluir atendente');
+            }
         }
     };
 
@@ -60,9 +67,57 @@ export const Attendants: React.FC = () => {
 
     if (loading) return <div>Carregando...</div>;
 
+    const displayAttendants = (sectorFilter === 'all' 
+        ? attendants 
+        : attendants.filter(a => a.sector === sectorFilter)
+    ).filter(a => {
+        if (!searchTerm.trim()) return true;
+        const term = searchTerm.toLowerCase();
+        return (
+            a.name.toLowerCase().includes(term) || 
+            a.email.toLowerCase().includes(term)
+        );
+    });
+
+    const handleCreate = () => {
+        setSelectedAttendant(null);
+        setIsModalOpen(true);
+    };
+
     return (
         <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="w-64">
+                        <FloatingInput
+                            label="Pesquisar por nome ou email"
+                            value={searchTerm}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    {(canViewAllSectors(user) || isMedinaUser(user) || isDualLeader(user)) && (
+                        <FloatingSelect
+                            label="Setor"
+                            value={sectorFilter}
+                            onChange={(e: any) => setSectorFilter(e.target.value)}
+                            options={[
+                                { value: 'all', label: 'Todos os Setores' },
+                                ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
+                            ]}
+                            className="w-44"
+                        />
+                    )}
+                </div>
 
+                {(user?.sector === 'TEI' || user?.role === 'Dev' || user?.role === 'Admin') && (
+                    <button
+                        onClick={handleCreate}
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                        Criar Atendente
+                    </button>
+                )}
+            </div>
 
             <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
                 <table className="w-full text-left">
@@ -76,7 +131,7 @@ export const Attendants: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {attendants.map(attendant => (
+                        {displayAttendants.map(attendant => (
                             <tr key={attendant.id} className="hover:bg-background/50 transition-colors">
                                 <td className="px-6 py-4 text-foreground font-medium">
                                     <span
@@ -97,22 +152,26 @@ export const Attendants: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-foreground">{attendant.role}</td>
-                                <td className="px-6 py-4 text-center space-x-2">
+                                <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
                                     <button
                                         onClick={() => handleEdit(attendant)}
-                                        className="text-foreground hover:text-primary transition-colors"
-                                        title="Editar"
+                                        className="p-1 text-secondary hover:text-foreground transition-colors"
+                                        title="Editar Atendente"
                                     >
                                         <Edit size={18} />
                                     </button>
-                                    <button
-                                        onClick={() => handleDelete(attendant.id)}
-                                        className="text-foreground hover:text-danger transition-colors"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
-                                </td>
+                                    {['Admin', 'Dev'].includes(user?.role || '') && (
+                                        <button
+                                            onClick={() => handleDelete(attendant.id)}
+                                            className="p-1 text-secondary hover:text-destructive transition-colors"
+                                            title="Excluir Atendente"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    )}
+                                </div>
+                            </td>
                             </tr>
                         ))}
                     </tbody>

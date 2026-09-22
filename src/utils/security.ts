@@ -16,7 +16,7 @@ export const SECURITY_PATTERNS = {
     SEARCH_SAFE: /[^a-zA-Z0-9\u00C0-\u00FF\s-]/g,
 
     // Strict text (No numbers, specific punctuation only) per user request for Additional Info
-    STRICT_TEXT: /[^a-zA-Z0-9\u00C0-\u00FF\s,()."']/g
+    STRICT_TEXT: /[^a-zA-Z0-9\u00C0-\u00FF\s,()."'\-:;!?]/g
 };
 
 export const sanitizeInput = {
@@ -38,4 +38,52 @@ export const sanitizeInput = {
         const number = parseInt(digits, 10) / 100;
         return number.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
+};
+
+export const canViewAllSectors = (user: { email?: string; sector?: string; id?: string; role?: string } | null | undefined) => {
+    if (!user) return false;
+    const globalRoles = ['Admin', 'Dev', 'TEI', 'Qualidade', 'Suporte'];
+    return globalRoles.includes(user.role || '') || user.sector === 'TEI';
+};
+
+export const isMedinaUser = (user: { email?: string; id?: string } | null | undefined) => {
+    if (!user) return false;
+    return user.email === 'medina@tradestars.com.br' || user.id === '216557f7-03be-447c-ab6a-094460504da1';
+};
+
+export const isDualLeader = (user: { id?: string } | null | undefined) => {
+    if (!user) return false;
+    return user.id === 'ac060268-4e06-4afb-8689-7ea71c6fad1f';
+};
+
+export const getAllowedSectors = (user: { email?: string; sector?: string; id?: string; role?: string } | null | undefined) => {
+    if (!user) return [];
+    if (user.sector === 'Suporte') return ['Aldeia', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller', 'Presencial'];
+    if (canViewAllSectors(user)) return ['Aldeia', 'Closer', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller', 'Presencial'];
+    if (isMedinaUser(user)) return ['SDR', 'Aldeia', 'Tribo'];
+    if (isDualLeader(user)) return ['Perpétuos', 'Presencial'];
+    return user.sector ? [user.sector] : [];
+};
+
+// Mitigação VULN-009: Formula Injection (CSV)
+export const escapeCsvValue = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    let strValue = String(value);
+    
+    // Se começar com caracteres perigosos de fórmula (=, +, -, @), injeta aspas simples no início
+    if (/^[=+\-@]/.test(strValue)) {
+        strValue = "'" + strValue;
+    }
+    
+    // Trata aspas duplas internas de acordo com padrão CSV (RFC 4180)
+    if (strValue.includes('"')) {
+        strValue = strValue.replace(/"/g, '""');
+    }
+    
+    // Envolve em aspas duplas caso o valor tenha vírgulas, quebras de linha ou as próprias aspas recém-escapadas
+    if (strValue.includes(',') || strValue.includes('\n') || strValue.includes('"')) {
+        return `"${strValue}"`;
+    }
+    
+    return strValue;
 };

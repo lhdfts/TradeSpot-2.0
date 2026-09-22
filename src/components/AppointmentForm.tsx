@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eraser, Save } from 'lucide-react';
+import { Eraser, Save, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { FloatingDateInput } from './FloatingDateInput';
 import { TimePickerInput } from './TimePickerInput';
@@ -10,12 +10,23 @@ import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
 import { APPOINTMENT_STATUSES } from '../types';
 import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, AppointmentStatus } from '../types';
-import { findAvailableCloser } from '../utils/distribution';
+import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit } from '../utils/distribution';
 import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
 import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
+import { getPurchasesByEmail } from '../services/pipedriveService';
+
+const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
+const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
+const ON_THE_ROAD_EVENT_ID = '62936e18-6042-43c9-8526-6ec920184351';
+const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
+
+
+const isCloserBlockedForSelectedEvent = (eventId: string, attendantId: string) => {
+    return eventId === BLOCKED_EVENT_ID && attendantId === BLOCKED_CLOSER_ID;
+};
 
 
 interface AppointmentFormProps {
@@ -26,24 +37,29 @@ interface AppointmentFormProps {
         phone?: string;
     } | null;
     onSuccess: () => void;
-    onCancel: () => void;
 }
 
-export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, prefillData, onSuccess, onCancel }) => {
+export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, prefillData, onSuccess }) => {
     const { createAppointment, updateAppointment, appointments } = useAppointments();
-    const { attendants, events, loading } = useFormData();
+    const { attendants, events, loading, refreshAttendants } = useFormData();
     const { user } = useAuth();
     const [rates, setRates] = useState<Record<string, number>>({});
     const [isExistingClient, setIsExistingClient] = useState(false);
+    const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
 
     useEffect(() => {
-        fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,JPY-BRL')
+        fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,JPY-BRL,USD-AOA')
             .then(res => res.json())
             .then(data => {
+                const usdBrl = parseFloat(data.USDBRL.bid);
                 setRates({
-                    USD: parseFloat(data.USDBRL.bid),
+                    USD: usdBrl,
                     EUR: parseFloat(data.EURBRL.bid),
-                    JPY: parseFloat(data.JPYBRL.bid)
+                    JPY: parseFloat(data.JPYBRL.bid),
+                    AOA: usdBrl / parseFloat(data.USDAOA.bid) // Derive AOA from USD-AOA and USD-BRL
                 });
             })
             .catch(err => console.error('Failed to fetch rates', err));
@@ -69,8 +85,41 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         }
     });
 
+    const [availableTimes, setAvailableTimes] = useState<string[] | undefined>(undefined);
+
+    // Fetches live availability from the backend (fresh DB read) instead of filtering the
+    // client's locally cached `appointments`, which can be stale/incomplete depending on
+    // what other screens last loaded into the shared AppointmentContext.
+    useEffect(() => {
+        if (!formData.date || !formData.type) {
+            setAvailableTimes(undefined);
+            return;
+        }
+
+        let cancelled = false;
+        setAvailableTimes(undefined);
+
+        api.appointments.getAvailableTimes({
+            date: formData.date,
+            type: formData.type,
+            eventId: formData.eventId || undefined,
+            attendantId: formData.attendantId || undefined
+        }).then(times => {
+            if (!cancelled) setAvailableTimes(times);
+        }).catch(err => {
+            console.error('Failed to fetch available times', err);
+            if (!cancelled) setAvailableTimes([]);
+        });
+
+        return () => { cancelled = true; };
+    }, [formData.date, formData.type, formData.attendantId, formData.eventId]);
+
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
+    const isAction14Dias = formData.eventId === ACTION_14_DIAS_EVENT_ID;
+    // Em 'Direcionar Closer' a disponibilidade é a agenda de um closer específico, então data e
+    // horário só fazem sentido depois que ele for escolhido.
+    const isCloserDirecionado = !!formData.attendantId && formData.attendantId !== 'distribuicao_automatica';
 
     const allowedTypes = React.useMemo(() => {
         const allTypes: { value: AppointmentType, label: string }[] = [
@@ -78,31 +127,207 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             { value: 'Ligação Closer', label: 'Ligação Closer' },
             { value: 'Agendamento Pessoal', label: 'Agendamento Pessoal' },
             { value: 'Reagendamento Closer', label: 'Reagendamento Closer' },
-            { value: 'Upgrade', label: 'Upgrade' }
+            { value: 'Upgrade', label: 'Upgrade' },
+            { value: 'Fora da agenda', label: 'Fora da agenda' },
+            { value: 'Fechamento', label: 'Fechamento' }
         ];
 
+        const selectedEvent = events.find(e => e.id === formData.eventId);
+        if (selectedEvent && (selectedEvent.event_name === 'Primeiro Dólar na Prática' || selectedEvent.event_name === 'Dollar On Demand')) {
+            allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
+        }
+
+        // Perpétuos direcionando um lead do Partners para um Closer específico (sem distribuição automática).
+        // O dropdown de eventos já restringe Perpétuos aos eventos do próprio setor, então o Partners
+        // do setor Closer nunca chega aqui.
+        if (user?.sector === 'Perpétuos' && selectedEvent?.event_name === 'Partners') {
+            allTypes.push({ value: 'Direcionar Closer', label: 'Direcionar Closer' });
+        }
+
+        if (user?.sector === 'Closer') {
+            allTypes.push({ value: 'Ligação Equipe Aldeia', label: 'Ligação Equipe Aldeia' });
+        }
+
+        if (user && (user.sector === 'Aldeia' || user.sector === 'Tribo' || user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin')) {
+            allTypes.push(
+                { value: 'Onboarding', label: 'Onboarding' }
+            );
+        }
+
         if (!user) return [];
-        if (user.sector === 'TEI' || user.role === 'Dev') return allTypes;
+        if (user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin') return allTypes;
 
         if (user.sector === 'SDR') {
-            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer'].includes(t.value));
+            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Fechamento'].includes(t.value));
         }
         if (user.sector === 'Closer') {
-            return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade'].includes(t.value));
+            return allTypes.filter(t => ['Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
+        }
+        if (user.sector === 'Tribo') {
+            return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
+        }
+        if (user.sector === 'Aldeia') {
+            const allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer'];
+            if (formData.eventId === ON_THE_ROAD_EVENT_ID || isAction14Dias) {
+                allowed.push('Ligação Closer');
+            }
+            return allTypes.filter(t => allowed.includes(t.value));
+        }
+        if (user.sector === 'Social Seller') {
+            return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
+        }
+        if (user.sector === 'Perpétuos') {
+            return allTypes.filter(t => ['Gold Call', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
         }
 
         return allTypes;
-    }, [user]);
+    }, [user, formData.eventId, events, isAction14Dias]);
 
-    const attendantOptions = [
-        { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
-        ...attendants
-            .filter(a => formData.type === 'Upgrade' ? a.sector === 'Closer' : true)
-            .map(a => ({ value: a.id, label: a.name }))
-    ];
+    const attendantOptions = React.useMemo(() => {
+        // When EDITING, filter attendants by appointment type strictly
+        if (isEditing) {
+            const typeToSectors: Record<string, string[]> = {
+                'Ligação Closer': ['Closer', 'Co-líder'],
+                'Ligação Equipe Aldeia': ['Aldeia'],
+                'Gold Call': ['Closer', 'Co-líder', 'Perpétuos'],
+                'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
+                'Upgrade': ['Closer', 'Co-líder'],
+                'Ligação SDR': ['SDR'],
+                'Fechamento': ['Closer', 'Co-líder']
+            };
+
+            const requiredSectors = typeToSectors[formData.type];
+
+            // Filter attendants by sector if type requires it, excluding Líder role
+            const filteredAttendants = (requiredSectors
+                ? attendants.filter(a => requiredSectors.includes(a.sector) || (requiredSectors.includes('Closer') && a.role === 'Co-líder'))
+                : attendants).filter(a => a.role !== 'Líder');
+
+            const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
+            let filteredAttendantsForBlock = shouldBlock
+                ? filteredAttendants.filter(a =>
+                    a.id !== BLOCKED_CLOSER_ID || a.id === initialData?.attendantId
+                )
+                : filteredAttendants;
+
+            const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
+            
+            if (user?.sector === 'Suporte') {
+                filteredAttendantsForBlock = filteredAttendantsForBlock.filter(a => a.sector !== 'Closer');
+            }
+
+            if (!isGlobalViewer && user?.sector) {
+                filteredAttendantsForBlock = filteredAttendantsForBlock.filter(
+                    a => a.sector === user.sector || a.id === initialData?.attendantId
+                );
+            }
+
+            if (isAction14Dias && formData.type === 'Ligação Closer') {
+                return filteredAttendantsForBlock
+                    .filter(a => (a.role === 'Colaborador' || a.role === 'Co-líder') && ['Closer', 'Co-líder'].includes(a.sector))
+                    .map(a => ({ value: a.id, label: a.name }));
+            }
+
+            return filteredAttendantsForBlock.map(a => ({ value: a.id, label: a.name }));
+        }
+
+        // Original logic for CREATING new appointments
+        const options = [
+            { value: 'distribuicao_automatica', label: 'Distribuição Automática' },
+            ...attendants
+                .filter(a => {
+                    if (a.role === 'Líder') return false;
+                    const shouldBlock = formData.eventId === BLOCKED_EVENT_ID;
+                    if (shouldBlock && a.id === BLOCKED_CLOSER_ID) return false;
+
+                    if (a.sector === 'Desativado') return false;
+
+                    const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
+                    
+                    if (user?.sector === 'Suporte' && a.sector === 'Closer') {
+                        return false;
+                    }
+
+                    // 'Direcionar Closer' is cross-sector by design (Perpétuos hands the lead to a
+                    // Closer), so it has to be resolved before the own-sector restriction below.
+                    // Líderes já foram descartados no topo do filtro.
+                    if (formData.type === 'Direcionar Closer') {
+                        return a.sector === 'Closer';
+                    }
+
+                    if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
+                        return false;
+                    }
+
+                    if (isAction14Dias && formData.type === 'Ligação Closer') {
+                        return ['Closer', 'Co-líder'].includes(a.sector) && (a.role === 'Colaborador' || a.role === 'Co-líder');
+                    }
+
+                    const selectedEvent = events.find(e => e.id === formData.eventId);
+                    const eventSector = selectedEvent?.sector;
+                    const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
+
+                    if (formData.type === 'Fora da agenda') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
+                    if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fechamento') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
+                    if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder', 'Aldeia'].includes(a.sector) || a.role === 'Co-líder';
+                    if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia' || (a.sector === 'Aldeia' && a.role === 'Co-líder');
+
+                    if (isAdministrative) {
+                        return eventSector ? (a.sector === eventSector || (eventSector === 'Closer' && (a.role === 'Co-líder' || a.sector === 'Co-líder'))) : true;
+                    }
+
+                    if (user?.sector === 'TEI') return true;
+                    return user?.sector ? a.sector === user.sector : true;
+                })
+                .map(a => ({ value: a.id, label: a.name }))
+        ];
+
+        // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call/Fora da agenda, mostrar apenas Distribuição Automática
+        if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda')) {
+            if (isAction14Dias && formData.type === 'Ligação Closer') {
+                return options;
+            }
+            return options.filter(opt => opt.value === 'distribuicao_automatica');
+        }
+
+        if (!isEditing && formData.type === 'Fechamento') {
+            return options.filter(opt => opt.value === 'distribuicao_automatica');
+        }
+
+        // Direcionamento é sempre manual — sem distribuição automática.
+        if (formData.type === 'Direcionar Closer') {
+            return options.filter(opt => opt.value !== 'distribuicao_automatica');
+        }
+
+        return options;
+    }, [isEditing, formData.type, formData.eventId, attendants, events, user, isAction14Dias]);
+
+    const eventOptions = React.useMemo(() => {
+        // Filter active events by sector (or if user is privileged)
+        const filtered = events.filter(e => {
+            if (e.status !== true) return false;
+            if (user?.sector === 'Perpétuos') return e.sector === 'Perpétuos';
+
+            // Special case for On The Road 2.0 and Aldeia
+            // if (e.id === ON_THE_ROAD_EVENT_ID && user?.sector === 'Aldeia') return true;
+
+            return !e.sector || (user && (['Dev', 'Admin', 'Qualidade'].includes(user.role) || user.sector === e.sector));
+        });
+
+        // If we are editing and the current event is not in the list, add it
+        if (initialData?.eventId && !filtered.some(e => e.id === initialData.eventId)) {
+            const currentEvent = events.find(e => e.id === initialData.eventId);
+            if (currentEvent) {
+                filtered.push(currentEvent);
+            }
+        }
+
+        return filtered.map(e => ({ value: e.id, label: e.event_name }));
+    }, [events, user, initialData]);
 
     useEffect(() => {
         if (initialData) {
+            const incomingProfile = initialData.studentProfile;
             setFormData({
                 lead: initialData.lead,
                 phone: String(initialData.phone || ''),
@@ -116,10 +341,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 meetLink: initialData.meetLink || '',
                 notes: initialData.notes || '',
                 additionalInfo: initialData.additionalInfo || '',
-                studentProfile: initialData.studentProfile || {
-                    interest: 'Mediano',
-                    knowledge: 'Iniciante',
-                    financial: { currency: 'BRL', amount: '' }
+                studentProfile: {
+                    interest: (incomingProfile?.interest || '') as ProfileLevel,
+                    knowledge: (incomingProfile?.knowledge || '') as KnowledgeLevel,
+                    financial: {
+                        currency: incomingProfile?.financial?.currency || 'BRL',
+                        amount: incomingProfile?.financial?.amount != null ? String(incomingProfile.financial.amount) : ''
+                    }
                 }
             });
         } else if (prefillData) {
@@ -143,16 +371,39 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     setFormData(prev => ({ ...prev, attendantId: user.id }));
                 }
             }
-            // 2. Ligação Closer
-            else if (formData.type === 'Ligação Closer') {
-                if (user.sector === 'Closer') {
+            // 2. Ligação Closer, Gold Call & Fechamento
+            else if (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fechamento') {
+                if (user.sector === 'Closer' && formData.type !== 'Fechamento') {
                     setFormData(prev => ({ ...prev, attendantId: user.id }));
                 } else {
                     setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
                 }
             }
+            // 2c. Ligação Equipe Aldeia
+            else if (formData.type === 'Ligação Equipe Aldeia') {
+                setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
+            }
+            // 2b. Fora da agenda: pré-seleciona Distribuição Automática mas permite escolha manual
+            else if (formData.type === 'Fora da agenda') {
+                setFormData(prev => ({ ...prev, attendantId: 'distribuicao_automatica' }));
+            }
             // 3. Agendamento Pessoal
             else if (formData.type === 'Agendamento Pessoal') {
+                setFormData(prev => ({ ...prev, attendantId: user.id }));
+            }
+            // 3b. Direcionar Closer: escolha sempre manual. Descarta um atendente herdado de outro
+            // tipo (inclusive o 'distribuicao_automatica') que não sirva para este direcionamento.
+            else if (formData.type === 'Direcionar Closer') {
+                setFormData(prev => {
+                    if (!prev.attendantId) return prev;
+                    const picked = attendants.find(a => a.id === prev.attendantId);
+                    const isValid = !!picked && picked.sector === 'Closer' && picked.role !== 'Líder';
+                    return isValid ? prev : { ...prev, attendantId: '' };
+                });
+            }
+
+            // Special case for Tribo, Aldeia and Perpétuos: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
+            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || user.sector === 'Perpétuos') && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
             // 4. Reagendamento Closer
@@ -164,8 +415,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const appPhone = String(app.phone);
                     return appPhone === targetPhone &&
                         (app.type === 'Ligação Closer' ||
+                            app.type === 'Gold Call' ||
                             app.type === 'Reagendamento Closer' ||
-                            app.type === 'Agendamento Pessoal');
+                            app.type === 'Agendamento Pessoal' ||
+                            app.type === 'Upgrade');
                 });
 
                 if (relevantAppointments.length > 0) {
@@ -198,8 +451,43 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         return appointments.some(app =>
             String(app.phone) === cleanPhone &&
-            ['Ligação Closer', 'Upgrade'].includes(app.type)
+            ['Ligação Closer', 'Upgrade', 'Gold Call'].includes(app.type)
         );
+    };
+
+    const fetchPurchaseHistory = async (email: string) => {
+        if (!email) {
+            setPurchaseHistory([]);
+            return;
+        }
+        try {
+            // toastManager.add({ title: "Pipedrive", description: "Buscando histórico...", type: 'info', duration: 2000 });
+            const history = await getPurchasesByEmail(email);
+            setPurchaseHistory(history);
+
+            if (history.length > 0) {
+                toastManager.add({
+                    title: "Pipedrive",
+                    description: `${history.length} compra(s) encontrada(s).`,
+                    type: 'success'
+                });
+            } else {
+                // Optional: Notify if nothing found, helpful for debugging why panel doesn't open
+                toastManager.add({
+                    title: "Pipedrive",
+                    description: "Nenhuma compra encontrada.",
+                    type: 'info'
+                });
+            }
+        } catch (error: any) {
+            console.error("Error fetching purchase history:", error);
+            toastManager.add({
+                title: "Erro Pipedrive",
+                description: "Falha ao buscar histórico.",
+                type: 'error'
+            });
+            setPurchaseHistory([]);
+        }
     };
 
     const handlePhoneBlur = async () => {
@@ -212,7 +500,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             if (!checkEligibility(formData.phone)) {
                 toastManager.add({
                     title: "Permissão Negada",
-                    description: "Este cliente não possui um histórico (Ligação Closer ou Upgrade) para realizar um reagendamento.",
+                    description: "Este cliente não possui um histórico (Ligação Closer, Gold Call ou Upgrade) para realizar um reagendamento.",
                     type: 'error'
                 });
                 setFormData(prev => ({ ...prev, type: '' as AppointmentType }));
@@ -237,15 +525,30 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     }
                 }));
                 setIsExistingClient(true);
+
+                // Fetch Pipedrive History if email exists
+                if (client.email) {
+                    fetchPurchaseHistory(client.email);
+                } else {
+                    setPurchaseHistory([]);
+                }
             } else {
                 setIsExistingClient(false);
+                // If we have an email, try to fetch Pipedrive history again (or keep it), 
+                // instead of blindly clearing it. This handles the case of a new client 
+                // where we typed Email then Phone, or corrected Phone.
+                if (formData.email) {
+                    fetchPurchaseHistory(formData.email);
+                } else {
+                    setPurchaseHistory([]);
+                }
             }
         } catch (error) {
             console.error('Error checking client phone:', error);
             setIsExistingClient(false);
+            setPurchaseHistory([]);
         }
     };
-
 
     const handleClear = () => {
         setFormData({
@@ -268,39 +571,194 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
         });
         setIsExistingClient(false);
+        setPurchaseHistory([]);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (isSaving) return;
+
+        // Manual validation for required fields to provide better feedback
+        if (!formData.lead) { toastManager.add({ title: "Erro", description: "Nome é obrigatório", type: 'error' }); return; }
+        if (!formData.phone) { toastManager.add({ title: "Erro", description: "Telefone é obrigatório", type: 'error' }); return; }
+        if (!formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
 
         // Final Validation Gatekeeper
         if (formData.type === 'Reagendamento Closer') {
             if (!checkEligibility(formData.phone)) {
                 toastManager.add({
                     title: "Erro",
-                    description: "Este cliente não possui um histórico (Ligação Closer ou Upgrade) para realizar um reagendamento.",
+                    description: "Este cliente não possui um histórico (Ligação Closer, Gold Call ou Upgrade) para realizar um reagendamento.",
                     type: 'error'
                 });
                 return;
             }
         }
 
+        // Helper to check availability
+        const checkAvailability = (attendantId: string) => {
+
+            // Blocked closer cannot be assigned for this event (except when editing the existing assignment)
+            const isEditingMode = !!initialData;
+            const isSameExistingAssignment = isEditingMode &&
+                initialData?.attendantId === attendantId &&
+                initialData?.eventId === formData.eventId;
+            if (isCloserBlockedForSelectedEvent(formData.eventId, attendantId) && !isSameExistingAssignment) {
+                toastManager.add({
+                    title: "Indisponibilidade",
+                    description: "Este atendente está bloqueado para este evento.",
+                    type: 'error'
+                });
+                return false;
+            }
+
+            const selectedAttendant = attendants.find(a => a.id === attendantId);
+            if (!selectedAttendant) return true; // Can't validate if not found
+
+            const selectedEvent = events.find(e => e.id === formData.eventId);
+            const eventDurationMinutes = selectedEvent?.duration_minutes || 60;
+            const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
+
+            // 1. Check Schedule (Work hours + Pauses)
+            if (!isAldeiaOrTribo && !isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time, formData.type, eventDurationMinutes)) {
+                toastManager.add({
+                    title: "Indisponibilidade",
+                    description: `${selectedAttendant.name} não está disponível neste horário (Fora de expediente ou Pausa).`,
+                    type: 'error'
+                });
+                return false;
+            }
+
+            // 2. Check Conflicts (Overlapping appointments)
+            if (hasConflictingAppointment(attendantId, formData.date, formData.time, formData.type, appointments, initialData?.id, eventDurationMinutes)) {
+                toastManager.add({
+                    title: "Conflito de Agenda",
+                    description: `${selectedAttendant.name} já possui um agendamento conflitante neste horário.`,
+                    type: 'error'
+                });
+                return false;
+            }
+
+            // 3. Check 10-minute buffer (Final check before submission)
+            const now = new Date();
+            const apptDateTime = new Date(`${formData.date}T${formData.time}:00-03:00`);
+            const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
+
+            const isCloserLigacaoCloser = user?.sector === 'Closer' && formData.type === 'Ligação Closer';
+            const canBypassBuffer = isCloserLigacaoCloser;
+            if (diffMinutes < 0) {
+                toastManager.add({
+                    title: "Horário Inválido",
+                    description: "O agendamento deve ser em um horário futuro.",
+                    type: 'error'
+                });
+                return false;
+            }
+            if (!canBypassBuffer && formData.type !== 'Fora da agenda' && diffMinutes < 10) {
+                toastManager.add({
+                    title: "Horário Inválido",
+                    description: "Os agendamentos devem ser marcados com pelo menos 10 minutos de antecedência.",
+                    type: 'error'
+                });
+                return false;
+            }
+
+            // 4. Sector Check
+            if (isAldeiaOrTribo && formData.type !== 'Agendamento Pessoal') {
+                if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, formData.time, formData.type, appointments, attendants, initialData?.id)) {
+                    toastManager.add({
+                        title: "Limite de Agendamentos",
+                        description: `O setor ${selectedEvent!.sector} atingiu o limite máximo de agendamentos para este horário.`,
+                        type: 'error'
+                    });
+                    return false;
+                }
+            }
+
+            return true;
+        };
+
+        // Validate 'Upgrade', 'Reagendamento Closer', 'Fora da agenda' and 'Direcionar Closer' manual selections
+        if (formData.type === 'Upgrade' || formData.type === 'Reagendamento Closer' || formData.type === 'Fora da agenda' || formData.type === 'Direcionar Closer') {
+            if (formData.attendantId && formData.attendantId !== 'distribuicao_automatica') {
+                // Skip validation if we are editing and the schedule-relevant fields haven't changed
+                const isScheduleChanged = !initialData ||
+                    initialData.date !== formData.date ||
+                    initialData.time !== formData.time ||
+                    initialData.attendantId !== formData.attendantId;
+
+                if (isScheduleChanged) {
+                    if (!checkAvailability(formData.attendantId)) {
+                        return;
+                    }
+                }
+            }
+        }
+
+        setIsSaving(true);
+
         try {
             let finalAttendantId = formData.attendantId;
+            const studentProfilePayload = (() => {
+                const interest = formData.studentProfile.interest;
+                const knowledge = formData.studentProfile.knowledge;
+                const currency = formData.studentProfile.financial.currency;
+                const amount = formData.studentProfile.financial.amount;
+
+                const payload: any = {};
+                if (interest) payload.interest = interest;
+                if (knowledge) payload.knowledge = knowledge;
+
+                const hasAmount = String(amount ?? '').trim() !== '';
+                if (hasAmount) {
+                    payload.financial = {
+                        currency: currency || 'BRL',
+                        amount: amount
+                    };
+                }
+
+                return Object.keys(payload).length > 0 ? payload : undefined;
+            })();
 
             // Resolve Automatic Distribution on Submit
             if (formData.attendantId === 'distribuicao_automatica') {
+                // FRESH DATA: Refresh attendants and appointments right before distribution to avoid
+                // stale sector/schedule/booking data (the shared AppointmentContext may not reflect
+                // bookings made by other sessions since it was last loaded).
+                const [freshAttendants, freshAppointments] = await Promise.all([
+                    refreshAttendants(),
+                    api.appointments.list().catch(() => appointments)
+                ]);
+                console.log('[DISTRIBUTION] Refreshed attendants before submit:', freshAttendants.length, 'total');
+
+                let freshAttendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
+                    ? freshAttendants.filter(a => a.id !== BLOCKED_CLOSER_ID)
+                    : freshAttendants;
+
+                if (formData.eventId === ACTION_14_DIAS_EVENT_ID && formData.type === 'Ligação Closer') {
+                    freshAttendantsForEvent = freshAttendantsForEvent.filter(a => (a.role === 'Colaborador' || a.role === 'Co-líder') && ['Closer', 'Co-líder'].includes(a.sector));
+                }
+
+                const selectedEvent = events.find(e => e.id === formData.eventId);
+                const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
+                const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento'].includes(formData.type);
+                const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
+
                 const bestCloser = findAvailableCloser(
                     formData.date,
                     formData.time,
                     formData.type,
-                    attendants,
-                    appointments
+                    freshAttendantsForEvent,
+                    freshAppointments,
+                    { ignoreSchedule, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined }
                 );
                 if (bestCloser) {
+                    console.log(`[DISTRIBUTION] Assigned: ${bestCloser.name} (sector: ${bestCloser.sector}, id: ${bestCloser.id})`);
                     finalAttendantId = bestCloser.id;
                 } else {
-                    alert('Não há closers disponíveis para este horário.');
+                    alert('Não há atendentes disponíveis para este horário.');
+                    setIsSaving(false);
                     return;
                 }
             }
@@ -311,6 +769,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             if (initialData) {
                 await updateAppointment(initialData.id, {
                     ...formData,
+                    studentProfile: studentProfilePayload,
                     phone: Number(formData.phone.replace(/\D/g, '')),
                     attendantId: finalAttendantId,
                     updatedBy: user?.id // Pass current user for status tracking
@@ -318,19 +777,75 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             } else {
                 await createAppointment({
                     ...formData,
+                    studentProfile: studentProfilePayload,
                     phone: Number(formData.phone.replace(/\D/g, '')),
                     attendantId: finalAttendantId,
                     createdBy: creatorId
                 } as any);
             }
             onSuccess();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving appointment:', error);
-            toastManager.add({
-                title: "Erro",
-                description: "Erro ao salvar agendamento.",
-                type: 'error'
-            });
+            setIsSaving(false);
+
+            if (error.response) {
+                const status = error.response.status;
+                const data = error.response.data;
+
+                // Handle Details (Validation Errors) or Specific Error Messages
+                if (data.details || data.error) {
+                    // 1. Details Object (Zod/Backend Validation)
+                    if (data.details) {
+                        const errorMessages: string[] = [];
+                        // Recursive helper to extract errors from Zod format
+                        const extractErrors = (obj: any): string[] => {
+                            const messages: string[] = [];
+                            if (obj._errors && Array.isArray(obj._errors)) {
+                                messages.push(...obj._errors);
+                            }
+                            Object.keys(obj).forEach(key => {
+                                if (typeof obj[key] === 'object' && obj[key] !== null && key !== '_errors') {
+                                    messages.push(...extractErrors(obj[key]));
+                                }
+                            });
+                            return messages;
+                        };
+                        errorMessages.push(...extractErrors(data.details));
+
+                        [...new Set(errorMessages)].forEach(msg => {
+                            toastManager.add({
+                                title: "Erro de Validação",
+                                description: msg,
+                                type: 'error'
+                            });
+                        });
+                    }
+
+                    // 2. Single Error Message (e.g., 409 Conflict, 400 Bad Request)
+                    if (data.error) {
+                        toastManager.add({
+                            title: status === 409 ? "Conflito / Indisponibilidade" : "Erro",
+                            description: data.error,
+                            type: 'error'
+                        });
+                    }
+
+                } else {
+                    // Generic Fallback
+                    toastManager.add({
+                        title: "Erro",
+                        description: `Erro ${status}: Ocorreu um erro no servidor.`,
+                        type: 'error'
+                    });
+                }
+            } else {
+                // Network or other errors
+                toastManager.add({
+                    title: "Erro",
+                    description: "Ocorreu um erro inesperado. Verifique sua conexão.",
+                    type: 'error'
+                });
+            }
         }
     };
 
@@ -357,14 +872,16 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     };
 
     // Calculate end time (start time + duration)
-    const calculateEndTime = (startTime: string) => {
+    const calculateEndTime = (startTime: string, eventId: string) => {
         if (!startTime) return '';
         const [hours, minutes] = startTime.split(':').map(Number);
 
-        let duration = 30; // Default (Ligação SDR)
-
-        if (['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Agendamento Pessoal'].includes(formData.type)) {
-            duration = 60;
+        let duration = 60; // Default
+        if (eventId) {
+            const selectedEvent = events.find(e => e.id === eventId);
+            if (selectedEvent && selectedEvent.duration_minutes) {
+                duration = selectedEvent.duration_minutes;
+            }
         }
 
         const totalMinutes = hours * 60 + minutes + duration;
@@ -373,29 +890,44 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
     };
 
-    const endTime = calculateEndTime(formData.time);
+    const endTime = calculateEndTime(formData.time, formData.eventId);
 
     if (loading) return <div>Carregando...</div>;
 
     const getBrazilStats = () => {
         const now = new Date();
-        const brazilTimeStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
-        const brazilDate = new Date(brazilTimeStr);
-        const year = brazilDate.getFullYear();
-        const month = brazilDate.getMonth();
-        const day = brazilDate.getDate();
+
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+
+        const parts = formatter.formatToParts(now);
+        const getPart = (type: string) => parts.find(p => p.type === type)?.value || '';
+
+        const year = parseInt(getPart('year'));
+        const month = parseInt(getPart('month')) - 1;
+        const day = parseInt(getPart('day'));
 
         const todayDate = new Date(year, month, day);
-        const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const todayStr = `${year}-${getPart('month')}-${getPart('day')}`;
+        const nowTimeStr = `${getPart('hour')}:${getPart('minute')}`;
 
-        const hours = String(brazilDate.getHours()).padStart(2, '0');
-        const minutes = String(brazilDate.getMinutes()).padStart(2, '0');
-        const nowTimeStr = `${hours}:${minutes}`;
+        // Calculate minTime with 10 minute buffer
+        const bufferDate = new Date(now.getTime() + 10 * 60000);
+        const bufferParts = formatter.formatToParts(bufferDate);
+        const getBufferPart = (type: string) => bufferParts.find(p => p.type === type)?.value || '';
+        const minTimeStr = `${getBufferPart('hour')}:${getBufferPart('minute')}`;
 
-        return { todayDate, todayStr, nowTimeStr };
+        return { todayDate, todayStr, nowTimeStr, minTimeStr };
     };
 
-    const { todayDate, todayStr, nowTimeStr } = getBrazilStats();
+    const { todayDate, todayStr, minTimeStr } = getBrazilStats();
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -403,7 +935,186 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 <div className="flex-1 p-6 space-y-4 min-w-0">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Row 2: Telefone (First) and Aluno */}
-                        <div className="col-span-1 md:col-span-2 relative mt-0 mb-2">
+                        <div className="col-span-1 md:col-span-2 relative mt-1 mb-2">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-border" />
+                            </div>
+                            <div className="relative flex justify-center text-xs">
+                                <span className="bg-surface px-2 text-muted-foreground font-medium">
+                                    Agendamento
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Row 1: Evento and Tipo */}
+                        <FloatingSelect
+                            label="Evento"
+                            value={formData.eventId}
+                            onChange={(e: any) => {
+                                setFormData({ ...formData, eventId: e.target.value });
+                                if (errors.eventId) setErrors(prev => ({ ...prev, eventId: '' }));
+                            }}
+                            onBlur={() => {
+                                if (!formData.eventId) {
+                                    setErrors(prev => ({ ...prev, eventId: 'Evento é obrigatório' }));
+                                }
+                            }}
+                            options={eventOptions}
+                            disabled={isEditing}
+                            error={errors.eventId}
+                        />
+                        <div className="space-y-1">
+                            <FloatingSelect
+                                label="Tipo"
+                                value={formData.type}
+                                onChange={(e: any) => {
+                                    const newType = e.target.value as AppointmentType;
+                                    if (newType === 'Reagendamento Closer' && formData.phone) {
+                                        if (!checkEligibility(formData.phone)) {
+                                            toastManager.add({
+                                                title: "Permissão Negada",
+                                                description: "Este cliente não possui um histórico para realizar um reagendamento.",
+                                                type: 'error'
+                                            });
+                                            return;
+                                        }
+                                    }
+                                    setFormData({ ...formData, type: newType });
+                                    if (errors.type) setErrors(prev => ({ ...prev, type: '' }));
+                                }}
+                                onBlur={() => {
+                                    if (!formData.type) {
+                                        setErrors(prev => ({ ...prev, type: 'Tipo de agendamento é obrigatório' }));
+                                    }
+                                }}
+                                options={[...allowedTypes]}
+                                disabled={isEditing}
+                                error={errors.type}
+                            />
+                            {['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && !formData.phone && (
+                                <p className="text-xs text-amber-500 font-medium ml-1">
+                                    * Preencha o cliente primeiro para liberar a data
+                                </p>
+                            )}
+                            {formData.type === 'Direcionar Closer' && !isCloserDirecionado && (
+                                <p className="text-xs text-amber-500 font-medium ml-1">
+                                    * Escolha o Closer primeiro para liberar a data
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Row 2: Data and Horário */}
+                        <FloatingDateInput
+                            label="Data"
+                            value={formData.date}
+                            onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
+                            minDate={todayDate}
+                            disabled={
+                                isEditing ||
+                                !formData.eventId ||
+                                !formData.type ||
+                                (['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && (!formData.phone || !formData.lead)) ||
+                                (formData.type === 'Direcionar Closer' && !isCloserDirecionado)
+                            }
+                        />
+                        <div className="grid grid-cols-2 gap-4">
+                            <TimePickerInput
+                                label="Horário"
+                                value={formData.time}
+                                onChange={(time) => setFormData({ ...formData, time })}
+                                minTime={(formData.date === todayStr) ? minTimeStr : undefined}
+                                disabled={
+                                    isEditing ||
+                                    !formData.date ||
+                                    (['Reagendamento Closer', 'Fora da agenda'].includes(formData.type) && (!formData.phone || !formData.lead)) ||
+                                    (formData.type === 'Direcionar Closer' && !isCloserDirecionado)
+                                }
+                                availableTimes={availableTimes}
+                            />
+                            <FloatingInput
+                                label="Horário Final"
+                                type="text"
+                                value={endTime}
+                                disabled
+                                className="opacity-50 cursor-not-allowed"
+                            />
+                        </div>
+
+                        {/* Row 3: Atendente and Status */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className={!initialData ? "col-span-2" : ""}>
+                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || user?.sector === 'Perpétuos') && !initialData && user ? (
+                                    <FloatingInput
+                                        label="Atendente"
+                                        value={user.name}
+                                        disabled
+                                        className="opacity-100 bg-muted/50 text-foreground"
+                                    />
+                                ) : (
+                                    <FloatingSelect
+                                        label="Atendente"
+                                        value={formData.attendantId}
+                                        onChange={(e: any) => {
+                                            setFormData({ ...formData, attendantId: e.target.value });
+                                            if (errors.attendantId) setErrors(prev => ({ ...prev, attendantId: '' }));
+                                        }}
+                                        onBlur={() => {
+                                            if (!formData.attendantId) {
+                                                setErrors(prev => ({ ...prev, attendantId: 'Atendente é obrigatório' }));
+                                            }
+                                        }}
+                                        options={attendantOptions}
+                                        disabled={
+                                            isEditing
+                                                ? !(user && ['Co-líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && formData.type !== 'Direcionar Closer' && !(isAction14Dias && formData.type === 'Ligação Closer'))
+                                        }
+                                        error={errors.attendantId}
+                                    />
+                                )}
+                            </div>
+                            {initialData && (
+                                <FloatingSelect
+                                    label="Status"
+                                    value={formData.status}
+                                    onChange={(e: any) => setFormData({ ...formData, status: e.target.value as AppointmentStatus })}
+                                    options={APPOINTMENT_STATUSES.map(status => ({ value: status, label: status }))}
+                                    disabled={
+                                        !user || (
+                                            user.id !== initialData.createdBy &&
+                                            user.id !== initialData.attendantId &&
+                                            !['Líder', 'Co-líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
+                                        ) || (
+                                            user.role === 'Colaborador' &&
+                                            user.sector === 'Closer' &&
+                                            (initialData.status_edit_count || 0) >= 3
+                                        )
+                                    }
+                                />
+                            )}
+                            {initialData && (initialData.updater || initialData.updatedBy) && (
+                                <div className="col-span-1 md:col-span-2 flex justify-end -mt-3">
+                                    <span className="text-xs text-muted-foreground">
+                                        Editado por: {initialData.updater?.name || 'Sistema'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Row 4: Google Meet (if editing) */}
+                        {initialData && (
+                            <FloatingInput
+                                label="Google Meet"
+                                value={formData.meetLink}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, meetLink: e.target.value })}
+                                className="text-blue-500"
+                                disabled={isEditing}
+                            />
+                        )}
+
+
+                        {/* DIVIDER: Client Section */}
+                        <div className="col-span-1 md:col-span-2 relative mt-4 mb-2">
                             <div className="absolute inset-0 flex items-center">
                                 <span className="w-full border-t border-border" />
                             </div>
@@ -413,23 +1124,47 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 </span>
                             </div>
                         </div>
+
+                        {/* Row 5: Telefone and Nome */}
                         <FloatingInput
                             label="Telefone"
                             value={formData.phone}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, phone: sanitizeInput.digits(e.target.value) })}
-                            onBlur={handlePhoneBlur}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                setFormData({ ...formData, phone: sanitizeInput.digits(e.target.value) });
+                                if (errors.phone) setErrors(prev => ({ ...prev, phone: '' }));
+                            }}
+                            onBlur={() => {
+                                if (!formData.phone) {
+                                    setErrors(prev => ({ ...prev, phone: 'Telefone é obrigatório' }));
+                                } else {
+                                    handlePhoneBlur();
+                                }
+                            }}
                             required
+                            error={errors.phone}
                             disabled={isEditing || isExistingClient}
+                            maxLength={20}
+                            type="tel"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                         />
                         <FloatingInput
-                            label="Aluno"
+                            label="Nome"
                             value={formData.lead}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 setFormData({ ...formData, lead: sanitizeInput.name(e.target.value) });
+                                if (errors.lead) setErrors(prev => ({ ...prev, lead: '' }));
                             }}
-                            onBlur={() => setFormData(prev => ({ ...prev, lead: prev.lead.trim() }))}
+                            onBlur={() => {
+                                setFormData(prev => ({ ...prev, lead: prev.lead.trim() }));
+                                if (!formData.lead.trim()) {
+                                    setErrors(prev => ({ ...prev, lead: 'Nome é obrigatório' }));
+                                }
+                            }}
                             required
+                            error={errors.lead}
                             disabled={isEditing || isExistingClient}
+                            maxLength={100}
                         />
 
                         {/* Row 2: Email and Perfil de Interesse */}
@@ -440,13 +1175,30 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 const val = sanitizeInput.email(e.target.value);
                                 setFormData({ ...formData, email: val });
+                                if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
                                 if (isExistingClient && val !== formData.email) {
                                     setIsExistingClient(false);
                                 }
                             }}
-                            required
+                            onBlur={() => {
+                                let hasError = false;
+                                if (!formData.email) {
+                                    setErrors(prev => ({ ...prev, email: 'Email é obrigatório' }));
+                                    hasError = true;
+                                } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+                                    setErrors(prev => ({ ...prev, email: 'O campo de email precisa terminar com .com, .br, .net, .jp, etc' }));
+                                    hasError = true;
+                                }
+
+                                if (!hasError) {
+                                    fetchPurchaseHistory(formData.email);
+                                }
+                            }}
+                            required // Keep required on main fields but handled manually too
+                            error={errors.email}
                             disabled={isEditing}
                         />
+
                         <FloatingSelect
                             label="Perfil de Interesse"
                             value={formData.studentProfile.interest}
@@ -473,7 +1225,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                             { value: 'BRL', label: 'BRL' },
                                             { value: 'USD', label: 'USD' },
                                             { value: 'EUR', label: 'EUR' },
-                                            { value: 'JPY', label: 'JPY' }
+                                            { value: 'JPY', label: 'JPY' },
+                                            { value: 'AOA', label: 'KWZ' }
                                         ]}
                                         disabled={isEditing}
                                     />
@@ -484,16 +1237,22 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         value={formData.studentProfile.financial.amount}
                                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                             const formatted = sanitizeInput.currency(e.target.value);
+                                            // Check limits
+                                            const clean = formatted.replace(/\./g, '').replace(',', '.');
+                                            const num = parseFloat(clean);
+                                            if (!isNaN(num) && num > 1000000) {
+                                                return; // Prevent exceeding 1M
+                                            }
                                             setFormData(prev => ({
                                                 ...prev,
                                                 studentProfile: {
                                                     ...prev.studentProfile,
                                                     financial: { ...prev.studentProfile.financial, amount: formatted }
                                                 }
-                                            }))
+                                            }));
                                         }}
                                         disabled={isEditing}
-                                        required
+                                    // required - Validation handled manually for better UX
                                     />
                                     {getConvertedValue() && (
                                         <div className="text-xs text-muted-foreground mt-1 text-right">
@@ -511,169 +1270,62 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             disabled={isEditing}
                         />
 
-                        {/* Row 4: Evento and Tipo */}
-                        <div className="col-span-1 md:col-span-2 relative mt-1 mb-2">
-                            <div className="absolute inset-0 flex items-center">
-                                <span className="w-full border-t border-border" />
-                            </div>
-                            <div className="relative flex justify-center text-xs">
-                                <span className="bg-surface px-2 text-muted-foreground font-medium">
-                                    Agendamento
-                                </span>
-                            </div>
-                        </div>
-                        <FloatingSelect
-                            label="Evento"
-                            value={formData.eventId}
-                            onChange={(e: any) => setFormData({ ...formData, eventId: e.target.value })}
-                            options={[...events.filter(e => e.status === true).map(e => ({ value: e.id, label: e.event_name }))]}
-                            disabled={isEditing}
-                        />
-                        <FloatingSelect
-                            label="Tipo"
-                            value={formData.type}
-                            onChange={(e: any) => {
-                                const newType = e.target.value as AppointmentType;
-                                if (newType === 'Reagendamento Closer' && formData.phone) {
-                                    if (!checkEligibility(formData.phone)) {
-                                        toastManager.add({
-                                            title: "Permissão Negada",
-                                            description: "Este cliente não possui um histórico (Ligação Closer ou Upgrade) para realizar um reagendamento.",
-                                            type: 'error'
-                                        });
-                                        return; // Prevent selection
-                                    }
-                                }
-                                setFormData({ ...formData, type: newType });
-                            }}
-                            options={[...allowedTypes]}
-                            disabled={isEditing}
-                        />
-
-                        {/* Row 5: Data and Horário */}
-                        <FloatingDateInput
-                            label="Data"
-                            value={formData.date}
-                            onChange={(e: any) => setFormData({ ...formData, date: e.target.value })}
-                            minDate={todayDate}
-                            disabled={isEditing || !formData.email || !formData.lead || !formData.phone || !formData.eventId || !formData.type}
-                        />
-                        <div className="grid grid-cols-2 gap-4">
-                            <TimePickerInput
-                                label="Horário"
-                                value={formData.time}
-                                onChange={(time) => setFormData({ ...formData, time })}
-                                minTime={formData.date === todayStr ? nowTimeStr : undefined}
-                                disabled={isEditing || !formData.date}
-                            />
-                            <FloatingInput
-                                label="Horário Final"
-                                type="text"
-                                value={endTime}
-                                disabled
-                                className="opacity-50 cursor-not-allowed"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Row 7: Informações Adicionais */}
-                    <div className="relative">
-                        <FloatingTextArea
-                            label="Informações Adicionais"
-                            value={formData.additionalInfo}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                                setFormData({ ...formData, additionalInfo: sanitizeInput.strictText(e.target.value) });
-                            }}
-                            maxLength={300}
-                            disabled={isEditing}
-                            rows={3}
-                            className="pb-6"
-                        />
-                        <div className="absolute bottom-2 right-3 text-xs text-muted-foreground pointer-events-none">
-                            {formData.additionalInfo.length}/300
-                        </div>
-                    </div>
-
-                    {/* Row 7: Descrição do Agendamento (TextArea) - ONLY VISIBLE WHEN EDITING */}
-                    {initialData && (
-                        <div className="space-y-1">
-                            <label className="block text-sm font-bold text-foreground">Descrição do Agendamento:</label>
-                            <textarea
-                                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
-                                rows={4}
-                                value={formData.notes}
-                                onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                        {/* Row 6: Informações Adicionais */}
+                        <div className="relative">
+                            <FloatingTextArea
+                                label="Informações Adicionais"
+                                value={formData.additionalInfo}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                                    setFormData({ ...formData, additionalInfo: sanitizeInput.strictText(e.target.value) });
+                                }}
                                 maxLength={500}
-                                placeholder="Digite a descrição do agendamento..."
+                                disabled={isEditing}
+                                rows={3}
+                                className="pb-6"
                             />
+                            <div className="absolute bottom-2 right-3 text-xs text-muted-foreground pointer-events-none">
+                                {formData.additionalInfo.length}/500
+                            </div>
                         </div>
-                    )}
 
-                    {/* Row 8: Atendente and Status */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className={!initialData ? "col-span-2" : ""}>
-                            <FloatingSelect
-                                label="Atendente"
-                                value={formData.attendantId}
-                                onChange={(e: any) => setFormData({ ...formData, attendantId: e.target.value })}
-                                options={attendantOptions}
-                                disabled={
-                                    // Enabled if:
-                                    // 1. Creating new 'Upgrade' appointment
-                                    // 2. Editing existing appointment AND user has specific role permissions
-                                    isEditing
-                                        ? !(user && ['Co-Líder', 'Líder', 'Admin', 'Dev'].includes(user.role))
-                                        : formData.type !== 'Upgrade'
-                                }
-                            />
-                        </div>
+                        {/* Row 7: Descrição do Agendamento (TextArea) - ONLY VISIBLE WHEN EDITING */}
                         {initialData && (
-                            <FloatingSelect
-                                label="Status"
-                                value={formData.status}
-                                onChange={(e: any) => setFormData({ ...formData, status: e.target.value as AppointmentStatus })}
-                                options={APPOINTMENT_STATUSES.map(status => ({ value: status, label: status }))}
-                            />
-                        )}
-                        {initialData && (initialData.updater || initialData.updatedBy) && (
-                            <div className="col-span-1 md:col-span-2 flex justify-end -mt-3">
-                                <span className="text-xs text-muted-foreground">
-                                    Editado por: {initialData.updater?.name || 'Sistema'}
-                                </span>
+                            <div className="space-y-1">
+                                <label className="block text-sm font-bold text-foreground">Descrição do Agendamento:</label>
+                                <textarea
+                                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
+                                    rows={4}
+                                    value={formData.notes}
+                                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                                    maxLength={500}
+                                    placeholder="Digite a descrição do agendamento..."
+                                />
                             </div>
                         )}
+
+
+
+
                     </div>
-
-                    {/* Row 9: Google Meet */}
-                    {initialData && (
-                        <FloatingInput
-                            label="Google Meet"
-                            value={formData.meetLink}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, meetLink: e.target.value })}
-                            className="text-blue-500"
-                            disabled={isEditing}
-                        />
-                    )}
-
                 </div>
 
-                {!initialData && <ClientHistory phone={formData.phone} />}
-            </div>
+
+
+                {!initialData && <ClientHistory phone={formData.phone} externalHistory={purchaseHistory} />}
+            </div >
             <div className="flex justify-end gap-3">
-                <Button type="button" variant="ghost" onClick={() => onCancel()} className="flex items-center gap-2">
-                    Cancelar
-                </Button>
+
                 {!initialData && (
-                    <Button type="button" variant="secondary" onClick={handleClear} className="flex items-center gap-2">
+                    <Button type="button" variant="secondary" onClick={handleClear} className="flex items-center gap-2" disabled={isSaving}>
                         <Eraser size={18} />
                         Limpar
                     </Button>
                 )}
-                <Button type="submit" className="flex items-center gap-2">
-                    <Save size={18} />
-                    Salvar
+                <Button type="submit" className="flex items-center gap-2" disabled={isSaving}>
+                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    {isSaving ? 'Salvando...' : 'Salvar'}
                 </Button>
             </div>
-        </form>
+        </form >
     );
 };

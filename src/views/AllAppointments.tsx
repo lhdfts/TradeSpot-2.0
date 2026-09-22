@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { useAppointments } from '../context/AppointmentContext';
+import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
 import { Search, Calendar as CalendarIcon, List, Copy, Check } from 'lucide-react';
 import type { Appointment } from '../types';
@@ -11,28 +13,64 @@ import { FloatingSelect } from '../components/FloatingSelect';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { CalendarView } from '../components/CalendarView';
 import { toastManager } from '../components/ui/toast';
-import { sanitizeInput } from '../utils/security';
+import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
 
 interface AllAppointmentsProps {
     onEdit: (appt: Appointment) => void;
 }
 
+const getBrazilTodayISO = () => {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    });
+    return formatter.format(new Date()); // YYYY-MM-DD no fuso de Brasília
+};
+
 export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
-    const { appointments } = useAppointments();
+    const { appointments, refresh } = useAppointments();
     const { attendants, events } = useFormData();
     const [searchParams] = useSearchParams();
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (user?.role === 'Colaborador' && user?.sector === 'Closer') {
+            navigate('/');
+        }
+    }, [user, navigate]);
 
     const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     // Initialize attendant filter from URL param if present
     const [attendantFilter, setAttendantFilter] = useState('all');
+    const [creatorFilter, setCreatorFilter] = useState('all');
     const [eventFilter, setEventFilter] = useState('all');
-    const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [sectorFilter, setSectorFilter] = useState('all');
+    const [dateRange, setDateRange] = useState({ start: getBrazilTodayISO(), end: '' });
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
     const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    // Solução 1 (Recomendada - Filtro de Data no Backend):
+    // Busca do Supabase exatamente os agendamentos do período selecionado, antes dos limites de linhas
+    useEffect(() => {
+        refresh({
+            startDate: dateRange.start || undefined,
+            endDate: dateRange.end || undefined
+        });
+    }, [dateRange.start, dateRange.end]);
+
+    const filteredAttendants = (user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade'
+        ? attendants
+        : user?.sector === 'Suporte'
+            ? attendants.filter(att => getAllowedSectors(user).includes(att.sector))
+            : attendants.filter(att => att.sector === user?.sector))
+        .sort((a, b) => a.name.localeCompare(b.name));
 
     // Update filter if URL param changes or attendants/events load
     useEffect(() => {
@@ -57,27 +95,115 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         }
     }, [searchParams, attendants, events]);
 
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, statusFilter, attendantFilter, creatorFilter, eventFilter, sectorFilter, dateRange]);
+
+    // Events that had at least 1 appointment within the selected period (Data Inicial/Data Final),
+    // used to restrict the options shown in the "Evento" filter.
+    const eventIdsInDateRange = new Set(
+        appointments
+            .filter(a => {
+                let matchesDateForEvent;
+                if (!dateRange.start && !dateRange.end) {
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    const safeTodayStr = `${yyyy}-${mm}-${dd}`;
+                    matchesDateForEvent = a.date >= safeTodayStr;
+                } else {
+                    matchesDateForEvent =
+                        (!dateRange.start || a.date >= dateRange.start) &&
+                        (!dateRange.end || a.date <= dateRange.end);
+                }
+
+                if (!matchesDateForEvent) return false;
+
+                const linkedAttendant = attendants.find(att => att.id === a.attendantId);
+                const linkedEvent = events.find(e => e.id === a.eventId);
+                const creatorUser = attendants.find(att => att.id === a.createdBy);
+                const allowedSectors = getAllowedSectors(user);
+                const isGlobalViewer = canViewAllSectors(user);
+
+                return isGlobalViewer ||
+                    (linkedAttendant && linkedAttendant.sector && allowedSectors.includes(linkedAttendant.sector)) ||
+                    (linkedEvent && linkedEvent.sector && allowedSectors.includes(linkedEvent.sector)) ||
+                    (creatorUser && creatorUser.sector && allowedSectors.includes(creatorUser.sector)) ||
+                    (a.attendantId === user?.id) ||
+                    (a.createdBy === user?.id);
+            })
+            .map(a => a.eventId)
+    );
+
+    // Keep the currently selected event selectable even if it has no appointments in range
+    const eventOptions = events.filter(ev =>
+        ev.status === true && (eventIdsInDateRange.has(ev.id) || ev.id === eventFilter)
+    );
+
     // Filter Logic
     const filtered = appointments.filter(a => {
         const matchesSearch =
             a.lead.toLowerCase().includes(search.toLowerCase()) ||
             a.phone.toString().includes(search) ||
-            a.id.includes(search);
+            a.id.includes(search) ||
+            a.email?.toLowerCase().includes(search.toLowerCase());
 
         const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
-        // Check exact match for attendant ID
+
         const matchesAttendant = attendantFilter === 'all' || a.attendantId === attendantFilter;
+
+        const matchesCreator = creatorFilter === 'all' || (a.createdBy && a.createdBy === creatorFilter);
+
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
 
-        const matchesDate =
-            (!dateRange.start || a.date >= dateRange.start) &&
-            (!dateRange.end || a.date <= dateRange.end);
+        const matchesSectorFilter = sectorFilter === 'all' || (() => {
+            const linkedAttendant = attendants.find(att => att.id === a.attendantId);
+            return linkedAttendant?.sector === sectorFilter;
+        })();
 
-        return matchesSearch && matchesStatus && matchesAttendant && matchesEvent && matchesDate;
+        // Updated: If searching, IGNORE date filter (Global Search)
+        let matchesDate = true;
+
+        if (search) {
+            matchesDate = true;
+        } else {
+            if (!dateRange.start && !dateRange.end) {
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const dd = String(today.getDate()).padStart(2, '0');
+                const safeTodayStr = `${yyyy}-${mm}-${dd}`;
+
+                matchesDate = a.date >= safeTodayStr;
+            } else {
+                matchesDate =
+                    (!dateRange.start || a.date >= dateRange.start) &&
+                    (!dateRange.end || a.date <= dateRange.end);
+            }
+        }
+
+        // Sector restrictions (Fixed for Medina and TEI)
+        const allowedSectors = getAllowedSectors(user);
+        const isGlobalViewer = canViewAllSectors(user);
+        
+        const linkedAttendant = attendants.find(att => att.id === a.attendantId);
+        const linkedEvent = events.find(e => e.id === a.eventId);
+        const creatorUser = attendants.find(att => att.id === a.createdBy);
+
+        const matchesSector = isGlobalViewer ||
+            (linkedAttendant && linkedAttendant.sector && allowedSectors.includes(linkedAttendant.sector)) ||
+            (linkedEvent && linkedEvent.sector && allowedSectors.includes(linkedEvent.sector)) ||
+            (creatorUser && creatorUser.sector && allowedSectors.includes(creatorUser.sector)) ||
+            (a.attendantId === user?.id) ||
+            (a.createdBy === user?.id);
+
+        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesSectorFilter && matchesDate && matchesSector;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
-        return dateA.getTime() - dateB.getTime();
+        return dateA.getTime() - dateB.getTime(); // Ascending for closest appointments first
     });
 
     // Pagination Logic
@@ -110,18 +236,39 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Realizado': return 'bg-green-500/10 text-green-400 border-green-500/20';
-            case 'Pendente': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-            case 'Cancelado': return 'bg-red-500/10 text-red-400 border-red-500/20';
-            case 'Reagendado': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-            case 'Esquecimento': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
-            case 'Não compareceu': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+            case 'Realizado': return 'bg-[#00E676]/10 text-[#00E676] border-[#00E676]/20';
+            case 'Pendente': return 'bg-[#B2B2B2]/10 text-[#B2B2B2] border-[#B2B2B2]/20';
+            case 'Cancelado': return 'bg-[#FF1744]/10 text-[#FF1744] border-[#FF1744]/20';
+            case 'Reagendado': return 'bg-[#2979FF]/10 text-[#2979FF] border-[#2979FF]/20';
+            case 'Esquecimento': return 'bg-[#D500F9]/10 text-[#D500F9] border-[#D500F9]/20';
+            case 'No-show': return 'bg-[#FF9100]/10 text-[#FF9100] border-[#FF9100]/20';
             default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
         }
     };
 
+    // Helper to get Creator Name
+    const getCreatorName = (id?: string) => {
+        if (!id) return '-';
+        const creator = attendants.find(a => a.id === id);
+        return creator ? creator.name : 'Unknown';
+    };
+
+    if (user?.role === 'Colaborador' && user?.sector === 'Closer') {
+        return <Navigate to="/" replace />;
+    }
+
     return (
         <div className="space-y-6">
+            {createPortal(
+                <div className="flex flex-col text-right mr-4">
+                    <span className="text-[10px] tracking-wider text-secondary font-bold uppercase">Quantidade</span>
+                    <span className="text-xl font-bold text-foreground leading-none">
+                        {filtered.length}
+                    </span>
+                </div>,
+                document.getElementById('header-actions') || document.body
+            )}
+
             {/* Controls Bar */}
             <div className="flex flex-col xl:flex-row gap-4 bg-surface p-4 rounded-lg border border-border shadow-sm">
                 {/* Search */}
@@ -149,10 +296,32 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                 { value: 'all', label: 'Todos' },
                                 { value: 'Cancelado', label: 'Cancelado' },
                                 { value: 'Esquecimento', label: 'Esquecimento' },
-                                { value: 'Não compareceu', label: 'Não compareceu' },
+                                { value: 'No-show', label: 'No-show' },
                                 { value: 'Pendente', label: 'Pendente' },
                                 { value: 'Realizado', label: 'Realizado' },
                                 { value: 'Reagendado', label: 'Reagendado' }
+                            ]}
+                        />
+                    )}
+
+                    <FloatingSelect
+                        label="Criador"
+                        value={creatorFilter}
+                        onChange={(e: any) => setCreatorFilter(e.target.value)}
+                        options={[
+                            { value: 'all', label: 'Todos' },
+                            ...filteredAttendants.map(att => ({ value: att.id, label: att.name }))
+                        ]}
+                    />
+
+                    {(canViewAllSectors(user) || isMedinaUser(user) || isDualLeader(user)) && (
+                        <FloatingSelect
+                            label="Setor"
+                            value={sectorFilter}
+                            onChange={(e: any) => setSectorFilter(e.target.value)}
+                            options={[
+                                { value: 'all', label: 'Todos' },
+                                ...getAllowedSectors(user).map(s => ({ value: s, label: s }))
                             ]}
                         />
                     )}
@@ -163,7 +332,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         onChange={(e: any) => setAttendantFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos' },
-                            ...attendants.map(att => ({ value: att.id, label: att.name }))
+                            ...filteredAttendants.map(att => ({ value: att.id, label: att.name }))
                         ]}
                     />
 
@@ -173,7 +342,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         onChange={(e: any) => setEventFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos' },
-                            ...events.filter(ev => ev.status === true).map(ev => ({ value: ev.id, label: ev.event_name }))
+                            ...eventOptions.map(ev => ({ value: ev.id, label: ev.event_name }))
                         ]}
                     />
 
@@ -188,7 +357,8 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                 </div>
 
                 {/* View Toggle & Actions */}
-                <div className="flex gap-2 border-l border-border pl-4 ml-auto">
+                <div className="flex items-center gap-2 border-l border-border pl-4 ml-auto">
+
                     <div>
                         <div className="flex bg-background rounded-lg p-1 border border-border h-11 items-center">
                             <button
@@ -222,6 +392,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                     <th className="px-6 py-4">Aluno(a)</th>
                                     <th className="px-6 py-4">Tipo</th>
                                     <th className="px-6 py-4">Status</th>
+                                    <th className="px-6 py-4">Criado Por</th>
                                     <th className="px-6 py-4">Atendente</th>
                                     <th className="px-6 py-4 text-center">Ações</th>
                                 </tr>
@@ -235,7 +406,9 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                             <div className="text-sm text-secondary">{appt.time}</div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="text-foreground font-medium">{appt.lead}</div>
+                                            <div className="text-foreground font-medium" title={appt.lead}>
+                                                {appt.lead.length > 25 ? `${appt.lead.substring(0, 25)}...` : appt.lead}
+                                            </div>
                                             <div className="flex items-center gap-2 text-sm text-secondary">
                                                 {appt.phone}
                                                 <button
@@ -252,6 +425,9 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(appt.status)}`}>
                                                 {appt.status}
                                             </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-foreground">
+                                            {getCreatorName(appt.createdBy)}
                                         </td>
                                         <td className="px-6 py-4 text-sm text-foreground">
                                             {appt.attendantName || appt.attendantId}
