@@ -40,6 +40,21 @@ export class SupabaseApiService implements ApiService {
             const data = await response.json();
             return data.availableTimes || [];
         },
+        resolveAttendant: async (params: { date: string; time: string; type: string; eventId?: string }): Promise<{ attendantId: string | null; attendantName?: string; motivo?: string }> => {
+            const authHeaders = await getAuthHeaders();
+            const searchParams = new URLSearchParams({ date: params.date, time: params.time, type: params.type });
+            if (params.eventId) searchParams.append('eventId', params.eventId);
+
+            const response = await fetch(`/api/appointments/resolve-attendant?${searchParams.toString()}`, {
+                headers: authHeaders
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to resolve attendant');
+            }
+
+            return await response.json();
+        },
         create: async (data: Omit<Appointment, 'id'>): Promise<Appointment> => {
             // New Secure Flow (Spec 2.B): Send to Node.js Backend for Validation & Creation
             // Backend URL - uses local proxy or Vercel function

@@ -8,6 +8,7 @@ export interface ApiService {
         create: (data: Omit<Appointment, 'id'>) => Promise<Appointment>;
         update: (id: string | number, data: Partial<Appointment>) => Promise<Appointment>;
         getAvailableTimes: (params: { date: string; type: string; eventId?: string; attendantId?: string }) => Promise<string[]>;
+        resolveAttendant: (params: { date: string; time: string; type: string; eventId?: string }) => Promise<{ attendantId: string | null; attendantName?: string; motivo?: string }>;
     };
     attendants: {
         list: () => Promise<Attendant[]>;
