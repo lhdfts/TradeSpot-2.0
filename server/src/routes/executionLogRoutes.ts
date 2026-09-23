@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { supabase } from '../utils/supabaseClient.js';
 import { AuthenticatedRequest } from '../middleware/firebaseAuth.js';
+import { sectorAliases } from '../constants/sectors.js';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
         // Se for Líder, filtra para ver apenas logs de atendentes do seu próprio setor
         if (req.user.role === 'Líder' && req.user.sector) {
-            const { data: sectorUsers } = await supabase.from('user').select('id').eq('sector', req.user.sector);
+            const { data: sectorUsers } = await supabase.from('user').select('id').in('sector', sectorAliases(req.user.sector));
             if (sectorUsers && sectorUsers.length > 0) {
                 const sectorUserIds = sectorUsers.map(u => u.id);
                 query = query.in('selected_attendant_id', sectorUserIds);

@@ -1,5 +1,6 @@
 
 import { supabase } from './supabaseClient.js';
+import { PRE_VENDAS_ALIASES, isPreVendas } from '../constants/sectors.js';
 
 // Types (simplified for backend)
 interface Attendant {
@@ -287,8 +288,8 @@ export const findBestAttendantWithLogs = async (
     if (eventId && type !== 'Ligação Equipe Aldeia') {
         const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
         if (eventData) {
-            if (eventData.sector === 'Perpétuos') {
-                sectors = ['Perpétuos'];
+            if (isPreVendas(eventData.sector)) {
+                sectors = [...PRE_VENDAS_ALIASES];
             } else if (eventData.sector === 'CEO') {
                 sectors = ['CEO'];
             } else if (eventData.sector === 'Tribo') {

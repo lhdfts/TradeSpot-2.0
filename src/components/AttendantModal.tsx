@@ -7,6 +7,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { Attendant } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { SECTOR_PRE_VENDAS } from '../constants/sectors';
 
 const Input: React.FC<any> = ({ label, ...props }) => (
     <div className="space-y-1">
@@ -210,7 +211,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                         options={[
                             { value: 'SDR', label: 'SDR' },
                             { value: 'Closer', label: 'Closer' },
-                            { value: 'Perpétuos', label: 'Perpétuos' },
+                            { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
                             { value: 'Tribo', label: 'Tribo' },
                             { value: 'Aldeia', label: 'Aldeia' },
                             { value: 'Social Seller', label: 'Social Seller' },

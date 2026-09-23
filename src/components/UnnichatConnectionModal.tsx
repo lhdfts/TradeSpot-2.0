@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import type { UnnichatConnection } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { SECTOR_PRE_VENDAS } from '../constants/sectors';
 
 const Input: React.FC<any> = ({ label, ...props }) => (
     <div className="space-y-1">
@@ -19,7 +20,7 @@ const Select = CustomSelect;
 const SECTOR_OPTIONS = [
     { value: 'Aldeia', label: 'Aldeia' },
     { value: 'Closer', label: 'Closer' },
-    { value: 'Perpétuos', label: 'Perpétuos' },
+    { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
     { value: 'CEO', label: 'CEO' },
     { value: 'SDR', label: 'SDR' },
     { value: 'Tribo', label: 'Tribo' },
