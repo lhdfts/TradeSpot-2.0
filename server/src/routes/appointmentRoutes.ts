@@ -126,6 +126,74 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     }
 });
 
+/**
+ * Carrega, de uma vez, tudo que as decisões de distribuição precisam: duração e
+ * setor do evento, agendamentos do dia e a lista de candidatos elegíveis.
+ *
+ * Usado tanto pela grade de horários quanto pelo resolvedor de atendente, de
+ * propósito: as duas precisam enxergar exatamente o mesmo conjunto de pessoas.
+ * Quando essa montagem era duplicada, a grade oferecia um horário que a escolha
+ * do atendente não conseguia honrar.
+ */
+const loadDistributionContext = async (
+    date: string,
+    type: string,
+    eventId?: string,
+    attendantId?: string
+) => {
+    let durationMinutes = 60;
+    let eventSector: string | null = null;
+    if (eventId) {
+        const { data: ev } = await supabase.from('events').select('duration_minutes, sector').eq('id', eventId).single();
+        if (ev?.duration_minutes) durationMinutes = ev.duration_minutes;
+        eventSector = ev?.sector || null;
+    }
+
+    const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+    const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento', 'Direcionar Closer'].includes(type);
+    const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
+
+    const [{ data: existingAppts, error: apptError }, { data: allAttendants, error: attError }] = await Promise.all([
+        supabase.from('appointments').select('id, attendant_id, date, time, end_time, type, status').eq('date', date).neq('status', 'Cancelado'),
+        supabase.from('user').select('id, name, sector, role, schedule, pauses, denied_events').neq('role', 'Líder')
+    ]);
+
+    if (apptError || attError || !allAttendants) {
+        console.error('[DISTRIBUTION CONTEXT] Erro ao buscar dados:', apptError || attError);
+        return null;
+    }
+
+    let candidates = allAttendants;
+
+    if (attendantId && attendantId !== 'distribuicao_automatica') {
+        candidates = allAttendants.filter(a => a.id === attendantId);
+    } else {
+        if (eventId === BLOCKED_EVENT_ID) {
+            candidates = candidates.filter(a => a.id !== BLOCKED_CLOSER_ID);
+        }
+        if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
+            candidates = candidates.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
+        }
+
+        const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento', 'Direcionar Closer'].includes(type);
+        if (type === 'Ligação Equipe Aldeia') {
+            candidates = candidates.filter(a => a.sector === 'Aldeia');
+        } else if (isCloserType) {
+            candidates = candidates.filter(a => ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder');
+        }
+    }
+
+    return {
+        durationMinutes,
+        eventSector,
+        isAldeiaOrTribo,
+        ignoreSchedule,
+        existingAppts: existingAppts || [],
+        allAttendants,
+        candidates
+    };
+};
+
 // GET /api/appointments/available-times - Live availability check for the time picker.
 // Mirrors the eligibility/schedule/conflict rules used by the create flow (src/utils/distribution.ts),
 // but against fresh Supabase data instead of the client's locally cached appointment list.
@@ -145,44 +213,11 @@ router.get('/available-times', async (req: AuthenticatedRequest, res: Response) 
             return res.json({ availableTimes: [] });
         }
 
-        let durationMinutes = 60;
-        let eventSector: string | null = null;
-        if (eventId) {
-            const { data: ev } = await supabase.from('events').select('duration_minutes, sector').eq('id', eventId).single();
-            if (ev?.duration_minutes) durationMinutes = ev.duration_minutes;
-            eventSector = ev?.sector || null;
-        }
-
-        const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
-        const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento', 'Direcionar Closer'].includes(type);
-        const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
-
-        const [{ data: existingAppts, error: apptError }, { data: allAttendants, error: attError }] = await Promise.all([
-            supabase.from('appointments').select('id, attendant_id, date, time, end_time, type, status').eq('date', date).neq('status', 'Cancelado'),
-            supabase.from('user').select('id, name, sector, role, schedule, pauses, denied_events').neq('role', 'Líder')
-        ]);
-
-        if (apptError || attError || !allAttendants) {
-            console.error('[AVAILABLE TIMES] Error fetching data:', apptError || attError);
+        const ctx = await loadDistributionContext(date, type, eventId, attendantId);
+        if (!ctx) {
             return res.status(500).json({ error: 'Erro ao buscar horários disponíveis.' });
         }
-
-        let candidates = allAttendants;
-
-        if (attendantId && attendantId !== 'distribuicao_automatica') {
-            candidates = allAttendants.filter(a => a.id === attendantId);
-        } else {
-            if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
-                candidates = candidates.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
-            }
-
-            const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento', 'Direcionar Closer'].includes(type);
-            if (type === 'Ligação Equipe Aldeia') {
-                candidates = candidates.filter(a => a.sector === 'Aldeia');
-            } else if (isCloserType) {
-                candidates = candidates.filter(a => ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder');
-            }
-        }
+        const { durationMinutes, eventSector, isAldeiaOrTribo, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
 
         const availableTimes = ALL_TIME_SLOTS.filter(time => {
             if (isAldeiaOrTribo && type !== 'Agendamento Pessoal' &&
@@ -201,6 +236,75 @@ router.get('/available-times', async (req: AuthenticatedRequest, res: Response) 
     } catch (err: any) {
         console.error('[AVAILABLE TIMES] Unexpected error:', err);
         res.status(500).json({ error: 'Erro ao buscar horários disponíveis.' });
+    }
+});
+
+// GET /api/appointments/resolve-attendant - Escolhe qual atendente recebe o agendamento.
+//
+// Essa decisão era tomada no navegador (src/utils/distribution.ts), que só enxerga
+// os agendamentos do próprio setor do usuário. Um usuário de Perpétuos, por exemplo,
+// não recebe a agenda dos closers: via todos com carga zero e sorteava um, acertando
+// um closer realmente livre só por sorte. Aqui a escolha é feita com a base completa.
+router.get('/resolve-attendant', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { date, time, type, eventId } = req.query as {
+            date?: string; time?: string; type?: string; eventId?: string;
+        };
+
+        if (!date || typeof date !== 'string' || !time || typeof time !== 'string' || !type || typeof type !== 'string') {
+            return res.status(400).json({ error: 'date, time e type são obrigatórios.' });
+        }
+
+        const ctx = await loadDistributionContext(date, type, eventId);
+        if (!ctx) {
+            return res.status(500).json({ error: 'Erro ao resolver atendente.' });
+        }
+        const { durationMinutes, eventSector, isAldeiaOrTribo, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
+
+        // Limite de agendamentos simultâneos do setor (Aldeia/Tribo)
+        if (isAldeiaOrTribo && type !== 'Agendamento Pessoal' &&
+            hasSectorTimeLimit(eventSector as string, date, time, type, existingAppts, allAttendants, undefined, durationMinutes)) {
+            return res.json({ attendantId: null, motivo: 'Limite de agendamentos do setor atingido para este horário.' });
+        }
+
+        // Quem pode atender: não bloqueado para o evento e dentro da escala/pausa
+        const disponiveis = candidates.filter(att =>
+            !isAttendantBlockedForEvent(att, eventId, type) &&
+            (ignoreSchedule || isAttendantWithinSchedule(att as any, date, time, type, durationMinutes))
+        );
+
+        if (disponiveis.length === 0) {
+            return res.json({ attendantId: null, motivo: 'Nenhum atendente em escala para este horário.' });
+        }
+
+        // Carga = compromissos ainda pendentes no dia, ignorando agendamentos pessoais.
+        // Mesma régua usada hoje: mede agenda futura ocupada, não esforço já gasto.
+        const comCarga = disponiveis.map(att => ({
+            att,
+            load: existingAppts.filter(appt =>
+                appt.attendant_id === att.id &&
+                appt.status === 'Pendente' &&
+                !['Agendamento Pessoal', 'Personal Appointment'].includes(appt.type)
+            ).length
+        }));
+
+        comCarga.sort((a, b) => (a.load !== b.load ? a.load - b.load : Math.random() - 0.5));
+
+        const escolhido = comCarga.find(({ att }) =>
+            !hasConflictingAppointment(att.id, date, time, type, existingAppts, undefined, durationMinutes)
+        );
+
+        if (!escolhido) {
+            return res.json({ attendantId: null, motivo: 'Todos os atendentes em escala já possuem compromisso neste horário.' });
+        }
+
+        return res.json({
+            attendantId: escolhido.att.id,
+            attendantName: escolhido.att.name
+        });
+    } catch (err: any) {
+        console.error('[RESOLVE ATTENDANT] Erro inesperado:', err);
+        res.status(500).json({ error: 'Erro ao resolver atendente.' });
     }
 });
 
