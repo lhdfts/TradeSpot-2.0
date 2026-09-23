@@ -10,7 +10,7 @@ import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
 import { APPOINTMENT_STATUSES } from '../types';
 import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, AppointmentStatus } from '../types';
-import { findAvailableCloser, isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit } from '../utils/distribution';
+import { isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit } from '../utils/distribution';
 import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
 import { useAuth } from '../context/AuthContext';
@@ -41,7 +41,7 @@ interface AppointmentFormProps {
 
 export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, prefillData, onSuccess }) => {
     const { createAppointment, updateAppointment, appointments } = useAppointments();
-    const { attendants, events, loading, refreshAttendants } = useFormData();
+    const { attendants, events, loading } = useFormData();
     const { user } = useAuth();
     const [rates, setRates] = useState<Record<string, number>>({});
     const [isExistingClient, setIsExistingClient] = useState(false);
@@ -723,44 +723,28 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
             // Resolve Automatic Distribution on Submit
             if (formData.attendantId === 'distribuicao_automatica') {
-                // FRESH DATA: Refresh attendants and appointments right before distribution to avoid
-                // stale sector/schedule/booking data (the shared AppointmentContext may not reflect
-                // bookings made by other sessions since it was last loaded).
-                const [freshAttendants, freshAppointments] = await Promise.all([
-                    refreshAttendants(),
-                    api.appointments.list().catch(() => appointments)
-                ]);
-                console.log('[DISTRIBUTION] Refreshed attendants before submit:', freshAttendants.length, 'total');
+                // A escolha é feita no servidor. O navegador só recebe os agendamentos do
+                // próprio setor do usuário, então decidir aqui significava enxergar todos os
+                // atendentes de outros setores como se estivessem livres — e sortear um
+                // closer já ocupado na maioria das vezes.
+                const resolucao = await api.appointments.resolveAttendant({
+                    date: formData.date,
+                    time: formData.time,
+                    type: formData.type,
+                    eventId: formData.eventId || undefined
+                });
 
-                let freshAttendantsForEvent = formData.eventId === BLOCKED_EVENT_ID
-                    ? freshAttendants.filter(a => a.id !== BLOCKED_CLOSER_ID)
-                    : freshAttendants;
-
-                if (formData.eventId === ACTION_14_DIAS_EVENT_ID && formData.type === 'Ligação Closer') {
-                    freshAttendantsForEvent = freshAttendantsForEvent.filter(a => (a.role === 'Colaborador' || a.role === 'Co-líder') && ['Closer', 'Co-líder'].includes(a.sector));
-                }
-
-                const selectedEvent = events.find(e => e.id === formData.eventId);
-                const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
-                const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento'].includes(formData.type);
-                const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
-
-                const bestCloser = findAvailableCloser(
-                    formData.date,
-                    formData.time,
-                    formData.type,
-                    freshAttendantsForEvent,
-                    freshAppointments,
-                    { ignoreSchedule, sectorLimit: isAldeiaOrTribo ? selectedEvent!.sector : undefined }
-                );
-                if (bestCloser) {
-                    console.log(`[DISTRIBUTION] Assigned: ${bestCloser.name} (sector: ${bestCloser.sector}, id: ${bestCloser.id})`);
-                    finalAttendantId = bestCloser.id;
-                } else {
-                    alert('Não há atendentes disponíveis para este horário.');
+                if (!resolucao.attendantId) {
+                    toastManager.add({
+                        title: "Indisponibilidade",
+                        description: resolucao.motivo || 'Não há atendentes disponíveis para este horário.',
+                        type: 'error'
+                    });
                     setIsSaving(false);
                     return;
                 }
+
+                finalAttendantId = resolucao.attendantId;
             }
 
             // Map creatorId
