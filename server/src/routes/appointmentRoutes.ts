@@ -179,7 +179,11 @@ const loadDistributionContext = async (
         if (type === 'Ligação Equipe Aldeia') {
             candidates = candidates.filter(a => a.sector === 'Aldeia');
         } else if (isCloserType) {
-            candidates = candidates.filter(a => ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder');
+            // Só o SETOR conta. Aceitar também o cargo 'Co-líder' colocava no pool
+            // Co-líderes de Aldeia, Tribo, Cobrança e Financeiro — que o guard de
+            // setor do POST recusa depois (409), e que por não terem carga de closer
+            // ficavam em primeiro no balanceamento e eram escolhidos quase sempre.
+            candidates = candidates.filter(a => ['Closer', 'Co-líder'].includes(a.sector));
         }
     }
 
