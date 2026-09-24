@@ -1,3 +1,5 @@
+import { SECTOR_PRE_VENDAS } from '../constants/sectors';
+
 export const SECURITY_PATTERNS = {
     // Only digits
     DIGITS_ONLY: /\D/g,
@@ -58,10 +60,10 @@ export const isDualLeader = (user: { id?: string } | null | undefined) => {
 
 export const getAllowedSectors = (user: { email?: string; sector?: string; id?: string; role?: string } | null | undefined) => {
     if (!user) return [];
-    if (user.sector === 'Suporte') return ['Aldeia', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller', 'Presencial'];
-    if (canViewAllSectors(user)) return ['Aldeia', 'Closer', 'Perpétuos', 'CEO', 'SDR', 'Tribo', 'Social Seller', 'Presencial'];
+    if (user.sector === 'Suporte') return ['Aldeia', SECTOR_PRE_VENDAS, 'CEO', 'SDR', 'Tribo', 'Social Seller', 'Presencial'];
+    if (canViewAllSectors(user)) return ['Aldeia', 'Closer', SECTOR_PRE_VENDAS, 'CEO', 'SDR', 'Tribo', 'Social Seller', 'Presencial'];
     if (isMedinaUser(user)) return ['SDR', 'Aldeia', 'Tribo'];
-    if (isDualLeader(user)) return ['Perpétuos', 'Presencial'];
+    if (isDualLeader(user)) return [SECTOR_PRE_VENDAS, 'Presencial'];
     return user.sector ? [user.sector] : [];
 };
 

@@ -6,6 +6,7 @@ import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAtte
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
+import { PRE_VENDAS_ALIASES, sectorAliases } from '../constants/sectors.js';
 
 const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
@@ -72,7 +73,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             query = query.limit(hasDateFilter ? 2000 : 500);
         } else {
             // Regra 3: Outros setores (e Líderes/Admins do Closer) podem ver todos do SEU PRÓPRIO setor
-            const { data: sectorUsers } = await supabase.from('user').select('id').eq('sector', userSector);
+            const { data: sectorUsers } = await supabase.from('user').select('id').in('sector', sectorAliases(userSector));
             const sectorUserIds = sectorUsers ? sectorUsers.map(u => u.id) : [];
             
             if (sectorUserIds.length > 0) {
@@ -246,7 +247,7 @@ router.get('/available-times', async (req: AuthenticatedRequest, res: Response) 
 // GET /api/appointments/resolve-attendant - Escolhe qual atendente recebe o agendamento.
 //
 // Essa decisão era tomada no navegador (src/utils/distribution.ts), que só enxerga
-// os agendamentos do próprio setor do usuário. Um usuário de Perpétuos, por exemplo,
+// os agendamentos do próprio setor do usuário. Um usuário de Pré-vendas, por exemplo,
 // não recebe a agenda dos closers: via todos com carga zero e sorteava um, acertando
 // um closer realmente livre só por sorte. Aqui a escolha é feita com a base completa.
 router.get('/resolve-attendant', async (req: AuthenticatedRequest, res: Response) => {
@@ -332,7 +333,7 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
         // which sector books them, so hiding that sector breaks scheduling for
         // everyone else. Email/PII stays hidden below for non-management viewers.
         if (!isManagement && !hasCrossSectorAccess) {
-            query = query.in('sector', [userSector, 'Closer']);
+            query = query.in('sector', [...sectorAliases(userSector), 'Closer']);
         }
 
         const { data, error } = await query;
@@ -921,7 +922,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Direcionar Closer'];
             const closerSectors = ['Closer', 'Co-líder'];
             if (data.type === 'Gold Call' || data.type === 'Ligação Closer') {
-                closerSectors.push('Perpétuos');
+                closerSectors.push(...PRE_VENDAS_ALIASES);
             }
 
             const allowedSectors = [...closerSectors];

@@ -1,6 +1,12 @@
 import { getAuthHeaders } from '../lib/firebase';
 import type { ApiService } from './api';
 import type { Appointment, Attendant, Event, UnnichatConnection } from '../types';
+import { normalizeSector } from '../constants/sectors';
+
+// Setores chegam aqui já com o nome atual, mesmo que o banco ainda guarde um
+// nome antigo. Assim o restante do frontend compara sempre contra um único nome.
+const withNormalizedSector = <T extends { sector?: string | null }>(rows: T[]): T[] =>
+    rows.map(row => ({ ...row, sector: normalizeSector(row.sector) }));
 
 export class SupabaseApiService implements ApiService {
     appointments = {
@@ -164,7 +170,7 @@ export class SupabaseApiService implements ApiService {
                 return [];
             }
 
-            return await response.json();
+            return withNormalizedSector(await response.json());
         },
         create: async (data: Omit<Attendant, 'id'>): Promise<Attendant> => {
             const authHeaders = await getAuthHeaders();
@@ -228,7 +234,7 @@ export class SupabaseApiService implements ApiService {
                 return [];
             }
 
-            return await response.json();
+            return withNormalizedSector(await response.json());
         },
         listFeeds: async (sector: string): Promise<Event[]> => {
             const response = await fetch(`/api/public/events/feeds?sector=${encodeURIComponent(sector)}`);
@@ -244,7 +250,7 @@ export class SupabaseApiService implements ApiService {
                 end_date: event.end_date,
                 status: event.status,
                 created_at: event.created_at,
-                sector: event.sector,
+                sector: normalizeSector(event.sector),
                 self_scheduling_link: event.self_scheduling_link
             }));
         },
@@ -302,7 +308,7 @@ export class SupabaseApiService implements ApiService {
                 headers: authHeaders
             });
             if (!response.ok) throw new Error('Failed to fetch unnichat connections');
-            return await response.json();
+            return withNormalizedSector(await response.json());
         },
         create: async (data: Omit<UnnichatConnection, 'id' | 'created_at'>): Promise<UnnichatConnection> => {
             const authHeaders = await getAuthHeaders();

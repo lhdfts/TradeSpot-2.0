@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../utils/supabaseClient.js';
+import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors.js';
 
 const router = Router();
 
@@ -126,7 +127,7 @@ router.get('/partners-report', async (req: Request, res: Response) => {
         );
 
         // Agrupa pelo setor do atendente designado. Agendamentos cujo atendente
-        // não é de Closer nem de Perpétuos entram em "Outros" para que a soma
+        // não é de Closer nem de Pré-vendas entram em "Outros" para que a soma
         // dos times sempre feche com o total.
         //
         // Agendamentos CRIADOS por alguém do setor TEI são descartados antes da
@@ -134,7 +135,7 @@ router.get('/partners-report', async (req: Request, res: Response) => {
         const agrupar = (linhas: { type: string; status: string; attendant_id: string | null; created_by: string | null }[]) => {
             const times: Record<string, Bucket> = {
                 'Closer': emptyBucket(),
-                'Perpétuos': emptyBucket(),
+                [SECTOR_PRE_VENDAS]: emptyBucket(),
                 'Outros': emptyBucket()
             };
 
@@ -149,7 +150,7 @@ router.get('/partners-report', async (req: Request, res: Response) => {
                 }
 
                 const setor = linha.attendant_id ? setorPorUsuario.get(linha.attendant_id) : undefined;
-                const chave = setor === 'Closer' || setor === 'Perpétuos' ? setor : 'Outros';
+                const chave = setor === 'Closer' ? 'Closer' : isPreVendas(setor) ? SECTOR_PRE_VENDAS : 'Outros';
                 addToBucket(times[chave], linha.type || '(sem tipo)', linha.status || '(sem status)');
                 total += 1;
             }

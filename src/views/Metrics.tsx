@@ -21,6 +21,7 @@ import {
 import { cn } from '../lib/utils';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
+import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors';
 import {
     Tooltip,
     TooltipTrigger,
@@ -57,7 +58,7 @@ export const Metrics: React.FC = () => {
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
-    const [uniqueClients, setUniqueClients] = useState('no');
+    const [uniqueClients, setUniqueClients] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
     // --- UI STATE ---
@@ -158,8 +159,10 @@ export const Metrics: React.FC = () => {
             return true;
         });
 
-        // 1.5 Unique Clients Logic
-        if (eventFilter && uniqueClients === 'yes') {
+        // 1.5 Alunos únicos: cada aluno (telefone) conta uma única vez, pelo agendamento
+        // mais recente dentro dos filtros atuais. Aplicado antes de rankings, gráfico,
+        // totais e exportação, para a tela inteira usar a mesma base.
+        if (uniqueClients) {
             const uniqueMap = new Map<string, typeof filtered[0]>();
             filtered.forEach(appt => {
                 const key = appt.phone ? appt.phone.toString() : appt.id;
@@ -180,7 +183,7 @@ export const Metrics: React.FC = () => {
 
         // 2. Generate Rankings for ALL sectors
         const rankingsMap = new Map<string, RankingItem[]>();
-        const sectors = ['SDR', 'Leads', 'Closer', 'Aldeia', 'Tribo', 'Social Seller', 'Perpétuos', 'Suporte', 'TEI', 'Qualidade'];
+        const sectors = ['SDR', 'Leads', 'Closer', 'Aldeia', 'Tribo', 'Social Seller', SECTOR_PRE_VENDAS, 'Suporte', 'TEI', 'Qualidade'];
 
         sectors.forEach(sector => {
             const map = new Map<string, RankingItem>();
@@ -388,7 +391,7 @@ export const Metrics: React.FC = () => {
             allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer', 'Ligação Closer'];
         } else if (displaySector === 'Social Seller') {
             allowed = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
-        } else if (displaySector === 'Perpétuos') {
+        } else if (isPreVendas(displaySector)) {
             allowed = ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'];
         } else {
             allowed = [...allTypes];
@@ -488,18 +491,34 @@ export const Metrics: React.FC = () => {
                         className="w-48"
                     />
 
-                    {eventFilter && (
-                        <FloatingSelect
-                            label="Clientes Únicos"
-                            value={uniqueClients}
-                            onChange={(e: any) => setUniqueClients(e.target.value)}
-                            options={[
-                                { value: 'no', label: 'Não' },
-                                { value: 'yes', label: 'Sim' }
-                            ]}
-                            className="w-40"
-                        />
-                    )}
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={uniqueClients}
+                        onClick={() => setUniqueClients(prev => !prev)}
+                        title="Conta cada aluno uma única vez no período, pelo agendamento mais recente dele. Vale para rankings, gráfico, totais e exportação."
+                        className={cn(
+                            "h-11 px-3 flex items-center gap-2 rounded-md border text-sm shadow-sm transition-colors",
+                            uniqueClients
+                                ? "border-[#070707] dark:border-gray-400 text-foreground"
+                                : "border-border text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        <span
+                            className={cn(
+                                "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+                                uniqueClients ? "bg-[#070707] dark:bg-white" : "bg-gray-300 dark:bg-gray-600"
+                            )}
+                        >
+                            <span
+                                className={cn(
+                                    "inline-block h-4 w-4 rounded-full bg-white dark:bg-[#070707] shadow transition-transform",
+                                    uniqueClients ? "translate-x-4" : "translate-x-0.5"
+                                )}
+                            />
+                        </span>
+                        Alunos únicos
+                    </button>
                     <div
                         className="cursor-pointer ml-auto hover:text-blue-500 transition-colors p-2"
                         onClick={handleExport}

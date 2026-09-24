@@ -5,6 +5,7 @@ import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAtte
 import { getAppointmentWebhooks, getGlobalAppointmentWebhook } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 import { supabase } from '../utils/supabaseClient.js';
+import { PRE_VENDAS_ALIASES, isPreVendas, sectorAliases } from '../constants/sectors.js';
 
 const router = Router();
 
@@ -34,7 +35,7 @@ router.get('/events/feeds', async (req: Request, res: Response) => {
         const { data: sectorEvents, error: sectorError } = await supabase
             .from('events')
             .select('*')
-            .eq('sector', sector);
+            .in('sector', sectorAliases(sector));
 
         if (sectorError) throw sectorError;
 
@@ -163,8 +164,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
                 } else if (eventData.sector === 'CEO') {
                     sectors = ['CEO'];
                     APPOINTMENT_TYPE = 'Agendamento Pessoal';
-                } else if (eventData.sector === 'Perpétuos') {
-                    sectors = ['Perpétuos'];
+                } else if (isPreVendas(eventData.sector)) {
+                    sectors = [...PRE_VENDAS_ALIASES];
                 } else if (eventData.sector === 'SDR') {
                     sectors = ['SDR'];
                     APPOINTMENT_TYPE = 'Ligação SDR';

@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
+import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors';
 
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
@@ -137,10 +138,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
         }
 
-        // Perpétuos direcionando um lead do Partners para um Closer específico (sem distribuição automática).
-        // O dropdown de eventos já restringe Perpétuos aos eventos do próprio setor, então o Partners
+        // Pré-vendas direcionando um lead do Partners para um Closer específico (sem distribuição automática).
+        // O dropdown de eventos já restringe Pré-vendas aos eventos do próprio setor, então o Partners
         // do setor Closer nunca chega aqui.
-        if (user?.sector === 'Perpétuos' && selectedEvent?.event_name === 'Partners') {
+        if (isPreVendas(user?.sector) && selectedEvent?.event_name === 'Partners') {
             allTypes.push({ value: 'Direcionar Closer', label: 'Direcionar Closer' });
         }
 
@@ -176,7 +177,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (user.sector === 'Social Seller') {
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
-        if (user.sector === 'Perpétuos') {
+        if (isPreVendas(user.sector)) {
             return allTypes.filter(t => ['Gold Call', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
         }
 
@@ -189,7 +190,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const typeToSectors: Record<string, string[]> = {
                 'Ligação Closer': ['Closer', 'Co-líder'],
                 'Ligação Equipe Aldeia': ['Aldeia'],
-                'Gold Call': ['Closer', 'Co-líder', 'Perpétuos'],
+                'Gold Call': ['Closer', 'Co-líder', SECTOR_PRE_VENDAS],
                 'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
                 'Upgrade': ['Closer', 'Co-líder'],
                 'Ligação SDR': ['SDR'],
@@ -248,7 +249,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         return false;
                     }
 
-                    // 'Direcionar Closer' is cross-sector by design (Perpétuos hands the lead to a
+                    // 'Direcionar Closer' is cross-sector by design (Pré-vendas hands the lead to a
                     // Closer), so it has to be resolved before the own-sector restriction below.
                     // Líderes já foram descartados no topo do filtro.
                     if (formData.type === 'Direcionar Closer') {
@@ -306,7 +307,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         // Filter active events by sector (or if user is privileged)
         const filtered = events.filter(e => {
             if (e.status !== true) return false;
-            if (user?.sector === 'Perpétuos') return e.sector === 'Perpétuos';
+            if (isPreVendas(user?.sector)) return isPreVendas(e.sector);
 
             // Special case for On The Road 2.0 and Aldeia
             // if (e.id === ON_THE_ROAD_EVENT_ID && user?.sector === 'Aldeia') return true;
@@ -402,8 +403,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 });
             }
 
-            // Special case for Tribo, Aldeia and Perpétuos: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
-            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || user.sector === 'Perpétuos') && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
+            // Special case for Tribo, Aldeia and Pré-vendas: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
+            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || isPreVendas(user.sector)) && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
             // 4. Reagendamento Closer
@@ -1027,7 +1028,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         {/* Row 3: Atendente and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={!initialData ? "col-span-2" : ""}>
-                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || user?.sector === 'Perpétuos') && !initialData && user ? (
+                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || isPreVendas(user?.sector)) && !initialData && user ? (
                                     <FloatingInput
                                         label="Atendente"
                                         value={user.name}
