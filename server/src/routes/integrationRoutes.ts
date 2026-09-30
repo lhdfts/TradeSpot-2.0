@@ -176,7 +176,8 @@ export default router;
  * GET /api/integrations/prior-appointment?phone=1234567
  *
  * Diz se já existe algum agendamento (qualquer status) para um telefone,
- * recebendo só os 7 últimos dígitos dele. Resposta: `true` ou `false`.
+ * recebendo só os 7 últimos dígitos dele. Resposta: `{ "agendamentoPrevio": true | false }`
+ * (objeto e não booleano solto: o nó HTTP Request do n8n só gera campos a partir de objeto).
  *
  * 7 dígitos não identificam uma pessoa de forma única: a resposta é `true` se
  * QUALQUER cliente com esse final tiver agendamento. Por isso o endpoint nunca
@@ -210,7 +211,7 @@ priorAppointmentRouter.get('/', async (req: Request, res: Response) => {
         }
 
         if (!clientes || clientes.length === 0) {
-            return res.json(false);
+            return res.json({ agendamentoPrevio: false });
         }
 
         const { count, error: apptErr } = await supabase
@@ -223,7 +224,7 @@ priorAppointmentRouter.get('/', async (req: Request, res: Response) => {
             return res.status(500).json({ error: 'Erro ao consultar agendamentos.' });
         }
 
-        return res.json((count ?? 0) > 0);
+        return res.json({ agendamentoPrevio: (count ?? 0) > 0 });
     } catch (err: any) {
         console.error('[PRIOR APPOINTMENT] Erro inesperado:', err?.message);
         return res.status(500).json({ error: 'Erro ao consultar agendamentos.' });
