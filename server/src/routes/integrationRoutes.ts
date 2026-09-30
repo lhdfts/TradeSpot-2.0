@@ -171,3 +171,61 @@ router.get('/partners-report', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+/**
+ * GET /api/integrations/prior-appointment?phone=1234567
+ *
+ * Diz se já existe algum agendamento (qualquer status) para um telefone,
+ * recebendo só os 7 últimos dígitos dele. Resposta: `true` ou `false`.
+ *
+ * 7 dígitos não identificam uma pessoa de forma única: a resposta é `true` se
+ * QUALQUER cliente com esse final tiver agendamento. Por isso o endpoint nunca
+ * devolve dado da pessoa, só o booleano.
+ *
+ * Depende da coluna clients.phone_last7 (supabase/add_clients_phone_last7.sql).
+ */
+export const priorAppointmentRouter = Router();
+
+priorAppointmentRouter.get('/', async (req: Request, res: Response) => {
+    try {
+        const raw = typeof req.query.phone === 'string' ? req.query.phone : '';
+        const last7 = raw.replace(/\D/g, '');
+
+        if (last7.length !== 7) {
+            return res.status(400).json({ error: 'phone deve conter exatamente os 7 últimos dígitos do telefone.' });
+        }
+
+        const { data: clientes, error: clientesErr } = await supabase
+            .from('clients')
+            .select('id')
+            .eq('phone_last7', last7);
+
+        if (clientesErr) {
+            if (clientesErr.code === '42703') {
+                console.error('[PRIOR APPOINTMENT] Coluna clients.phone_last7 ausente — rode supabase/add_clients_phone_last7.sql.');
+                return res.status(503).json({ error: 'Consulta indisponível: migração do banco pendente.' });
+            }
+            console.error('[PRIOR APPOINTMENT] Erro ao buscar clientes:', clientesErr.message);
+            return res.status(500).json({ error: 'Erro ao consultar agendamentos.' });
+        }
+
+        if (!clientes || clientes.length === 0) {
+            return res.json(false);
+        }
+
+        const { count, error: apptErr } = await supabase
+            .from('appointments')
+            .select('id', { count: 'exact', head: true })
+            .in('client_id', clientes.map(c => c.id));
+
+        if (apptErr) {
+            console.error('[PRIOR APPOINTMENT] Erro ao contar agendamentos:', apptErr.message);
+            return res.status(500).json({ error: 'Erro ao consultar agendamentos.' });
+        }
+
+        return res.json((count ?? 0) > 0);
+    } catch (err: any) {
+        console.error('[PRIOR APPOINTMENT] Erro inesperado:', err?.message);
+        return res.status(500).json({ error: 'Erro ao consultar agendamentos.' });
+    }
+});
