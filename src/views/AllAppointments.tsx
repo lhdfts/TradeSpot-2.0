@@ -30,7 +30,7 @@ const getBrazilTodayISO = () => {
 };
 
 export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
-    const { appointments, refresh } = useAppointments();
+    const { appointments, refresh, truncated, loading: loadingAppointments } = useAppointments();
     const { attendants, events } = useFormData();
     const [searchParams] = useSearchParams();
     const { user } = useAuth();
@@ -272,6 +272,12 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                     </span>
                 </div>,
                 document.getElementById('header-actions') || document.body
+            )}
+
+            {truncated && !loadingAppointments && (
+                <div className="p-3 rounded-lg border border-[#FF9100]/40 bg-[#FF9100]/10 text-sm text-foreground">
+                    O período selecionado tem mais agendamentos do que o limite de carregamento. A lista está incompleta — reduza o período.
+                </div>
             )}
 
             {/* Controls Bar */}

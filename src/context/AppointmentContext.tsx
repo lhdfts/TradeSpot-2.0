@@ -5,6 +5,8 @@ import { api } from '../services/api';
 interface AppointmentContextType {
     appointments: Appointment[];
     loading: boolean;
+    // A última busca com período bateu no teto do servidor (lista incompleta).
+    truncated: boolean;
     refresh: (params?: { startDate?: string; endDate?: string }) => Promise<void>;
     createAppointment: (data: Omit<Appointment, 'id'>) => Promise<void>;
     updateAppointment: (id: string, data: Partial<Appointment>) => Promise<void>;
@@ -16,12 +18,14 @@ const AppointmentContext = createContext<AppointmentContextType | undefined>(und
 export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(false);
+    const [truncated, setTruncated] = useState(false);
 
     const refresh = async (params?: { startDate?: string; endDate?: string }) => {
         setLoading(true);
         try {
-            const data = await api.appointments.list(params);
-            setAppointments(data);
+            const result = await api.appointments.listWithMeta(params);
+            setAppointments(result.appointments);
+            setTruncated(result.truncated);
         } catch (error) {
             console.error('Failed to fetch appointments', error);
         } finally {
@@ -52,7 +56,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     }, []);
 
     return (
-        <AppointmentContext.Provider value={{ appointments, loading, refresh, createAppointment, updateAppointment, changeOwner }}>
+        <AppointmentContext.Provider value={{ appointments, loading, truncated, refresh, createAppointment, updateAppointment, changeOwner }}>
             {children}
         </AppointmentContext.Provider>
     );

@@ -5,6 +5,7 @@ import type { Appointment, Attendant, Event, UnnichatConnection } from '../types
 export interface ApiService {
     appointments: {
         list: (params?: { startDate?: string; endDate?: string }) => Promise<Appointment[]>;
+        listWithMeta: (params?: { startDate?: string; endDate?: string }) => Promise<{ appointments: Appointment[]; truncated: boolean; total: number }>;
         create: (data: Omit<Appointment, 'id'>) => Promise<Appointment>;
         update: (id: string | number, data: Partial<Appointment>) => Promise<Appointment>;
         getAvailableTimes: (params: { date: string; type: string; eventId?: string; attendantId?: string }) => Promise<string[]>;

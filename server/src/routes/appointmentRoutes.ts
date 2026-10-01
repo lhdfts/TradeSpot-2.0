@@ -25,78 +25,109 @@ const ALL_TIME_SLOTS: string[] = (() => {
 
 const router = Router();
 
+// Limite por requisição do Supabase (db-max-rows) e teto da listagem com período.
+const PAGE_SIZE = 1000;
+const MAX_ROWS_WITH_DATE = 20000;
+
 // GET /api/appointments - List all appointments
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
-        let query = supabase
-            .from('appointments')
-            .select(`
-                *,
-                clients (
-                    name,
-                    phone,
-                    email
-                ),
-                attendant:user!attendant_id (
-                    name
-                ),
-                updater:user!updatedBy (
-                    name,
-                    sector
-                ),
-                owner_user:user!owner (
-                    name,
-                    sector
-                )
-            `)
-            .order('date', { ascending: false })
-            .order('time', { ascending: false });
-
         // Filtro de data no Backend (Solução 1 - Recomendada)
         const { startDate, endDate } = req.query;
-        const hasDateFilter = (startDate && typeof startDate === 'string' && startDate.trim() !== '') ||
-                              (endDate && typeof endDate === 'string' && endDate.trim() !== '');
-
-        if (startDate && typeof startDate === 'string' && startDate.trim() !== '') {
-            query = query.gte('date', startDate);
-        }
-        if (endDate && typeof endDate === 'string' && endDate.trim() !== '') {
-            query = query.lte('date', endDate);
-        }
+        const start = typeof startDate === 'string' && startDate.trim() !== '' ? startDate : null;
+        const end = typeof endDate === 'string' && endDate.trim() !== '' ? endDate : null;
+        const hasDateFilter = !!(start || end);
 
         // Correção VULN-006: Data Minimization & Least Privilege
         const userRole = req.user?.role;
         const userSector = req.user?.sector;
         const userId = req.user?.id;
 
+        // Escopo de visibilidade (filtro `or` do PostgREST); null = vê tudo.
+        let scopeFilter: string | null = null;
         if (userSector === 'TEI' || userSector === 'Suporte') {
             // Regra 1: TEI e Suporte podem ver tudo de todos os setores
-            query = query.limit(hasDateFilter ? 5000 : 2000);
+            scopeFilter = null;
         } else if (userSector === 'Closer' && userRole === 'Colaborador') {
             // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos.
             // "Próprio" = atendente ou owner. O criador perde a visibilidade quando o
             // Líder passa o agendamento para outro owner. Linhas sem owner (anteriores
             // à coluna) continuam valendo pelo criador.
-            query = query.or(`attendant_id.eq.${userId},owner.eq.${userId},and(owner.is.null,created_by.eq.${userId})`);
-            query = query.limit(hasDateFilter ? 2000 : 500);
+            scopeFilter = `attendant_id.eq.${userId},owner.eq.${userId},and(owner.is.null,created_by.eq.${userId})`;
         } else {
             // Regra 3: Outros setores (e Líderes/Admins do Closer) podem ver todos do SEU PRÓPRIO setor
             const { data: sectorUsers } = await supabase.from('user').select('id').in('sector', sectorAliases(userSector));
             const sectorUserIds = sectorUsers ? sectorUsers.map(u => u.id) : [];
-            
+
             if (sectorUserIds.length > 0) {
                 const inFilter = `(${sectorUserIds.join(',')})`;
-                query = query.or(`attendant_id.in.${inFilter},created_by.in.${inFilter},owner.in.${inFilter}`);
+                scopeFilter = `attendant_id.in.${inFilter},created_by.in.${inFilter},owner.in.${inFilter}`;
             } else {
-                // Fallback de segurança 
-                query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
+                // Fallback de segurança
+                scopeFilter = `attendant_id.eq.${userId},created_by.eq.${userId}`;
             }
-            query = query.limit(hasDateFilter ? 3000 : 1000);
         }
 
-        const { data, error } = await query;
+        // Teto de linhas. Com período (Métricas, Todos os Agendamentos) vem tudo
+        // até MAX_ROWS_WITH_DATE; sem período (carga inicial) só os mais recentes.
+        const maxRows = hasDateFilter
+            ? MAX_ROWS_WITH_DATE
+            : (userSector === 'Closer' && userRole === 'Colaborador' ? 500 : 1000);
 
-        if (error) throw new Error(error.message);
+        // O Supabase devolve no máximo PAGE_SIZE linhas por requisição, por isso a
+        // busca é paginada. A ordenação inclui o id para as páginas não se
+        // sobreporem quando vários agendamentos têm a mesma data e hora.
+        const buildPage = (from: number, to: number, withCount: boolean) => {
+            let q = supabase
+                .from('appointments')
+                .select(`
+                    *,
+                    clients (
+                        name,
+                        phone,
+                        email
+                    ),
+                    attendant:user!attendant_id (
+                        name
+                    ),
+                    updater:user!updatedBy (
+                        name,
+                        sector
+                    ),
+                    owner_user:user!owner (
+                        name,
+                        sector
+                    )
+                `, withCount ? { count: 'exact' } : undefined)
+                .order('date', { ascending: false })
+                .order('time', { ascending: false })
+                .order('id', { ascending: true })
+                .range(from, to);
+            if (start) q = q.gte('date', start);
+            if (end) q = q.lte('date', end);
+            if (scopeFilter) q = q.or(scopeFilter);
+            return q;
+        };
+
+        const firstPage = await buildPage(0, Math.min(PAGE_SIZE, maxRows) - 1, true);
+        if (firstPage.error) throw new Error(firstPage.error.message);
+
+        const totalAvailable = firstPage.count ?? firstPage.data.length;
+        const target = Math.min(totalAvailable, maxRows);
+        const pageStarts: number[] = [];
+        for (let from = PAGE_SIZE; from < target; from += PAGE_SIZE) pageStarts.push(from);
+
+        const otherPages = await Promise.all(
+            pageStarts.map(from => buildPage(from, Math.min(from + PAGE_SIZE, target) - 1, false))
+        );
+        const pageError = otherPages.find(p => p.error)?.error;
+        if (pageError) throw new Error(pageError.message);
+
+        const data = [firstPage.data, ...otherPages.map(p => p.data || [])].flat();
+
+        // Avisa o front quando o período tem mais agendamentos do que o teto.
+        res.setHeader('X-Total-Count', String(totalAvailable));
+        res.setHeader('X-Truncated', hasDateFilter && totalAvailable > maxRows ? 'true' : 'false');
 
         const mappedData = data.map((app: any) => ({
             id: app.id,

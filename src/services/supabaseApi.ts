@@ -11,6 +11,10 @@ const withNormalizedSector = <T extends { sector?: string | null }>(rows: T[]): 
 export class SupabaseApiService implements ApiService {
     appointments = {
         list: async (params?: { startDate?: string; endDate?: string }): Promise<Appointment[]> => {
+            return (await this.appointments.listWithMeta(params)).appointments;
+        },
+        // `truncated`: o período tem mais agendamentos do que o teto do servidor.
+        listWithMeta: async (params?: { startDate?: string; endDate?: string }): Promise<{ appointments: Appointment[]; truncated: boolean; total: number }> => {
             const authHeaders = await getAuthHeaders();
             let url = '/api/appointments';
             if (params?.startDate || params?.endDate) {
@@ -27,7 +31,12 @@ export class SupabaseApiService implements ApiService {
                 throw new Error('Failed to fetch appointments');
             }
 
-            return await response.json();
+            const appointments: Appointment[] = await response.json();
+            return {
+                appointments,
+                truncated: response.headers.get('X-Truncated') === 'true',
+                total: Number(response.headers.get('X-Total-Count')) || appointments.length
+            };
         },
         getAvailableTimes: async (params: { date: string; type: string; eventId?: string; attendantId?: string }): Promise<string[]> => {
             const authHeaders = await getAuthHeaders();

@@ -45,7 +45,7 @@ interface RankingItem {
 }
 
 export const Metrics: React.FC = () => {
-    const { appointments } = useAppointments();
+    const { appointments, refresh, loading: loadingAppointments, truncated } = useAppointments();
     const { attendants, events } = useFormData();
 
     // Filters State
@@ -344,6 +344,13 @@ export const Metrics: React.FC = () => {
         return { rankings: rankingsMap, chartData, filteredAppointments: sortedFiltered, chartTotal };
     }, [appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, uniqueClients, selectedStatuses]);
 
+    // Busca no banco tudo do período selecionado. Sem isso a tela usaria a lista
+    // que já estava carregada (carga inicial ou período de outra tela).
+    useEffect(() => {
+        if (!startDate || !endDate || startDate > endDate) return;
+        refresh({ startDate, endDate });
+    }, [startDate, endDate]);
+
     // Setores com troca de owner habilitada (Configurações). Só neles o card de owners aparece.
     const [ownerSectors, setOwnerSectors] = useState<string[]>([]);
     useEffect(() => {
@@ -392,10 +399,27 @@ export const Metrics: React.FC = () => {
             .sort((a, b) => b.realizados - a.realizados || b.comoOwner - a.comoOwner);
     }, [ownerSectors, ownerDisplaySector, appointments, attendants, startDate, endDate, eventFilter, typeFilter, attendantFilter, searchTerm]);
 
+    // Exportação = agendamentos da tela com TODOS os filtros da página: período,
+    // setor, tipo, evento e alunos únicos (já em filteredAppointments), mais
+    // atendente, pesquisa por nome e os status marcados no gráfico. Atendente e
+    // pesquisa valem para quem é atendente, criador ou owner do agendamento.
+    const exportAppointments = useMemo(() => {
+        const nameOf = (id?: string) => attendants.find(att => att.id === id)?.name?.toLowerCase() || '';
+        const term = searchTerm.trim().toLowerCase();
+        return filteredAppointments.filter(a => {
+            const people = [a.attendantId, a.createdBy, a.ownerId ?? a.createdBy];
+            if (attendantFilter && !people.includes(attendantFilter)) return false;
+            if (term && !people.some(id => nameOf(id).includes(term))) return false;
+            if (!selectedStatuses.includes(a.status)) return false;
+            return true;
+        });
+    }, [filteredAppointments, attendants, attendantFilter, searchTerm, selectedStatuses]);
+
     const handleExport = () => {
-        if (!filteredAppointments.length) return;
+        if (loadingAppointments) return;
+        if (!exportAppointments.length) return;
         const headers = ['Data', 'Horario', 'Lead', 'Telefone', 'Email', 'Tipo', 'Status', 'Atendente', 'Criador', 'Owner', 'Evento'];
-        const csvRows = filteredAppointments.map((appt: any) => {
+        const csvRows = exportAppointments.map((appt: any) => {
             const attendant = attendants.find(att => att.id === appt.attendantId);
             const event = events.find(e => e.id === appt.eventId);
             const creator = attendants.find(att => att.id === appt.createdBy);
@@ -573,14 +597,23 @@ export const Metrics: React.FC = () => {
                         Alunos únicos
                     </button>
                     <div
-                        className="cursor-pointer ml-auto hover:text-blue-500 transition-colors p-2"
+                        className={cn(
+                            "ml-auto transition-colors p-2",
+                            loadingAppointments ? "opacity-40 cursor-wait" : "cursor-pointer hover:text-blue-500"
+                        )}
                         onClick={handleExport}
-                        title="Exportar CSV"
+                        title={loadingAppointments ? "Carregando agendamentos do período..." : `Exportar CSV (${exportAppointments.length} agendamentos com os filtros atuais)`}
                     >
                         <ExportIcon />
                     </div>
                 </div>
             </div>
+
+            {truncated && !loadingAppointments && (
+                <div className="p-3 rounded-lg border border-[#FF9100]/40 bg-[#FF9100]/10 text-sm text-foreground">
+                    O período selecionado tem mais agendamentos do que o limite de carregamento. Os números e a exportação estão incompletos — reduza o período.
+                </div>
+            )}
 
             {/* Rankings */}
             <div className="grid grid-cols-1 gap-6">
