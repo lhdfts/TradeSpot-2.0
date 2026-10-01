@@ -48,6 +48,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     // Initialize attendant filter from URL param if present
     const [attendantFilter, setAttendantFilter] = useState('all');
     const [creatorFilter, setCreatorFilter] = useState('all');
+    const [ownerFilter, setOwnerFilter] = useState('all');
     const [eventFilter, setEventFilter] = useState('all');
     const [sectorFilter, setSectorFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: getBrazilTodayISO(), end: '' });
@@ -98,7 +99,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     // Reset pagination when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, statusFilter, attendantFilter, creatorFilter, eventFilter, sectorFilter, dateRange]);
+    }, [search, statusFilter, attendantFilter, creatorFilter, ownerFilter, eventFilter, sectorFilter, dateRange]);
 
     // Events that had at least 1 appointment within the selected period (Data Inicial/Data Final),
     // used to restrict the options shown in the "Evento" filter.
@@ -132,7 +133,8 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                     (linkedEvent && linkedEvent.sector && allowedSectors.includes(linkedEvent.sector)) ||
                     (creatorUser && creatorUser.sector && allowedSectors.includes(creatorUser.sector)) ||
                     (a.attendantId === user?.id) ||
-                    (a.createdBy === user?.id);
+                    (a.createdBy === user?.id) ||
+                    (a.ownerId === user?.id);
             })
             .map(a => a.eventId)
     );
@@ -155,6 +157,8 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         const matchesAttendant = attendantFilter === 'all' || a.attendantId === attendantFilter;
 
         const matchesCreator = creatorFilter === 'all' || (a.createdBy && a.createdBy === creatorFilter);
+
+        const matchesOwner = ownerFilter === 'all' || (a.ownerId ?? a.createdBy) === ownerFilter;
 
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
 
@@ -197,9 +201,10 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             (linkedEvent && linkedEvent.sector && allowedSectors.includes(linkedEvent.sector)) ||
             (creatorUser && creatorUser.sector && allowedSectors.includes(creatorUser.sector)) ||
             (a.attendantId === user?.id) ||
-            (a.createdBy === user?.id);
+            (a.createdBy === user?.id) ||
+            (a.ownerId === user?.id);
 
-        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesSectorFilter && matchesDate && matchesSector;
+        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesOwner && matchesEvent && matchesSectorFilter && matchesDate && matchesSector;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
@@ -314,6 +319,16 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         ]}
                     />
 
+                    <FloatingSelect
+                        label="Owner"
+                        value={ownerFilter}
+                        onChange={(e: any) => setOwnerFilter(e.target.value)}
+                        options={[
+                            { value: 'all', label: 'Todos' },
+                            ...filteredAttendants.map(att => ({ value: att.id, label: att.name }))
+                        ]}
+                    />
+
                     {(canViewAllSectors(user) || isMedinaUser(user) || isDualLeader(user)) && (
                         <FloatingSelect
                             label="Setor"
@@ -393,6 +408,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                     <th className="px-6 py-4">Tipo</th>
                                     <th className="px-6 py-4">Status</th>
                                     <th className="px-6 py-4">Criado Por</th>
+                                    <th className="px-6 py-4">Owner</th>
                                     <th className="px-6 py-4">Atendente</th>
                                     <th className="px-6 py-4 text-center">Ações</th>
                                 </tr>
@@ -428,6 +444,9 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                         </td>
                                         <td className="px-6 py-4 text-sm text-foreground">
                                             {getCreatorName(appt.createdBy)}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-foreground">
+                                            {appt.ownerName || getCreatorName(appt.ownerId ?? appt.createdBy)}
                                         </td>
                                         <td className="px-6 py-4 text-sm text-foreground">
                                             {appt.attendantName || appt.attendantId}

@@ -7,6 +7,7 @@ import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } fr
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
 import { PRE_VENDAS_ALIASES, sectorAliases } from '../constants/sectors.js';
+import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
 const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
@@ -42,6 +43,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
                 updater:user!updatedBy (
                     name,
                     sector
+                ),
+                owner_user:user!owner (
+                    name,
+                    sector
                 )
             `)
             .order('date', { ascending: false })
@@ -68,8 +73,11 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             // Regra 1: TEI e Suporte podem ver tudo de todos os setores
             query = query.limit(hasDateFilter ? 5000 : 2000);
         } else if (userSector === 'Closer' && userRole === 'Colaborador') {
-            // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos
-            query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
+            // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos.
+            // "Próprio" = atendente ou owner. O criador perde a visibilidade quando o
+            // Líder passa o agendamento para outro owner. Linhas sem owner (anteriores
+            // à coluna) continuam valendo pelo criador.
+            query = query.or(`attendant_id.eq.${userId},owner.eq.${userId},and(owner.is.null,created_by.eq.${userId})`);
             query = query.limit(hasDateFilter ? 2000 : 500);
         } else {
             // Regra 3: Outros setores (e Líderes/Admins do Closer) podem ver todos do SEU PRÓPRIO setor
@@ -78,7 +86,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             
             if (sectorUserIds.length > 0) {
                 const inFilter = `(${sectorUserIds.join(',')})`;
-                query = query.or(`attendant_id.in.${inFilter},created_by.in.${inFilter}`);
+                query = query.or(`attendant_id.in.${inFilter},created_by.in.${inFilter},owner.in.${inFilter}`);
             } else {
                 // Fallback de segurança 
                 query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
@@ -107,6 +115,9 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             notes: app.notes,
             additionalInfo: app.additional_info,
             createdBy: app.created_by,
+            ownerId: app.owner ?? app.created_by,
+            ownerName: app.owner_user?.name,
+            ownerChangedAt: app.owner_changedAt,
             studentProfile: {
                 interest: app.interest_level,
                 knowledge: app.knowledge_level,
@@ -1092,13 +1103,18 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             financial_amount: financialAmount,
             created_at: new Date().toISOString(),
             // created_by logic
-            created_by: data.createdBy
+            created_by: data.createdBy,
+            // Owner nasce igual ao criador; só o Líder troca depois (PUT /:id/owner).
+            owner: data.createdBy
         };
 
         // Validate createdBy
         if (appointmentPayload.created_by) {
             const { data: u } = await supabase.from('user').select('id').eq('id', appointmentPayload.created_by).maybeSingle();
-            if (!u) appointmentPayload.created_by = undefined;
+            if (!u) {
+                appointmentPayload.created_by = undefined;
+                appointmentPayload.owner = undefined;
+            }
         }
 
         const { data: createdAppointment, error: appError } = await supabase
@@ -1184,9 +1200,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             attendant_sector: names.attendant_sector || names.event_sector || null,
             created_by_name: names.created_by_name,
             creator_sector: names.creator_sector,
+            // Na criação o owner é sempre o próprio criador.
+            owner_id: appointmentPayload.owner ?? null,
+            owner_name: names.created_by_name,
+            owner_sector: names.creator_sector,
             event_name: names.event_name,
             event_sector: names.event_sector,
-            attendant_id: undefined, created_by: undefined, event_id: undefined
+            attendant_id: undefined, created_by: undefined, event_id: undefined, owner: undefined, owner_changedAt: undefined
         };
 
         const allWebhooks = getAppointmentWebhooks();
@@ -1474,7 +1494,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (updates.attendantId && currentApp.attendant_id !== updates.attendantId && currentApp.google_event_id && updated.status !== 'Cancelado') {
             // ... (Skipping verbose sync recreation for brevity, it's non-critical, but should preserve if possible)
             // I'll keep it simple: fire and forget or simple sync
-            const guestIds = [updated.attendant_id, updated.created_by].filter(Boolean);
+            const guestIds = [updated.attendant_id, updated.owner ?? updated.created_by].filter(Boolean);
             const { data: usersData } = await supabase.from('user').select('email').in('id', guestIds);
             const { data: clientData } = await supabase.from('clients').select('email').eq('id', updated.client_id).single();
             const attendees: string[] = [];
@@ -1547,7 +1567,22 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                     }
                 }
 
-                // 4. Send Webhook
+                // 5. Owner (quem recebe a comissão; nasce igual ao criador)
+                const ownerId = updated.owner ?? updated.created_by;
+                enrichedPayload.owner_id = ownerId ?? null;
+                if (ownerId) {
+                    const { data: ownerUser } = await supabase
+                        .from('user')
+                        .select('name, sector')
+                        .eq('id', ownerId)
+                        .maybeSingle();
+                    if (ownerUser) {
+                        enrichedPayload.owner_name = ownerUser.name;
+                        enrichedPayload.owner_sector = ownerUser.sector;
+                    }
+                }
+
+                // 6. Send Webhook
                 await axios.post(updateWebhookUrl, enrichedPayload);
                 console.log('Update Webhook sent successfully with enriched data');
 
@@ -1565,6 +1600,120 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
     } catch (err: any) {
         console.error("Update Error:", err);
+        res.status(500).json({ error: 'Erro Interno do Servidor' });
+    }
+});
+
+/**
+ * PUT /api/appointments/:id/owner  { ownerId }
+ *
+ * Troca o owner (quem recebe a comissão) de um agendamento. O criador
+ * (created_by) nunca muda: owner ≠ criador é o que registra que o criador não
+ * compareceu no próprio agendamento.
+ *
+ * Regras:
+ *  - só o Líder, e só em agendamentos criados por alguém do setor dele;
+ *  - o setor precisa estar habilitado em Configurações (owner_change_sectors);
+ *  - o novo owner é Colaborador ou Co-líder do mesmo setor (setor "Desativado"
+ *    fica de fora por definição), ou o próprio criador, para desfazer a troca.
+ */
+router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const me = req.user;
+        if (!me || me.role !== 'Líder') {
+            return res.status(403).json({ error: 'Somente o Líder pode trocar o owner do agendamento.' });
+        }
+
+        const { id } = req.params;
+        const newOwnerId = typeof req.body?.ownerId === 'string' ? req.body.ownerId.trim() : '';
+        if (!newOwnerId) {
+            return res.status(400).json({ error: 'Informe o novo owner.' });
+        }
+
+        const { data: appt, error: apptErr } = await supabase
+            .from('appointments')
+            .select('id, client_id, attendant_id, created_by, owner, owner_changedAt, google_event_id, status')
+            .eq('id', id)
+            .maybeSingle();
+        if (apptErr) throw new Error(apptErr.message);
+        if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado.' });
+        if (!appt.created_by) {
+            return res.status(422).json({ error: 'Agendamento sem criador registrado.' });
+        }
+
+        const currentOwnerId = appt.owner ?? appt.created_by;
+        const userIds = [...new Set([appt.created_by, newOwnerId, currentOwnerId])];
+        const { data: users, error: usersErr } = await supabase
+            .from('user')
+            .select('id, name, sector, role')
+            .in('id', userIds);
+        if (usersErr) throw new Error(usersErr.message);
+
+        const creator = users?.find(u => u.id === appt.created_by);
+        const newOwner = users?.find(u => u.id === newOwnerId);
+        const currentOwner = users?.find(u => u.id === currentOwnerId);
+        const mySectors = sectorAliases(me.sector);
+
+        if (!creator || !mySectors.includes(creator.sector)) {
+            return res.status(403).json({ error: 'Você só pode trocar o owner de agendamentos criados pelo seu setor.' });
+        }
+
+        const enabledSectors = await getOwnerChangeSectors();
+        if (!isOwnerChangeEnabledFor(enabledSectors, creator.sector)) {
+            return res.status(403).json({ error: `A troca de owner não está habilitada para o setor ${creator.sector}.` });
+        }
+
+        const isCreator = newOwnerId === appt.created_by;
+        const isEligible = !!newOwner
+            && ['Colaborador', 'Co-líder'].includes(newOwner.role)
+            && mySectors.includes(newOwner.sector);
+        if (!newOwner || (!isCreator && !isEligible)) {
+            return res.status(400).json({ error: 'O novo owner precisa ser um Colaborador ou Co-líder ativo do seu setor.' });
+        }
+
+        if (newOwnerId === currentOwnerId) {
+            return res.json({ ownerId: currentOwnerId, ownerName: newOwner.name, ownerChangedAt: appt.owner_changedAt });
+        }
+
+        const { data: updated, error: updErr } = await supabase
+            .from('appointments')
+            .update({ owner: newOwnerId, owner_changedAt: new Date().toISOString() })
+            .eq('id', id)
+            .select('owner, owner_changedAt')
+            .single();
+        if (updErr) throw new Error(updErr.message);
+
+        supabase.from('execution_logs').insert({
+            client_id: appt.client_id,
+            execution_type: 'Alteração de Owner',
+            selected_attendant_id: newOwnerId,
+            selected_attendant_name: newOwner.name,
+            appointment_id: id,
+            old_value: currentOwner?.name || 'Não informado',
+            new_value: newOwner.name,
+            changed_by_name: me.name || null,
+            checks_log: []
+        }).then(({ error: logErr }) => {
+            if (logErr) console.error('[EXECUTION LOGS] Error inserting owner-change log:', logErr);
+        });
+
+        // Quem entra na reunião é o owner: o convite do Google passa a ser dele.
+        if (appt.google_event_id && appt.status !== 'Cancelado') {
+            const guestIds = [appt.attendant_id, newOwnerId].filter(Boolean);
+            const { data: guests } = await supabase.from('user').select('email').in('id', guestIds);
+            const { data: clientData } = await supabase.from('clients').select('email').eq('id', appt.client_id).maybeSingle();
+            const attendees: string[] = [];
+            if (clientData?.email) attendees.push(clientData.email);
+            guests?.forEach((u: any) => { if (u.email) attendees.push(u.email); });
+            if (!attendees.includes('di01@tradestars.com.br')) attendees.push('di01@tradestars.com.br');
+            updateGoogleMeetEvent(appt.google_event_id, attendees);
+        }
+
+        logSuccessfulAction(req, 'UPDATE_OWNER', 'Appointment', id);
+
+        res.json({ ownerId: updated.owner, ownerName: newOwner.name, ownerChangedAt: updated.owner_changedAt });
+    } catch (err: any) {
+        console.error('Change Owner Error:', err?.message);
         res.status(500).json({ error: 'Erro Interno do Servidor' });
     }
 });

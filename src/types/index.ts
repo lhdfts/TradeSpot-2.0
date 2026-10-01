@@ -67,6 +67,10 @@ export interface Appointment {
     notes?: string;
     additionalInfo?: string;
     createdBy?: string;
+    // Owner: quem recebe a comissão. Nasce igual a createdBy; só o Líder troca.
+    ownerId?: string;
+    ownerName?: string;
+    ownerChangedAt?: string | null;
     user?: { name: string };
     // New fields from DB schema
     interest_level?: ProfileLevel;

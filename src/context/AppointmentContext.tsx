@@ -8,6 +8,7 @@ interface AppointmentContextType {
     refresh: (params?: { startDate?: string; endDate?: string }) => Promise<void>;
     createAppointment: (data: Omit<Appointment, 'id'>) => Promise<void>;
     updateAppointment: (id: string, data: Partial<Appointment>) => Promise<void>;
+    changeOwner: (id: string, ownerId: string) => Promise<void>;
 }
 
 const AppointmentContext = createContext<AppointmentContextType | undefined>(undefined);
@@ -38,12 +39,20 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
         await refresh();
     };
 
+    // Atualiza só a linha alterada, sem refazer a busca (que perderia o filtro de datas da tela).
+    const changeOwner = async (id: string, ownerId: string) => {
+        const result = await api.appointments.changeOwner(id, ownerId);
+        setAppointments(prev => prev.map(a => a.id === id
+            ? { ...a, ownerId: result.ownerId, ownerName: result.ownerName, ownerChangedAt: result.ownerChangedAt }
+            : a));
+    };
+
     useEffect(() => {
         refresh();
     }, []);
 
     return (
-        <AppointmentContext.Provider value={{ appointments, loading, refresh, createAppointment, updateAppointment }}>
+        <AppointmentContext.Provider value={{ appointments, loading, refresh, createAppointment, updateAppointment, changeOwner }}>
             {children}
         </AppointmentContext.Provider>
     );

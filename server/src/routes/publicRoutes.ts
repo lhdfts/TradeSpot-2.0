@@ -647,7 +647,8 @@ router.post('/appointments', async (req: Request, res: Response) => {
             financial_currency: 'BRL',
             financial_amount: 0,
             created_at: new Date().toISOString(),
-            created_by: validatedSenderId
+            created_by: validatedSenderId,
+            owner: validatedSenderId
         };
 
         const { data: createdAppointment, error: appError } = await supabase
@@ -722,7 +723,9 @@ router.post('/appointments', async (req: Request, res: Response) => {
             attendant_sector: attendantSector || eventData.sector || '',
             event_name: eventData.event_name,
             event_sector: eventData.sector,
-            created_by_name: creatorName
+            created_by_name: creatorName,
+            owner_id: validatedSenderId,
+            owner_name: creatorName
         };
 
         const webhookUrl = getAppointmentWebhooks()[APPOINTMENT_TYPE];

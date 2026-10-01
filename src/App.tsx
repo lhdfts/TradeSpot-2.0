@@ -9,6 +9,7 @@ import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
 import { UnnichatConnections } from './views/UnnichatConnections';
 import { CeoScheduler } from './views/CeoScheduler';
+import { Settings } from './views/Settings';
 import { Profile } from './views/Profile';
 import { Logs } from './views/Logs';
 import { Login } from './views/Login';
@@ -124,6 +125,7 @@ const InternalLayout: React.FC = () => {
                 {currentView === '/profile' && 'Perfil'}
                 {currentView === '/unnichat-connections' && 'Conexões Unnichat'}
                 {currentView === '/logs' && 'Logs'}
+                {currentView === '/settings' && 'Configurações'}
               </h1>
               <div className="flex items-center gap-4">
                 <div id="header-actions" style={{ display: 'flex', alignItems: 'center' }}></div>
@@ -174,6 +176,11 @@ const InternalLayout: React.FC = () => {
               {/* Logs de Execução / Distribuição - Admin, Dev */}
               <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev']} />}>
                 <Route path="/logs" element={<Logs />} />
+              </Route>
+
+              {/* Configurações do sistema - Admin, Dev */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev']} />}>
+                <Route path="/settings" element={<Settings />} />
               </Route>
 
               {/* CEO Only Management */}

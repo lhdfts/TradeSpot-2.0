@@ -43,7 +43,7 @@ export interface ExecutionLog {
     } | null;
 }
 
-const EXECUTION_TYPES = ['Distribuição Automática', 'Alteração de Status', 'Alteração de Atendente'];
+const EXECUTION_TYPES = ['Distribuição Automática', 'Alteração de Status', 'Alteração de Atendente', 'Alteração de Owner'];
 
 export const Logs: React.FC = () => {
     const { user } = useAuth();
@@ -187,7 +187,8 @@ export const Logs: React.FC = () => {
         const styles: Record<string, string> = {
             'Distribuição Automática': 'bg-primary/10 text-primary border-primary/20',
             'Alteração de Status': 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-            'Alteração de Atendente': 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20'
+            'Alteração de Atendente': 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+            'Alteração de Owner': 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
         };
         return styles[type] || 'bg-muted text-muted-foreground border-border/50';
     };
@@ -197,6 +198,7 @@ export const Logs: React.FC = () => {
             case 'Alteração de Status':
                 return `${log.old_value || 'Não informado'} → ${log.new_value || 'Não informado'}`;
             case 'Alteração de Atendente':
+            case 'Alteração de Owner':
                 return `${log.old_value || 'Não informado'} → ${log.new_value || 'Não informado'}`;
             default:
                 return `Atribuído para ${log.selected_attendant_name || 'Não informado'}`;

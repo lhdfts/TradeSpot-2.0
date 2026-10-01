@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
@@ -21,7 +21,8 @@ import {
 import { cn } from '../lib/utils';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
-import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors';
+import { api } from '../services/api';
+import { SECTOR_PRE_VENDAS, isPreVendas, normalizeSector } from '../constants/sectors';
 import {
     Tooltip,
     TooltipTrigger,
@@ -343,12 +344,62 @@ export const Metrics: React.FC = () => {
         return { rankings: rankingsMap, chartData, filteredAppointments: sortedFiltered, chartTotal };
     }, [appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, uniqueClients, selectedStatuses]);
 
+    // Setores com troca de owner habilitada (Configurações). Só neles o card de owners aparece.
+    const [ownerSectors, setOwnerSectors] = useState<string[]>([]);
+    useEffect(() => {
+        api.settings.getOwnerChangeSectors()
+            .then(r => setOwnerSectors(r.sectors))
+            .catch(() => setOwnerSectors([]));
+    }, []);
+
+    const ownerDisplaySector = sectorFilter === 'all' && user?.sector ? normalizeSector(user.sector) : sectorFilter;
+
+    // Owner x criador por pessoa do setor exibido. Usa período, evento e tipo, mas
+    // não o filtro de setor por atendente: o agendamento de um Pré-vendas quase
+    // sempre tem um Closer como atendente. Conta por agendamento (comissão), sem
+    // o switch de alunos únicos.
+    const ownerStats = useMemo(() => {
+        if (!ownerSectors.includes(ownerDisplaySector)) return null;
+        const sectorOf = (id?: string) => normalizeSector(attendants.find(att => att.id === id)?.sector);
+        const stats = new Map<string, { id: string; name: string; comoOwner: number; realizados: number; assumidos: number; repassados: number }>();
+        const get = (id: string) => {
+            if (!stats.has(id)) {
+                stats.set(id, { id, name: attendants.find(att => att.id === id)?.name || '-', comoOwner: 0, realizados: 0, assumidos: 0, repassados: 0 });
+            }
+            return stats.get(id)!;
+        };
+
+        appointments.forEach(a => {
+            if (!a.date || !startDate || !endDate || a.date < startDate || a.date > endDate) return;
+            if (eventFilter && a.eventId !== eventFilter) return;
+            if (typeFilter && a.type !== typeFilter) return;
+
+            const ownerId = a.ownerId ?? a.createdBy;
+            if (ownerId && sectorOf(ownerId) === ownerDisplaySector) {
+                const s = get(ownerId);
+                s.comoOwner++;
+                if (a.status === 'Realizado') s.realizados++;
+                if (a.createdBy && a.createdBy !== ownerId) s.assumidos++;
+            }
+            if (a.createdBy && ownerId && a.createdBy !== ownerId && sectorOf(a.createdBy) === ownerDisplaySector) {
+                get(a.createdBy).repassados++;
+            }
+        });
+
+        return Array.from(stats.values())
+            .filter(s => !attendantFilter || s.id === attendantFilter)
+            .filter(s => !searchTerm.trim() || s.name.toLowerCase().includes(searchTerm.toLowerCase()))
+            .sort((a, b) => b.realizados - a.realizados || b.comoOwner - a.comoOwner);
+    }, [ownerSectors, ownerDisplaySector, appointments, attendants, startDate, endDate, eventFilter, typeFilter, attendantFilter, searchTerm]);
+
     const handleExport = () => {
         if (!filteredAppointments.length) return;
-        const headers = ['Data', 'Horario', 'Lead', 'Telefone', 'Email', 'Tipo', 'Status', 'Atendente', 'Evento'];
+        const headers = ['Data', 'Horario', 'Lead', 'Telefone', 'Email', 'Tipo', 'Status', 'Atendente', 'Criador', 'Owner', 'Evento'];
         const csvRows = filteredAppointments.map((appt: any) => {
             const attendant = attendants.find(att => att.id === appt.attendantId);
             const event = events.find(e => e.id === appt.eventId);
+            const creator = attendants.find(att => att.id === appt.createdBy);
+            const owner = attendants.find(att => att.id === (appt.ownerId ?? appt.createdBy));
             return [
                 escapeCsvValue(appt.date),
                 escapeCsvValue(appt.time),
@@ -358,6 +409,8 @@ export const Metrics: React.FC = () => {
                 escapeCsvValue(appt.type),
                 escapeCsvValue(appt.status),
                 escapeCsvValue(attendant?.name),
+                escapeCsvValue(creator?.name),
+                escapeCsvValue(owner?.name),
                 escapeCsvValue(event?.event_name)
             ].join(',');
         });
@@ -392,7 +445,7 @@ export const Metrics: React.FC = () => {
         } else if (displaySector === 'Social Seller') {
             allowed = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
         } else if (isPreVendas(displaySector)) {
-            allowed = ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'];
+            allowed = ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer', 'Fora da agenda'];
         } else {
             allowed = [...allTypes];
         }
@@ -625,6 +678,41 @@ export const Metrics: React.FC = () => {
                     );
                 })()}
             </div>
+
+            {/* Owners (comissão) x criadores */}
+            {ownerStats && (
+                <div className="bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
+                    <div className="mb-6">
+                        <h3 className="text-lg font-bold text-foreground">Owners — {ownerDisplaySector}</h3>
+                        <p className="text-xs text-secondary mt-1">
+                            Owner recebe a comissão. "Repassou" conta os agendamentos que a pessoa criou e o Líder passou para outro owner. Conta todos os agendamentos, mesmo com o switch de alunos únicos ligado.
+                        </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <div className="min-w-[520px]">
+                            <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
+                                <div className="col-span-4">Nome</div>
+                                <div className="col-span-2 text-center">Como owner</div>
+                                <div className="col-span-2 text-center text-emerald-500">Realizados</div>
+                                <div className="col-span-2 text-center">Assumiu</div>
+                                <div className="col-span-2 text-center text-[#FF9100]">Repassou</div>
+                            </div>
+                            <div className="space-y-2">
+                                {ownerStats.map(item => (
+                                    <div key={item.id} className="grid grid-cols-12 items-center p-3 rounded-lg bg-background min-h-[44px]">
+                                        <div className="col-span-4 font-medium text-foreground text-[13px] truncate" title={item.name}>{item.name}</div>
+                                        <div className="col-span-2 text-center font-bold text-foreground text-xs">{item.comoOwner}</div>
+                                        <div className="col-span-2 text-center font-bold text-emerald-500 text-xs">{item.realizados}</div>
+                                        <div className="col-span-2 text-center font-bold text-foreground text-xs">{item.assumidos}</div>
+                                        <div className="col-span-2 text-center font-bold text-[#FF9100] text-xs">{item.repassados}</div>
+                                    </div>
+                                ))}
+                                {ownerStats.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Chart */}
             <div className="bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
