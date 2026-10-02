@@ -16,12 +16,13 @@ import publicRoutes from './routes/publicRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import unnichatRoutes from './routes/unnichatRoutes.js';
 import executionLogRoutes from './routes/executionLogRoutes.js';
-import integrationRoutes from './routes/integrationRoutes.js';
+import integrationRoutes, { priorAppointmentRouter } from './routes/integrationRoutes.js';
+import settingsRoutes from './routes/settingsRoutes.js';
 
 // Middleware
 import { verifyFirebaseToken, requireRole, AuthenticatedRequest } from './middleware/firebaseAuth.js';
 import { apiRateLimiter, publicRateLimiter, strictPublicRateLimiter } from './middleware/rateLimiter.js';
-import { integrationAuth } from './middleware/integrationAuth.js';
+import { integrationAuth, priorAppointmentAuth } from './middleware/integrationAuth.js';
 import { sanitizeMiddleware } from './utils/sanitize.js';
 import { generateRoleIntegrity, verifyRoleIntegrity } from './utils/integrity.js';
 
@@ -136,7 +137,10 @@ app.use('/api/appointments', apiRateLimiter, verifyFirebaseToken, requireRole('A
 app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), pipedriveRoutes);
 app.use('/api/unnichat-connections', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), unnichatRoutes);
 app.use('/api/execution-logs', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder'), executionLogRoutes);
+app.use('/api/settings', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), settingsRoutes);
 // Integrações máquina-a-máquina (n8n): autenticadas por token + id de workflow, não por Firebase.
+// Montada antes do bloco abaixo para ser validada contra o SEU workflow, não o do Partners.
+app.use('/api/integrations/prior-appointment', apiRateLimiter, priorAppointmentAuth, priorAppointmentRouter);
 app.use('/api/integrations', publicRateLimiter, integrationAuth, integrationRoutes);
 
 // Serve static files from the React app

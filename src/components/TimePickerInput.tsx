@@ -13,7 +13,7 @@ interface TimePickerInputProps {
     minTime?: string; // Format HH:MM - Should be the earliest allowed time slot
     hideUnavailable?: boolean;
     pickerGridClass?: string;
-    isPerpetuosEvent?: boolean; // If true, only show :00 and :30 time slots
+    isPreVendasEvent?: boolean; // If true, only show :00 and :30 time slots
 }
 
 export const TimePickerInput: React.FC<TimePickerInputProps> = ({
@@ -26,7 +26,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     minTime,
     hideUnavailable = false,
     pickerGridClass,
-    isPerpetuosEvent = false,
+    isPreVendasEvent = false,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
@@ -56,8 +56,8 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
 
     const allTimes = generateAllTimes();
     // If availableTimes is provided, use it (even if empty). If not (undefined), show all times.
-    // For Perpétuos events, filter to only :00 and :30 slots
-    const filteredAllTimes = isPerpetuosEvent
+    // For Pré-vendas events, filter to only :00 and :30 slots
+    const filteredAllTimes = isPreVendasEvent
         ? allTimes.filter(time => {
             const minutes = time.split(':')[1];
             return minutes === '00' || minutes === '30';
@@ -139,8 +139,8 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
         >
             <div className={cn("grid gap-2", pickerGridClass || "grid-cols-4")}>
                 {filteredAllTimes.map(time => {
-                    // For Perpétuos events, hide :15 and :45 time slots
-                    if (isPerpetuosEvent) {
+                    // For Pré-vendas events, hide :15 and :45 time slots
+                    if (isPreVendasEvent) {
                         const minutes = time.split(':')[1];
                         if (minutes === '15' || minutes === '45') {
                             return null;

@@ -8,6 +8,7 @@ import { FloatingInput } from '../../components/FloatingInput';
 import { Button } from '../../components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { FloatingCountrySelect } from '../../components/FloatingCountrySelect';
+import { isPreVendas } from '../../constants/sectors';
 
 export const SelfScheduling = () => {
     const { link } = useParams<{ link: string }>();
@@ -325,7 +326,7 @@ export const SelfScheduling = () => {
                             }
                             hideUnavailable={false}
                             pickerGridClass="grid-cols-3 md:grid-cols-4"
-                            isPerpetuosEvent={event?.sector === 'Perpétuos'}
+                            isPreVendasEvent={isPreVendas(event?.sector)}
                         />
                     </div>
                     {errors.time && <p className="text-xs text-destructive">{errors.time}</p>}

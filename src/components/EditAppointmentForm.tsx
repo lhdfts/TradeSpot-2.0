@@ -13,10 +13,12 @@ import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, Appoin
 import { isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit } from '../utils/distribution';
 import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
+import { AppointmentOwnerField } from './AppointmentOwnerField';
 import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
+import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors';
 
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
@@ -141,7 +143,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
         // Mantém o rótulo visível ao editar um agendamento que já é desse tipo, seja qual for o
         // setor de quem abriu a edição.
-        if (formData.type === 'Direcionar Closer' || (user?.sector === 'Perpétuos' && selectedEvent?.event_name === 'Partners')) {
+        if (formData.type === 'Direcionar Closer' || (isPreVendas(user?.sector) && selectedEvent?.event_name === 'Partners')) {
             allTypes.push({ value: 'Direcionar Closer', label: 'Direcionar Closer' });
         }
 
@@ -177,8 +179,8 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
         if (user.sector === 'Social Seller') {
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
-        if (user.sector === 'Perpétuos') {
-            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
+        if (isPreVendas(user.sector)) {
+            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer', 'Fora da agenda'].includes(t.value));
         }
 
         return allTypes;
@@ -190,7 +192,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
             const typeToSectors: Record<string, string[]> = {
                 'Ligação Closer': ['Closer', 'Co-líder'],
                 'Ligação Equipe Aldeia': ['Aldeia'],
-                'Gold Call': ['Closer', 'Co-líder', 'Perpétuos'],
+                'Gold Call': ['Closer', 'Co-líder', SECTOR_PRE_VENDAS],
                 'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
                 'Upgrade': ['Closer', 'Co-líder'],
                 'Ligação SDR': ['SDR'],
@@ -291,7 +293,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
         // Filter active events by sector (or if user is privileged)
         const filtered = events.filter(e => {
             if (e.status !== true) return false;
-            if (user?.sector === 'Perpétuos') return e.sector === 'Perpétuos';
+            if (isPreVendas(user?.sector)) return isPreVendas(e.sector);
 
             // Special case for On The Road 2.0 and Aldeia
             // if (e.id === ON_THE_ROAD_EVENT_ID && user?.sector === 'Aldeia') return true;
@@ -377,8 +379,8 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
 
-            // Special case for Tribo, Aldeia and Perpétuos: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
-            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || user.sector === 'Perpétuos') && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
+            // Special case for Tribo, Aldeia and Pré-vendas: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
+            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || isPreVendas(user.sector)) && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
             // 4. Reagendamento Closer
@@ -995,7 +997,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                         {/* Row 3: Atendente and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={!initialData ? "col-span-2" : ""}>
-                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || user?.sector === 'Perpétuos') && !initialData && user ? (
+                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || isPreVendas(user?.sector)) && !initialData && user ? (
                                     <FloatingInput
                                         label="Atendente"
                                         value={user.name}
@@ -1034,6 +1036,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                     disabled={
                                         !user || (
                                             user.id !== initialData.createdBy &&
+                                            user.id !== initialData.ownerId &&
                                             user.id !== initialData.attendantId &&
                                             !['Líder', 'Co-líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
                                         ) || (
@@ -1050,6 +1053,9 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                         Editado por: {initialData.updater?.name || 'Sistema'}
                                     </span>
                                 </div>
+                            )}
+                            {initialData && (
+                                <AppointmentOwnerField appointment={initialData} attendants={attendants} />
                             )}
                         </div>
 
