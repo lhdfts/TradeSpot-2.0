@@ -66,9 +66,9 @@ export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ ap
             await changeOwner(appointment.id, selected);
             setOwnerId(selected);
             setOwnerChangedAt(new Date().toISOString());
-            toastManager.add({ title: 'Owner alterado', description: `Agora o owner é ${nameOf(selected)}.`, type: 'success' });
+            toastManager.add({ title: 'Responsável alterado', description: `Agora o responsável é ${nameOf(selected)}.`, type: 'success' });
         } catch (err: any) {
-            toastManager.add({ title: 'Erro', description: err?.message || 'Não foi possível trocar o owner.', type: 'error' });
+            toastManager.add({ title: 'Erro', description: err?.message || 'Não foi possível trocar o responsável.', type: 'error' });
         } finally {
             setSaving(false);
         }
@@ -81,7 +81,7 @@ export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ ap
                     Criado por: <span className="text-foreground font-medium">{creator?.name || '-'}</span>
                 </span>
                 <span className="text-muted-foreground">
-                    Owner: <span className="text-foreground font-medium">{nameOf(ownerId)}</span>
+                    Responsável: <span className="text-foreground font-medium">{nameOf(ownerId)}</span>
                     {ownerDiffers && ownerChangedAt && (
                         <span className="text-xs"> (alterado em {formatDateTime(ownerChangedAt)})</span>
                     )}
@@ -92,7 +92,7 @@ export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ ap
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
                     <div className="flex-1">
                         <FloatingSelect
-                            label="Trocar owner"
+                            label="Trocar responsável"
                             value={selected}
                             onChange={(e) => setSelected(e.target.value)}
                             options={candidates.map(a => ({
@@ -109,7 +109,7 @@ export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ ap
                         disabled={saving || !selected || selected === ownerId}
                     >
                         {saving ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
-                        <span className="ml-2">Salvar owner</span>
+                        <span className="ml-2">Salvar responsável</span>
                     </Button>
                 </div>
             )}

@@ -1652,13 +1652,13 @@ router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
     try {
         const me = req.user;
         if (!me || me.role !== 'Líder') {
-            return res.status(403).json({ error: 'Somente o Líder pode trocar o owner do agendamento.' });
+            return res.status(403).json({ error: 'Somente o Líder pode trocar o responsável do agendamento.' });
         }
 
         const { id } = req.params;
         const newOwnerId = typeof req.body?.ownerId === 'string' ? req.body.ownerId.trim() : '';
         if (!newOwnerId) {
-            return res.status(400).json({ error: 'Informe o novo owner.' });
+            return res.status(400).json({ error: 'Informe o novo responsável.' });
         }
 
         const { data: appt, error: apptErr } = await supabase
@@ -1686,12 +1686,12 @@ router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
         const mySectors = sectorAliases(me.sector);
 
         if (!creator || !mySectors.includes(creator.sector)) {
-            return res.status(403).json({ error: 'Você só pode trocar o owner de agendamentos criados pelo seu setor.' });
+            return res.status(403).json({ error: 'Você só pode trocar o responsável de agendamentos criados pelo seu setor.' });
         }
 
         const enabledSectors = await getOwnerChangeSectors();
         if (!isOwnerChangeEnabledFor(enabledSectors, creator.sector)) {
-            return res.status(403).json({ error: `A troca de owner não está habilitada para o setor ${creator.sector}.` });
+            return res.status(403).json({ error: `A troca de responsável não está habilitada para o setor ${creator.sector}.` });
         }
 
         const isCreator = newOwnerId === appt.created_by;
@@ -1699,7 +1699,7 @@ router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
             && ['Colaborador', 'Co-líder'].includes(newOwner.role)
             && mySectors.includes(newOwner.sector);
         if (!newOwner || (!isCreator && !isEligible)) {
-            return res.status(400).json({ error: 'O novo owner precisa ser um Colaborador ou Co-líder ativo do seu setor.' });
+            return res.status(400).json({ error: 'O novo responsável precisa ser um Colaborador ou Co-líder ativo do seu setor.' });
         }
 
         if (newOwnerId === currentOwnerId) {

@@ -34,7 +34,7 @@ export const Settings = () => {
             const r = await api.settings.updateOwnerChangeSectors(selected);
             setSaved(r.sectors);
             setSelected(r.sectors);
-            toastManager.add({ title: 'Configurações salvas', description: 'Setores com troca de owner atualizados.', type: 'success' });
+            toastManager.add({ title: 'Configurações salvas', description: 'Setores com troca de responsável atualizados.', type: 'success' });
         } catch (err: any) {
             toastManager.add({ title: 'Erro', description: err?.message || 'Não foi possível salvar.', type: 'error' });
         } finally {
@@ -46,9 +46,9 @@ export const Settings = () => {
         <div className="max-w-2xl space-y-6">
             <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
                 <div>
-                    <h3 className="text-lg font-bold text-foreground">Troca de owner</h3>
+                    <h3 className="text-lg font-bold text-foreground">Troca de responsável</h3>
                     <p className="text-sm text-secondary mt-1">
-                        Nos setores marcados, o Líder pode trocar o owner (quem recebe a comissão) dos agendamentos criados pela equipe dele.
+                        Nos setores marcados, o Líder pode trocar o responsável (quem recebe a comissão) dos agendamentos criados pela equipe dele.
                     </p>
                 </div>
 

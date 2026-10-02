@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import type { Appointment } from '../types';
 import { api } from '../services/api';
 
@@ -20,16 +20,23 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     const [loading, setLoading] = useState(false);
     const [truncated, setTruncated] = useState(false);
 
+    // Só a busca mais recente pode gravar o resultado. Sem isso, uma busca
+    // antiga e mais lenta (ex.: a carga inicial de 1.000 linhas) terminava
+    // depois da busca pelo período e sobrescrevia a lista com dados incompletos.
+    const latestRequest = useRef(0);
+
     const refresh = async (params?: { startDate?: string; endDate?: string }) => {
+        const requestId = ++latestRequest.current;
         setLoading(true);
         try {
             const result = await api.appointments.listWithMeta(params);
+            if (requestId !== latestRequest.current) return;
             setAppointments(result.appointments);
             setTruncated(result.truncated);
         } catch (error) {
             console.error('Failed to fetch appointments', error);
         } finally {
-            setLoading(false);
+            if (requestId === latestRequest.current) setLoading(false);
         }
     };
 

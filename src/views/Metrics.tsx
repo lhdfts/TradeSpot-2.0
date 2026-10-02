@@ -8,7 +8,7 @@ import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
 import { Input as BaseInput } from '../components/ui/input';
 import { ExportIcon } from '../components/ExportIcon';
-import { canViewAllSectors, isMedinaUser, getAllowedSectors, escapeCsvValue, isDualLeader } from '../utils/security';
+import { canViewAllSectors, isMedinaUser, getAllowedSectors, escapeCsvValue } from '../utils/security';
 import {
     ComposedChart,
     Bar,
@@ -19,10 +19,10 @@ import {
     LabelList
 } from 'recharts';
 import { cn } from '../lib/utils';
-import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
+import { computeMetrics, computeOwnerStats, filterAppointments, filterForExport, RESPONSIBLE_SECTORS, type DirectionFilter } from '../utils/metricsCalc';
 import { api } from '../services/api';
-import { SECTOR_PRE_VENDAS, isPreVendas, normalizeSector } from '../constants/sectors';
+import { isPreVendas, normalizeSector } from '../constants/sectors';
 import {
     Tooltip,
     TooltipTrigger,
@@ -30,19 +30,6 @@ import {
     TooltipProvider
 } from '../components/ui/tooltip';
 
-interface RankingItem {
-    id: string;
-    name: string;
-    total: number;
-    totalRecebido: number;
-    'Realizado': number;
-    'Cancelado': number;
-    'Esquecimento': number;
-    'No-show': number;
-    'Reagendado': number;
-    'Pendente': number;
-    originalRank?: number;
-}
 
 export const Metrics: React.FC = () => {
     const { appointments, refresh, loading: loadingAppointments, truncated } = useAppointments();
@@ -53,18 +40,20 @@ export const Metrics: React.FC = () => {
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-    const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
-    const [endDate, setEndDate] = useState(lastDay.toISOString().split('T')[0]);
+    const toLocalISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const [startDate, setStartDate] = useState(toLocalISO(firstDay));
+    const [endDate, setEndDate] = useState(toLocalISO(lastDay));
 
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
     const [uniqueClients, setUniqueClients] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [directionFilter, setDirectionFilter] = useState<DirectionFilter>('all');
 
     // --- UI STATE ---
     const { user } = useAuth();
-    const isPrivilegedUser = canViewAllSectors(user) || user?.role === 'Admin' || user?.role === 'Dev' || isDualLeader(user);
+    const isPrivilegedUser = canViewAllSectors(user) || user?.role === 'Admin' || user?.role === 'Dev';
     const [sectorFilter, setSectorFilter] = useState(() => {
         if (isPrivilegedUser) return 'all';
         return user?.sector || 'all';
@@ -107,242 +96,15 @@ export const Metrics: React.FC = () => {
         );
     };
 
+    // A direção (equipe -> outros, equipe -> equipe, outros -> equipe) só faz
+    // sentido com uma equipe escolhida no filtro de setor.
+    const effectiveDirection: DirectionFilter = sectorFilter === 'all' ? 'all' : directionFilter;
+
     // --- DATA CALCULATION ---
-    const { rankings, chartData, filteredAppointments, chartTotal } = useMemo(() => {
-        const allowedSectors = getAllowedSectors(user);
-        const isGlobalViewer = canViewAllSectors(user) || isDualLeader(user);
-
-        // 1. Filter Appointments by Date, Event, Type
-        let filtered = appointments.filter(a => {
-            if (!a.date) return false;
-
-            // Period Filter
-            if (startDate && endDate) {
-                if (a.date < startDate || a.date > endDate) return false;
-            } else {
-                return false;
-            }
-
-            // Event Filter
-            if (eventFilter && a.eventId !== eventFilter) return false;
-
-            // Type Filter
-            if (typeFilter && a.type !== typeFilter) return false;
-
-            // Sector Filter
-            const creator = attendants.find(att => att.id === a.createdBy);
-            const attendant = attendants.find(att => att.id === a.attendantId);
-
-            if (!isGlobalViewer) {
-                const matchesAllowedSector = 
-                    (creator && creator.sector && allowedSectors.includes(creator.sector)) ||
-                    (attendant && attendant.sector && allowedSectors.includes(attendant.sector));
-                
-                if (!matchesAllowedSector) return false;
-
-                if (sectorFilter !== 'all') {
-                    const activeAtt = sectorFilter === 'SDR' ? creator : attendant;
-                    if (!activeAtt || !activeAtt.sector) return false;
-                    const isMatch = sectorFilter === 'SDR'
-                        ? (activeAtt.sector === 'SDR' || activeAtt.sector === 'Leads')
-                        : activeAtt.sector === sectorFilter;
-                    if (!isMatch) return false;
-                }
-            } else if (sectorFilter !== 'all') {
-                const activeAtt = sectorFilter === 'SDR' ? creator : attendant;
-                if (!activeAtt || !activeAtt.sector) return false;
-                const isMatch = sectorFilter === 'SDR'
-                    ? (activeAtt.sector === 'SDR' || activeAtt.sector === 'Leads')
-                    : activeAtt.sector === sectorFilter;
-                if (!isMatch) return false;
-            }
-
-            return true;
-        });
-
-        // 1.5 Alunos únicos: cada aluno (telefone) conta uma única vez, pelo agendamento
-        // mais recente dentro dos filtros atuais. Aplicado antes de rankings, gráfico,
-        // totais e exportação, para a tela inteira usar a mesma base.
-        if (uniqueClients) {
-            const uniqueMap = new Map<string, typeof filtered[0]>();
-            filtered.forEach(appt => {
-                const key = appt.phone ? appt.phone.toString() : appt.id;
-                if (!uniqueMap.has(key)) {
-                    uniqueMap.set(key, appt);
-                } else {
-                    const existing = uniqueMap.get(key)!;
-                    const d1 = new Date(`${appt.date}T${appt.time}`);
-                    const d2 = new Date(`${existing.date}T${existing.time}`);
-
-                    if (d1 > d2) {
-                        uniqueMap.set(key, appt);
-                    }
-                }
-            });
-            filtered = Array.from(uniqueMap.values());
-        }
-
-        // 2. Generate Rankings for ALL sectors
-        const rankingsMap = new Map<string, RankingItem[]>();
-        const sectors = ['SDR', 'Leads', 'Closer', 'Aldeia', 'Tribo', 'Social Seller', SECTOR_PRE_VENDAS, 'Suporte', 'TEI', 'Qualidade'];
-
-        sectors.forEach(sector => {
-            const map = new Map<string, RankingItem>();
-            
-            filtered.forEach(a => {
-                // For SDR/Leads: count as creator for specific types
-                if ((sector === 'SDR' || sector === 'Leads') && a.createdBy && ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(a.type)) {
-                    const creator = attendants.find(att => att.id === a.createdBy);
-                    if (creator && creator.sector === sector) {
-                        if (!map.has(a.createdBy)) {
-                            map.set(a.createdBy, {
-                                id: creator.id,
-                                name: creator.name,
-                                total: 0,
-                                totalRecebido: 0,
-                                'Realizado': 0,
-                                'Cancelado': 0,
-                                'Esquecimento': 0,
-                                'No-show': 0,
-                                'Reagendado': 0,
-                                'Pendente': 0
-                            });
-                        }
-                        const stats = map.get(a.createdBy)!;
-                        stats.total++;
-                        if (a.status as string in stats) {
-                            stats[a.status]++;
-                        }
-                    }
-                }
-
-                // For ALL sectors: calculate as attendant (totalRecebido and status)
-                if (a.attendantId) {
-                    const attendant = attendants.find(att => att.id === a.attendantId);
-                    if (attendant && attendant.sector === sector) {
-                        if (!map.has(a.attendantId)) {
-                            map.set(a.attendantId, {
-                                id: attendant.id,
-                                name: attendant.name,
-                                total: 0,
-                                totalRecebido: 0,
-                                'Realizado': 0,
-                                'Cancelado': 0,
-                                'Esquecimento': 0,
-                                'No-show': 0,
-                                'Reagendado': 0,
-                                'Pendente': 0
-                            });
-                        }
-                        const stats = map.get(a.attendantId)!;
-                        stats.total++;
-                        if (a.attendantId !== a.createdBy) {
-                            stats.totalRecebido++;
-                        }
-                        if (a.status as string in stats) {
-                            stats[a.status]++;
-                        }
-                    }
-                }
-            });
-
-            // Sort by Realizados
-            const ranking = Array.from(map.values())
-                .sort((a, b) => b['Realizado'] - a['Realizado'])
-                .map((item, idx) => ({ ...item, originalRank: idx })) as RankingItem[];
-
-            // Apply attendant filter
-            const filteredRanking = attendantFilter 
-                ? ranking.filter(item => item.id === attendantFilter)
-                : ranking;
-
-            rankingsMap.set(sector, filteredRanking);
-        });
-
-        // 3. Chart Data
-        type ChartItem = {
-            displayDate: string;
-            rawDate: number;
-            total: number;
-            'Cancelado': number;
-            'Esquecimento': number;
-            'No-show': number;
-            'Pendente': number;
-            'Realizado': number;
-            'Reagendado': number;
-        };
-        const dateMap = new Map<string, ChartItem>();
-
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const loop = new Date(start);
-        loop.setHours(12, 0, 0, 0);
-        const endLoop = new Date(end);
-        endLoop.setHours(23, 59, 59, 999);
-
-        let count = 0;
-        while (loop <= endLoop && count < 366) {
-            const dateStr = loop.toISOString().split('T')[0];
-            const display = loop.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-            dateMap.set(dateStr, {
-                displayDate: display,
-                rawDate: loop.getTime(),
-                total: 0,
-                'Cancelado': 0,
-                'Esquecimento': 0,
-                'No-show': 0,
-                'Pendente': 0,
-                'Realizado': 0,
-                'Reagendado': 0
-            });
-            loop.setDate(loop.getDate() + 1);
-            count++;
-        }
-
-        filtered.forEach(a => {
-            const key = a.date;
-            if (dateMap.has(key)) {
-                const stats = dateMap.get(key)!;
-                if (a.status as string in stats) {
-                    stats[a.status as AppointmentStatus]++;
-                }
-            }
-        });
-
-        const sortedData = Array.from(dateMap.values()).sort((a, b) => a.rawDate - b.rawDate);
-        
-        // Recalculate total based on selected statuses
-        const chartData = sortedData.map(item => {
-            let total = 0;
-            selectedStatuses.forEach(status => {
-                if (status in item) {
-                    total += (item as any)[status];
-                }
-            });
-            return { ...item, total };
-        });
-
-        // Calculate Totals
-        const totals: Record<string, number> = {};
-        APPOINTMENT_STATUSES.forEach(status => totals[status] = 0);
-        chartData.forEach(item => {
-            APPOINTMENT_STATUSES.forEach(status => {
-                if (status in item) {
-                    totals[status] += (item as any)[status];
-                }
-            });
-        });
-
-        const chartTotal = chartData.reduce((acc, curr) => acc + curr.total, 0);
-
-        const sortedFiltered = [...filtered].sort((a, b) => {
-            const dateA = new Date(`${a.date}T${a.time}`);
-            const dateB = new Date(`${b.date}T${b.time}`);
-            return dateA.getTime() - dateB.getTime();
-        });
-
-        return { rankings: rankingsMap, chartData, filteredAppointments: sortedFiltered, chartTotal };
-    }, [appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, uniqueClients, selectedStatuses]);
+    const { rankings, chartData, filteredAppointments, chartTotal } = useMemo(() => computeMetrics({
+        user, appointments, attendants, startDate, endDate, attendantFilter,
+        eventFilter, typeFilter, sectorFilter, directionFilter: effectiveDirection, uniqueClients, selectedStatuses
+    }), [user, appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, effectiveDirection, uniqueClients, selectedStatuses]);
 
     // Busca no banco tudo do período selecionado. Sem isso a tela usaria a lista
     // que já estava carregada (carga inicial ou período de outra tela).
@@ -351,7 +113,7 @@ export const Metrics: React.FC = () => {
         refresh({ startDate, endDate });
     }, [startDate, endDate]);
 
-    // Setores com troca de owner habilitada (Configurações). Só neles o card de owners aparece.
+    // Setores com troca de responsável habilitada (Configurações). Só neles o card de responsáveis aparece.
     const [ownerSectors, setOwnerSectors] = useState<string[]>([]);
     useEffect(() => {
         api.settings.getOwnerChangeSectors()
@@ -361,64 +123,25 @@ export const Metrics: React.FC = () => {
 
     const ownerDisplaySector = sectorFilter === 'all' && user?.sector ? normalizeSector(user.sector) : sectorFilter;
 
-    // Owner x criador por pessoa do setor exibido. Usa período, evento e tipo, mas
-    // não o filtro de setor por atendente: o agendamento de um Pré-vendas quase
-    // sempre tem um Closer como atendente. Conta por agendamento (comissão), sem
-    // o switch de alunos únicos.
-    const ownerStats = useMemo(() => {
-        if (!ownerSectors.includes(ownerDisplaySector)) return null;
-        const sectorOf = (id?: string) => normalizeSector(attendants.find(att => att.id === id)?.sector);
-        const stats = new Map<string, { id: string; name: string; comoOwner: number; realizados: number; assumidos: number; repassados: number }>();
-        const get = (id: string) => {
-            if (!stats.has(id)) {
-                stats.set(id, { id, name: attendants.find(att => att.id === id)?.name || '-', comoOwner: 0, realizados: 0, assumidos: 0, repassados: 0 });
-            }
-            return stats.get(id)!;
-        };
+    // Base do card: mesmos filtros da página (visibilidade, setor e direção), sem alunos únicos.
+    const ownerBase = useMemo(() => filterAppointments({
+        user, appointments, attendants, startDate, endDate, eventFilter, typeFilter,
+        sectorFilter: ownerDisplaySector || 'all', directionFilter: ownerDisplaySector ? directionFilter : 'all'
+    }), [user, appointments, attendants, startDate, endDate, eventFilter, typeFilter, ownerDisplaySector, directionFilter]);
 
-        appointments.forEach(a => {
-            if (!a.date || !startDate || !endDate || a.date < startDate || a.date > endDate) return;
-            if (eventFilter && a.eventId !== eventFilter) return;
-            if (typeFilter && a.type !== typeFilter) return;
+    const ownerStats = useMemo(() => computeOwnerStats({
+        ownerSectors, ownerDisplaySector, appointments: ownerBase, attendants, startDate, endDate,
+        eventFilter, typeFilter, attendantFilter, searchTerm
+    }), [ownerSectors, ownerDisplaySector, ownerBase, attendants, startDate, endDate, eventFilter, typeFilter, attendantFilter, searchTerm]);
 
-            const ownerId = a.ownerId ?? a.createdBy;
-            if (ownerId && sectorOf(ownerId) === ownerDisplaySector) {
-                const s = get(ownerId);
-                s.comoOwner++;
-                if (a.status === 'Realizado') s.realizados++;
-                if (a.createdBy && a.createdBy !== ownerId) s.assumidos++;
-            }
-            if (a.createdBy && ownerId && a.createdBy !== ownerId && sectorOf(a.createdBy) === ownerDisplaySector) {
-                get(a.createdBy).repassados++;
-            }
-        });
-
-        return Array.from(stats.values())
-            .filter(s => !attendantFilter || s.id === attendantFilter)
-            .filter(s => !searchTerm.trim() || s.name.toLowerCase().includes(searchTerm.toLowerCase()))
-            .sort((a, b) => b.realizados - a.realizados || b.comoOwner - a.comoOwner);
-    }, [ownerSectors, ownerDisplaySector, appointments, attendants, startDate, endDate, eventFilter, typeFilter, attendantFilter, searchTerm]);
-
-    // Exportação = agendamentos da tela com TODOS os filtros da página: período,
-    // setor, tipo, evento e alunos únicos (já em filteredAppointments), mais
-    // atendente, pesquisa por nome e os status marcados no gráfico. Atendente e
-    // pesquisa valem para quem é atendente, criador ou owner do agendamento.
-    const exportAppointments = useMemo(() => {
-        const nameOf = (id?: string) => attendants.find(att => att.id === id)?.name?.toLowerCase() || '';
-        const term = searchTerm.trim().toLowerCase();
-        return filteredAppointments.filter(a => {
-            const people = [a.attendantId, a.createdBy, a.ownerId ?? a.createdBy];
-            if (attendantFilter && !people.includes(attendantFilter)) return false;
-            if (term && !people.some(id => nameOf(id).includes(term))) return false;
-            if (!selectedStatuses.includes(a.status)) return false;
-            return true;
-        });
-    }, [filteredAppointments, attendants, attendantFilter, searchTerm, selectedStatuses]);
+    const exportAppointments = useMemo(() => filterForExport({
+        filteredAppointments, attendants, attendantFilter, searchTerm, selectedStatuses
+    }), [filteredAppointments, attendants, attendantFilter, searchTerm, selectedStatuses]);
 
     const handleExport = () => {
         if (loadingAppointments) return;
         if (!exportAppointments.length) return;
-        const headers = ['Data', 'Horario', 'Lead', 'Telefone', 'Email', 'Tipo', 'Status', 'Atendente', 'Criador', 'Owner', 'Evento'];
+        const headers = ['Data', 'Horario', 'Lead', 'Telefone', 'Email', 'Tipo', 'Status', 'Atendente', 'Criador', 'Responsável', 'Evento'];
         const csvRows = exportAppointments.map((appt: any) => {
             const attendant = attendants.find(att => att.id === appt.attendantId);
             const event = events.find(e => e.id === appt.eventId);
@@ -447,6 +170,21 @@ export const Metrics: React.FC = () => {
         document.body.removeChild(link);
     };
 
+    // Agendamentos do período visíveis com o setor atual, ignorando tipo e evento:
+    // base para as opções desses dois filtros. Sem isso, tipos e eventos de
+    // outro setor (ex.: evento do Pré-vendas atendido pelo Closer) não podiam
+    // ser filtrados, embora entrassem nos números.
+    const optionBase = useMemo(() => filterAppointments({
+        user, appointments, attendants, startDate, endDate, eventFilter: '', typeFilter: '', sectorFilter, directionFilter: effectiveDirection
+    }), [user, appointments, attendants, startDate, endDate, sectorFilter, effectiveDirection]);
+
+    const eventOptions = useMemo(() => {
+        const presentIds = new Set(optionBase.map(a => a.eventId).filter(Boolean));
+        return events
+            .filter(e => sectorFilter === 'all' || !e.sector || e.sector === sectorFilter || presentIds.has(e.id) || e.id === eventFilter)
+            .map(e => ({ value: e.id, label: e.event_name }));
+    }, [events, optionBase, sectorFilter, eventFilter]);
+
     // Get allowed types for current sector
     const getAllowedTypesForSector = () => {
         const displaySector = sectorFilter === 'all' && user?.sector ? user.sector : sectorFilter;
@@ -474,6 +212,10 @@ export const Metrics: React.FC = () => {
             allowed = [...allTypes];
         }
 
+        // Tipos que aparecem nos dados do período também entram, mesmo fora da lista do setor.
+        optionBase.forEach(a => { if (a.type && !allowed.includes(a.type)) allowed.push(a.type); });
+        if (typeFilter && !allowed.includes(typeFilter)) allowed.push(typeFilter);
+
         return allowed.map(t => ({ value: t, label: t }));
     };
 
@@ -488,14 +230,14 @@ export const Metrics: React.FC = () => {
                             label="Data Inicial"
                             value={startDate}
                             onChange={(e: any) => setStartDate(e.target.value)}
-                            maxDate={endDate ? new Date(endDate) : undefined}
+                            maxDate={endDate ? new Date(`${endDate}T12:00:00`) : undefined}
                             className="w-36"
                         />
                         <FloatingDateInput
                             label="Data Final"
                             value={endDate}
                             onChange={(e: any) => setEndDate(e.target.value)}
-                            minDate={startDate ? new Date(startDate) : undefined}
+                            minDate={startDate ? new Date(`${startDate}T12:00:00`) : undefined}
                             className="w-36"
                         />
                     </div>
@@ -510,7 +252,7 @@ export const Metrics: React.FC = () => {
                     </div>
 
                     {/* Sector Filter */}
-                    {(canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || isDualLeader(user)) && (
+                    {(canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
                         <FloatingSelect
                             label="Setor"
                             value={sectorFilter}
@@ -520,6 +262,22 @@ export const Metrics: React.FC = () => {
                                 ...getAllowedSectors(user).map(s => ({ value: s, label: s }))
                             ]}
                             className="w-40"
+                        />
+                    )}
+
+                    {/* Direção em relação à equipe */}
+                    {sectorFilter !== 'all' && (
+                        <FloatingSelect
+                            label="Direção"
+                            value={directionFilter}
+                            onChange={(e: any) => setDirectionFilter(e.target.value as DirectionFilter)}
+                            options={[
+                                { value: 'all', label: 'Todos' },
+                                { value: 'out', label: 'Da equipe para outros setores' },
+                                { value: 'internal', label: 'Da equipe para a própria equipe' },
+                                { value: 'in', label: 'De outros setores para a equipe' }
+                            ]}
+                            className="w-64"
                         />
                     )}
 
@@ -558,12 +316,7 @@ export const Metrics: React.FC = () => {
                         onChange={(e: any) => setEventFilter(e.target.value)}
                         options={[
                             { value: '', label: 'Todos' },
-                            ...events
-                                .filter(e => {
-                                    if (sectorFilter === 'all') return true;
-                                    return !e.sector || e.sector === sectorFilter;
-                                })
-                                .map(e => ({ value: e.id, label: e.event_name }))
+                            ...eventOptions
                         ]}
                         className="w-48"
                     />
@@ -648,7 +401,11 @@ export const Metrics: React.FC = () => {
                             <div className="flex justify-between items-start mb-6">
                                 <div>
                                     <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
-                                    <p className="text-xs text-secondary mt-1">Total de agendamentos recebidos e realizados</p>
+                                    <p className="text-xs text-secondary mt-1">
+                                        {RESPONSIBLE_SECTORS.includes(displaySector)
+                                            ? 'Agendamentos recebidos como atendente e marcados para o Closer como responsável'
+                                            : 'Total de agendamentos recebidos e realizados'}
+                                    </p>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <span className="text-lg font-bold text-foreground">Total: {total}</span>
@@ -712,20 +469,20 @@ export const Metrics: React.FC = () => {
                 })()}
             </div>
 
-            {/* Owners (comissão) x criadores */}
+            {/* Responsáveis (comissão) x criadores */}
             {ownerStats && (
                 <div className="bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
                     <div className="mb-6">
-                        <h3 className="text-lg font-bold text-foreground">Owners — {ownerDisplaySector}</h3>
+                        <h3 className="text-lg font-bold text-foreground">Responsáveis — {ownerDisplaySector}</h3>
                         <p className="text-xs text-secondary mt-1">
-                            Owner recebe a comissão. "Repassou" conta os agendamentos que a pessoa criou e o Líder passou para outro owner. Conta todos os agendamentos, mesmo com o switch de alunos únicos ligado.
+                            O responsável recebe a comissão. "Repassou" conta os agendamentos que a pessoa criou e o Líder passou para outro responsável. Conta todos os agendamentos, mesmo com o switch de alunos únicos ligado.
                         </p>
                     </div>
                     <div className="overflow-x-auto">
                         <div className="min-w-[520px]">
                             <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
                                 <div className="col-span-4">Nome</div>
-                                <div className="col-span-2 text-center">Como owner</div>
+                                <div className="col-span-2 text-center">Como responsável</div>
                                 <div className="col-span-2 text-center text-emerald-500">Realizados</div>
                                 <div className="col-span-2 text-center">Assumiu</div>
                                 <div className="col-span-2 text-center text-[#FF9100]">Repassou</div>

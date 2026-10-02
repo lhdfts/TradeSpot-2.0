@@ -45,6 +45,10 @@ export interface ExecutionLog {
 
 const EXECUTION_TYPES = ['Distribuição Automática', 'Alteração de Status', 'Alteração de Atendente', 'Alteração de Owner'];
 
+// Nome exibido; o valor gravado no banco continua 'Alteração de Owner'.
+const EXECUTION_TYPE_LABELS: Record<string, string> = { 'Alteração de Owner': 'Alteração de Responsável' };
+const executionTypeLabel = (type: string) => EXECUTION_TYPE_LABELS[type] || type;
+
 export const Logs: React.FC = () => {
     const { user } = useAuth();
     const [logs, setLogs] = useState<ExecutionLog[]>([]);
@@ -272,7 +276,7 @@ export const Logs: React.FC = () => {
                         onChange={(e: any) => setExecutionTypeFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos os Tipos' },
-                            ...EXECUTION_TYPES.map(type => ({ value: type, label: type }))
+                            ...EXECUTION_TYPES.map(type => ({ value: type, label: executionTypeLabel(type) }))
                         ]}
                         className="w-56"
                     />
@@ -361,7 +365,7 @@ export const Logs: React.FC = () => {
 
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={cn("px-2.5 py-1 rounded-md text-xs font-semibold border", getExecutionTypeBadge(log.execution_type))}>
-                                                        {log.execution_type}
+                                                        {executionTypeLabel(log.execution_type)}
                                                     </span>
                                                 </td>
 

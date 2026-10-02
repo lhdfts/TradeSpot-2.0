@@ -326,7 +326,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                     />
 
                     <FloatingSelect
-                        label="Owner"
+                        label="Responsável"
                         value={ownerFilter}
                         onChange={(e: any) => setOwnerFilter(e.target.value)}
                         options={[
@@ -414,7 +414,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                     <th className="px-6 py-4">Tipo</th>
                                     <th className="px-6 py-4">Status</th>
                                     <th className="px-6 py-4">Criado Por</th>
-                                    <th className="px-6 py-4">Owner</th>
+                                    <th className="px-6 py-4">Responsável</th>
                                     <th className="px-6 py-4">Atendente</th>
                                     <th className="px-6 py-4 text-center">Ações</th>
                                 </tr>
