@@ -178,7 +178,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
         if (isPreVendas(user.sector)) {
-            return allTypes.filter(t => ['Gold Call', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
+            return allTypes.filter(t => ['Gold Call', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer', 'Fora da agenda'].includes(t.value));
         }
 
         return allTypes;

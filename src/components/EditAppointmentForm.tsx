@@ -13,6 +13,7 @@ import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, Appoin
 import { isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit } from '../utils/distribution';
 import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
+import { AppointmentOwnerField } from './AppointmentOwnerField';
 import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
@@ -179,7 +180,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
         if (isPreVendas(user.sector)) {
-            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
+            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer', 'Fora da agenda'].includes(t.value));
         }
 
         return allTypes;
@@ -1035,6 +1036,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                     disabled={
                                         !user || (
                                             user.id !== initialData.createdBy &&
+                                            user.id !== initialData.ownerId &&
                                             user.id !== initialData.attendantId &&
                                             !['Líder', 'Co-líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
                                         ) || (
@@ -1051,6 +1053,9 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                         Editado por: {initialData.updater?.name || 'Sistema'}
                                     </span>
                                 </div>
+                            )}
+                            {initialData && (
+                                <AppointmentOwnerField appointment={initialData} attendants={attendants} />
                             )}
                         </div>
 
