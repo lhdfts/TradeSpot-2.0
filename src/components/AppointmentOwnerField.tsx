@@ -12,6 +12,9 @@ import type { Appointment, Attendant } from '../types';
 interface AppointmentOwnerFieldProps {
     appointment: Appointment;
     attendants: Attendant[];
+    // Troca escolhida e ainda não salva (null = nada pendente). O formulário de
+    // edição usa isso para salvar a troca também pelo botão principal.
+    onPendingChange?: (ownerId: string | null) => void;
 }
 
 const formatDateTime = (iso?: string | null) =>
@@ -22,7 +25,7 @@ const formatDateTime = (iso?: string | null) =>
  * muda. Só o Líder do setor do criador troca o owner, e só nos setores
  * habilitados em Configurações. O backend valida as mesmas regras.
  */
-export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ appointment, attendants }) => {
+export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ appointment, attendants, onPendingChange }) => {
     const { user } = useAuth();
     const { changeOwner } = useAppointments();
 
@@ -46,6 +49,10 @@ export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ ap
     }, [isSectorLeader]);
 
     const canChange = isSectorLeader && !!enabledSectors?.includes(creatorSector!);
+
+    useEffect(() => {
+        onPendingChange?.(canChange && selected && selected !== ownerId ? selected : null);
+    }, [canChange, selected, ownerId, onPendingChange]);
 
     const candidates = useMemo(() => {
         if (!canChange) return [];

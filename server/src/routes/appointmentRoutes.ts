@@ -1166,16 +1166,19 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             return res.status(500).json({ error: 'Erro no Banco de Dados' });
         }
 
-        if (distributionChecksLog && finalAttendantId && createdAppointment && clientId) {
+        // Log de criação: distribuição automática (com as verificações do algoritmo)
+        // ou atendente escolhido manualmente por quem criou.
+        if (finalAttendantId && createdAppointment && clientId) {
             const { data: selectedUser } = await supabase.from('user').select('name').eq('id', finalAttendantId).maybeSingle();
             const attName = selectedUser?.name || 'Atendente Selecionado';
             supabase.from('execution_logs').insert({
                 client_id: clientId,
-                execution_type: 'Distribuição Automática',
+                execution_type: distributionChecksLog ? 'Distribuição Automática' : 'Atribuição Manual',
                 selected_attendant_id: finalAttendantId,
                 selected_attendant_name: attName,
                 appointment_id: createdAppointment.id,
-                checks_log: distributionChecksLog
+                changed_by_name: req.user?.name || null,
+                checks_log: distributionChecksLog || []
             }).then(({ error: logErr }) => {
                 if (logErr) console.error('[EXECUTION LOGS] Error inserting log in appointmentRoutes:', logErr);
             });
