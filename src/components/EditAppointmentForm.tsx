@@ -47,7 +47,8 @@ if (!API_URL) {
 }
 
 export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initialData, prefillData, onSuccess }) => {
-    const { createAppointment, updateAppointment, appointments } = useAppointments();
+    const { createAppointment, updateAppointment, changeOwner, appointments } = useAppointments();
+    const [pendingOwnerId, setPendingOwnerId] = useState<string | null>(null);
     const { attendants, events, loading } = useFormData();
     const { user } = useAuth();
     const [rates, setRates] = useState<Record<string, number>>({});
@@ -735,6 +736,16 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                 if (!updatePayload.email) delete updatePayload.email;
 
                 await updateAppointment(initialData.id, updatePayload);
+
+                // Troca de responsável escolhida no campo próprio, mas sem clicar em
+                // "Salvar responsável": salva junto com o agendamento.
+                if (pendingOwnerId) {
+                    try {
+                        await changeOwner(initialData.id, pendingOwnerId);
+                    } catch (err: any) {
+                        toastManager.add({ title: 'Responsável não alterado', description: err?.message || 'Não foi possível trocar o responsável.', type: 'error' });
+                    }
+                }
             } else {
                 await createAppointment({
                     ...formData,
@@ -1055,7 +1066,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                 </div>
                             )}
                             {initialData && (
-                                <AppointmentOwnerField appointment={initialData} attendants={attendants} />
+                                <AppointmentOwnerField appointment={initialData} attendants={attendants} onPendingChange={setPendingOwnerId} />
                             )}
                         </div>
 
