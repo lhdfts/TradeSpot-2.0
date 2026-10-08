@@ -20,7 +20,8 @@ import {
 } from 'recharts';
 import { cn } from '../lib/utils';
 import { RankingModal } from '../components/RankingModal';
-import { computeMetrics, computeOwnerStats, filterAppointments, filterForExport, RESPONSIBLE_SECTORS, type DirectionFilter } from '../utils/metricsCalc';
+import { computeMetrics, computeOwnerStats, filterAppointments, filterForExport, responsibleOf, RESPONSIBLE_SECTORS, type DirectionFilter, type RankingScope } from '../utils/metricsCalc';
+import { FloatingMultiSelect } from '../components/FloatingMultiSelect';
 import { api } from '../services/api';
 import { isPreVendas, normalizeSector } from '../constants/sectors';
 import {
@@ -32,7 +33,7 @@ import {
 
 
 export const Metrics: React.FC = () => {
-    const { appointments, refresh, loading: loadingAppointments, truncated } = useAppointments();
+    const { appointments: loadedAppointments, refresh, loading: loadingAppointments, truncated } = useAppointments();
     const { attendants, events } = useFormData();
 
     // Filters State
@@ -46,18 +47,27 @@ export const Metrics: React.FC = () => {
 
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
-    const [typeFilter, setTypeFilter] = useState('');
+    const [typeFilter, setTypeFilter] = useState<string[]>([]);
     const [uniqueClients, setUniqueClients] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [directionFilter, setDirectionFilter] = useState<DirectionFilter>('all');
+    // Ranking dos setores que marcam para outros (Pré-vendas etc.): outros setores x próprio setor.
+    const [rankingScope, setRankingScope] = useState<Exclude<RankingScope, 'all'>>('other');
 
     // --- UI STATE ---
     const { user } = useAuth();
     const isPrivilegedUser = canViewAllSectors(user) || user?.role === 'Admin' || user?.role === 'Dev';
-    const [sectorFilter, setSectorFilter] = useState(() => {
+    // Colaborador vê só os próprios números (como atendente ou responsável), sem ranking.
+    const isCollaborator = user?.role === 'Colaborador';
+    const [sectorFilterState, setSectorFilter] = useState(() => {
         if (isPrivilegedUser) return 'all';
         return user?.sector || 'all';
     });
+    const sectorFilter = isCollaborator ? 'all' : sectorFilterState;
+
+    const appointments = useMemo(() => isCollaborator && user
+        ? loadedAppointments.filter(a => a.attendantId === user.id || responsibleOf(a) === user.id)
+        : loadedAppointments, [isCollaborator, user, loadedAppointments]);
 
     // Reset attendant filter when sector changes
     React.useEffect(() => {
@@ -100,11 +110,16 @@ export const Metrics: React.FC = () => {
     // sentido com uma equipe escolhida no filtro de setor.
     const effectiveDirection: DirectionFilter = sectorFilter === 'all' ? 'all' : directionFilter;
 
+    // O switch só existe no ranking dos setores que marcam para outros.
+    const rankingDisplaySector = sectorFilter === 'all' && user?.sector ? normalizeSector(user.sector) : sectorFilter;
+    const hasScopeSwitch = RESPONSIBLE_SECTORS.includes(rankingDisplaySector);
+    const rankingScopeFor = (_sector: string): RankingScope => hasScopeSwitch ? rankingScope : 'all';
+
     // --- DATA CALCULATION ---
     const { rankings, chartData, filteredAppointments, chartTotal } = useMemo(() => computeMetrics({
         user, appointments, attendants, startDate, endDate, attendantFilter,
-        eventFilter, typeFilter, sectorFilter, directionFilter: effectiveDirection, uniqueClients, selectedStatuses
-    }), [user, appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, effectiveDirection, uniqueClients, selectedStatuses]);
+        eventFilter, typeFilter, sectorFilter, directionFilter: effectiveDirection, rankingScope: rankingScopeFor(sectorFilter), uniqueClients, selectedStatuses
+    }), [user, appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, effectiveDirection, rankingScope, uniqueClients, selectedStatuses]);
 
     // Busca no banco tudo do período selecionado. Sem isso a tela usaria a lista
     // que já estava carregada (carga inicial ou período de outra tela).
@@ -175,15 +190,22 @@ export const Metrics: React.FC = () => {
     // outro setor (ex.: evento do Pré-vendas atendido pelo Closer) não podiam
     // ser filtrados, embora entrassem nos números.
     const optionBase = useMemo(() => filterAppointments({
-        user, appointments, attendants, startDate, endDate, eventFilter: '', typeFilter: '', sectorFilter, directionFilter: effectiveDirection
+        user, appointments, attendants, startDate, endDate, eventFilter: '', typeFilter: [], sectorFilter, directionFilter: effectiveDirection
     }), [user, appointments, attendants, startDate, endDate, sectorFilter, effectiveDirection]);
 
+    // Quem vê vários setores (Admin, Dev, Suporte, Qualidade...) escolhe entre os
+    // eventos do setor filtrado e os que aparecem nos dados. Os demais (Líder,
+    // Co-líder, Colaborador) só veem os eventos do próprio time.
+    const seesAllEvents = isPrivilegedUser || user?.role === 'Qualidade' || isMedinaUser(user);
     const eventOptions = useMemo(() => {
+        const mySector = normalizeSector(user?.sector);
         const presentIds = new Set(optionBase.map(a => a.eventId).filter(Boolean));
         return events
-            .filter(e => sectorFilter === 'all' || !e.sector || e.sector === sectorFilter || presentIds.has(e.id) || e.id === eventFilter)
+            .filter(e => e.id === eventFilter || (seesAllEvents
+                ? (sectorFilter === 'all' || !e.sector || e.sector === sectorFilter || presentIds.has(e.id))
+                : normalizeSector(e.sector) === mySector))
             .map(e => ({ value: e.id, label: e.event_name }));
-    }, [events, optionBase, sectorFilter, eventFilter]);
+    }, [events, optionBase, sectorFilter, eventFilter, seesAllEvents, user]);
 
     // Get allowed types for current sector
     const getAllowedTypesForSector = () => {
@@ -214,7 +236,7 @@ export const Metrics: React.FC = () => {
 
         // Tipos que aparecem nos dados do período também entram, mesmo fora da lista do setor.
         optionBase.forEach(a => { if (a.type && !allowed.includes(a.type)) allowed.push(a.type); });
-        if (typeFilter && !allowed.includes(typeFilter)) allowed.push(typeFilter);
+        typeFilter.forEach(t => { if (!allowed.includes(t)) allowed.push(t); });
 
         return allowed.map(t => ({ value: t, label: t }));
     };
@@ -243,13 +265,15 @@ export const Metrics: React.FC = () => {
                     </div>
 
                     {/* Search by Name */}
-                    <div className="w-64">
-                        <BaseInput
-                            placeholder="Pesquisar por nome"
-                            value={searchTerm}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
+                    {!isCollaborator && (
+                        <div className="w-64">
+                            <BaseInput
+                                placeholder="Pesquisar por nome"
+                                value={searchTerm}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                    )}
 
                     {/* Sector Filter */}
                     {(canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
@@ -282,18 +306,15 @@ export const Metrics: React.FC = () => {
                     )}
 
                     {/* Type Filter */}
-                    <FloatingSelect
+                    <FloatingMultiSelect
                         label="Tipo"
-                        value={typeFilter}
-                        onChange={(e: any) => setTypeFilter(e.target.value)}
-                        options={[
-                            { value: '', label: 'Todos' },
-                            ...getAllowedTypesForSector()
-                        ]}
+                        values={typeFilter}
+                        onChange={setTypeFilter}
+                        options={getAllowedTypesForSector()}
                         className="w-48"
                     />
 
-                    <FloatingSelect
+                    {!isCollaborator && <FloatingSelect
                         label="Atendente"
                         value={attendantFilter}
                         onChange={(e: any) => setAttendantFilter(e.target.value)}
@@ -308,7 +329,7 @@ export const Metrics: React.FC = () => {
                                 .map(a => ({ value: a.id, label: a.name }))
                         ]}
                         className="w-48"
-                    />
+                    />}
 
                     <FloatingSelect
                         label="Evento"
@@ -368,8 +389,35 @@ export const Metrics: React.FC = () => {
                 </div>
             )}
 
+            {/* Colaborador: só os próprios números */}
+            {isCollaborator && (() => {
+                const count = (st: string) => filteredAppointments.filter(a => a.status === st).length;
+                const total = filteredAppointments.length;
+                const done = count('Realizado');
+                const tiles: [string, number][] = [
+                    ['Agendamentos', total], ['Realizados', done], ['Pendentes', count('Pendente')],
+                    ['No-show', count('No-show')], ['Cancelados', count('Cancelado')], ['Reagendados', count('Reagendado')]
+                ];
+                return (
+                    <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+                        <h3 className="text-lg font-bold text-foreground">Meus números</h3>
+                        <p className="text-xs text-secondary mt-1">
+                            Agendamentos em que você é o atendente ou o responsável. Taxa de realização: {total ? Math.round(done / total * 100) : 0}%
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
+                            {tiles.map(([label, value]) => (
+                                <div key={label} className="rounded-lg bg-background p-3">
+                                    <div className="text-2xl font-bold text-foreground tabular-nums">{value}</div>
+                                    <div className="text-xs text-secondary">{label}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Rankings */}
-            <div className="grid grid-cols-1 gap-6">
+            {!isCollaborator && <div className="grid grid-cols-1 gap-6">
                 {(() => {
                     let displaySector = sectorFilter;
                     if (displaySector === 'all' && user?.sector) {
@@ -387,10 +435,34 @@ export const Metrics: React.FC = () => {
                     }
                     const total = ranking.reduce((acc, curr) => acc + curr.total, 0);
 
+                    const showOtherTotal = hasScopeSwitch && rankingScope === 'other';
+                    const scopeSwitch = hasScopeSwitch && (
+                        <div className="inline-flex p-1 rounded-lg bg-muted/40 border border-border text-xs font-medium" role="tablist">
+                            {([['other', 'Para outros setores'], ['own', 'Próprio setor']] as const).map(([value, label]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={rankingScope === value}
+                                    onClick={() => setRankingScope(value)}
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-md transition-colors",
+                                        rankingScope === value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    );
+
                     if (ranking.length === 0 && displaySector) {
                         return (
                             <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
-                                <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
+                                <div className="flex flex-wrap justify-between items-start gap-3">
+                                    <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
+                                    {scopeSwitch}
+                                </div>
                                 <p className="text-secondary text-sm text-center py-8">Sem dados para o período</p>
                             </div>
                         );
@@ -402,10 +474,13 @@ export const Metrics: React.FC = () => {
                                 <div>
                                     <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
                                     <p className="text-xs text-secondary mt-1">
-                                        {RESPONSIBLE_SECTORS.includes(displaySector)
-                                            ? 'Agendamentos recebidos como atendente e marcados para o Closer como responsável'
+                                        {hasScopeSwitch
+                                            ? (rankingScope === 'other'
+                                                ? 'Agendamentos marcados como responsável para outros setores (ex.: Closer)'
+                                                : 'Agendamentos atendidos pela própria equipe')
                                             : 'Total de agendamentos recebidos e realizados'}
                                     </p>
+                                    {scopeSwitch && <div className="mt-3">{scopeSwitch}</div>}
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <span className="text-lg font-bold text-foreground">Total: {total}</span>
@@ -431,10 +506,12 @@ export const Metrics: React.FC = () => {
                                         <TooltipProvider>
                                             <Tooltip>
                                                 <TooltipTrigger>
-                                                    <span className="cursor-help">TOTAL RECEBIDO</span>
+                                                    <span className="cursor-help">{showOtherTotal ? 'AGENDAMENTOS' : 'TOTAL RECEBIDO'}</span>
                                                 </TooltipTrigger>
                                                 <TooltipContent>
-                                                    <p className="text-xs">Considera somente agendamentos onde a pessoa é o Atendente, mas não é o Criador</p>
+                                                    <p className="text-xs">{showOtherTotal
+                                                        ? 'Agendamentos marcados como responsável para outros setores'
+                                                        : 'Considera somente agendamentos onde a pessoa é o Atendente, mas não é o Criador'}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         </TooltipProvider>
@@ -457,7 +534,7 @@ export const Metrics: React.FC = () => {
                                                 {item['Realizado']}
                                             </div>
                                             <div className="col-span-3 text-center font-bold text-foreground text-xs">
-                                                {item.totalRecebido}
+                                                {showOtherTotal ? item.total : item.totalRecebido}
                                             </div>
                                         </div>
                                     );
@@ -467,10 +544,10 @@ export const Metrics: React.FC = () => {
                         </div>
                     );
                 })()}
-            </div>
+            </div>}
 
             {/* Responsáveis (comissão) x criadores */}
-            {ownerStats && (
+            {ownerStats && !isCollaborator && (
                 <div className="bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
                     <div className="mb-6">
                         <h3 className="text-lg font-bold text-foreground">Responsáveis — {ownerDisplaySector}</h3>
