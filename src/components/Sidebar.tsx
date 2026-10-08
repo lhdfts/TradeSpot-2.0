@@ -153,8 +153,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                     {!effectiveCollapsed && <span className="w-full">Criar agendamento</span>}
                 </NavLink>
 
-                {/* Metrics - usually for managers */}
-                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Co-líder' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
+                {/* Metrics - gestão vê rankings; Colaborador vê só os próprios números */}
+                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Co-líder' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.role === 'Colaborador') && (
                     <NavItem
                         icon={<PieChart size={20} />}
                         label={effectiveCollapsed ? "" : "Métricas"}

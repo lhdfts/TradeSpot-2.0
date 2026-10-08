@@ -46,6 +46,8 @@ export const CLOSER_TYPES = ['Ligação Closer', 'Gold Call', 'Reagendamento Clo
  */
 export type DirectionFilter = 'all' | 'out' | 'internal' | 'in';
 
+export type RankingScope = 'all' | 'own' | 'other';
+
 /** Responsável = owner; agendamentos sem owner valem pelo criador. */
 export const responsibleOf = (a: Appointment) => a.ownerId ?? a.createdBy;
 
@@ -57,8 +59,12 @@ export interface MetricsInput {
     endDate: string;
     attendantFilter: string;
     eventFilter: string;
-    typeFilter: string;
+    // Tipos selecionados; vazio = todos.
+    typeFilter: string[];
     sectorFilter: string;
+    // Ranking dos setores que marcam para outros: 'own' = agendamentos que a pessoa
+    // atende (próprio setor), 'other' = marcados como responsável para outro setor.
+    rankingScope?: RankingScope;
     directionFilter?: DirectionFilter;
     uniqueClients: boolean;
     selectedStatuses: string[];
@@ -96,7 +102,7 @@ export const filterAppointments = ({
         if (eventFilter && a.eventId !== eventFilter) return false;
 
         // Type Filter
-        if (typeFilter && a.type !== typeFilter) return false;
+        if (typeFilter.length > 0 && !typeFilter.includes(a.type)) return false;
 
         const responsibleSector = sectorOf(responsibleOf(a));
         const creatorSector = sectorOf(a.createdBy);
@@ -126,7 +132,7 @@ export const filterAppointments = ({
 
 export const computeMetrics = ({
     user, appointments, attendants, startDate, endDate, attendantFilter,
-    eventFilter, typeFilter, sectorFilter, directionFilter = 'all', uniqueClients, selectedStatuses
+    eventFilter, typeFilter, sectorFilter, directionFilter = 'all', rankingScope = 'all', uniqueClients, selectedStatuses
 }: MetricsInput) => {
     let filtered = filterAppointments({ user, appointments, attendants, startDate, endDate, eventFilter, typeFilter, sectorFilter, directionFilter });
 
@@ -136,7 +142,8 @@ export const computeMetrics = ({
     if (uniqueClients) {
         const uniqueMap = new Map<string, typeof filtered[0]>();
         filtered.forEach(appt => {
-            const key = appt.phone ? appt.phone.toString() : appt.id;
+            // Aluno + evento: o mesmo aluno agendado em dois eventos conta 2 vezes.
+            const key = appt.phone ? `${appt.phone}|${appt.eventId || ''}` : appt.id;
             if (!uniqueMap.has(key)) {
                 uniqueMap.set(key, appt);
             } else {
@@ -164,7 +171,7 @@ export const computeMetrics = ({
             // tipos de Closer. Se o atendente for da mesma equipe (ex.: Aldeia em
             // Reagendamento Closer), ele já conta como atendente logo abaixo.
             const responsibleId = responsibleOf(a);
-            if (RESPONSIBLE_SECTORS.includes(sector) && responsibleId && CLOSER_TYPES.includes(a.type)) {
+            if (rankingScope !== 'own' && RESPONSIBLE_SECTORS.includes(sector) && responsibleId && CLOSER_TYPES.includes(a.type)) {
                 const responsible = attendants.find(att => att.id === responsibleId);
                 const attendantSector = attendants.find(att => att.id === a.attendantId)?.sector;
                 if (responsible && responsible.sector === sector && attendantSector !== sector) {
@@ -191,7 +198,7 @@ export const computeMetrics = ({
             }
 
             // For ALL sectors: calculate as attendant (totalRecebido and status)
-            if (a.attendantId) {
+            if (rankingScope !== 'other' && a.attendantId) {
                 const attendant = attendants.find(att => att.id === a.attendantId);
                 if (attendant && attendant.sector === sector) {
                     if (!map.has(a.attendantId)) {
@@ -344,7 +351,7 @@ export const computeOwnerStats = ({
     startDate: string;
     endDate: string;
     eventFilter: string;
-    typeFilter: string;
+    typeFilter: string[];
     attendantFilter: string;
     searchTerm: string;
 }): OwnerStatsItem[] | null => {
@@ -361,7 +368,7 @@ export const computeOwnerStats = ({
     appointments.forEach(a => {
         if (!a.date || !startDate || !endDate || a.date < startDate || a.date > endDate) return;
         if (eventFilter && a.eventId !== eventFilter) return;
-        if (typeFilter && a.type !== typeFilter) return;
+        if (typeFilter.length > 0 && !typeFilter.includes(a.type)) return;
 
         const ownerId = a.ownerId ?? a.createdBy;
         if (ownerId && sectorOf(ownerId) === ownerDisplaySector) {

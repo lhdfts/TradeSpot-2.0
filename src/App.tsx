@@ -154,8 +154,8 @@ const InternalLayout: React.FC = () => {
                 <Route path="/profile" element={<Profile />} />
               </Route>
 
-              {/* Metrics - Admin, Líder, Co-líder */}
-              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-líder', 'Dev', 'Qualidade']} />}>
+              {/* Metrics - gestão vê rankings; Colaborador vê só os próprios números */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-líder', 'Dev', 'Qualidade', 'Colaborador']} />}>
                 <Route path="/metrics" element={<Metrics />} />
               </Route>
 

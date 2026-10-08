@@ -97,7 +97,7 @@ export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ ap
 
             {canChange && (
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                         <FloatingSelect
                             label="Trocar responsável"
                             value={selected}
@@ -111,6 +111,7 @@ export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ ap
                     </div>
                     <Button
                         type="button"
+                        className="shrink-0"
                         variant="secondary"
                         onClick={handleSave}
                         disabled={saving || !selected || selected === ownerId}
