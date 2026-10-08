@@ -1652,16 +1652,22 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
  *    fica de fora por definição), ou o próprio criador, para desfazer a troca.
  */
 router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
+    // Toda recusa vai para o log do servidor (Vercel), para dar para diagnosticar
+    // o motivo sem depender de print da tela.
+    const reject = (status: number, error: string) => {
+        console.warn(`[OWNER CHANGE] Recusado ${status} | ${error} | usuário=${req.user?.name} (${req.user?.role}/${req.user?.sector}) | agendamento=${req.params.id} | novo=${req.body?.ownerId}`);
+        return res.status(status).json({ error });
+    };
     try {
         const me = req.user;
         if (!me || me.role !== 'Líder') {
-            return res.status(403).json({ error: 'Somente o Líder pode trocar o responsável do agendamento.' });
+            return reject(403, 'Somente o Líder pode trocar o responsável do agendamento.');
         }
 
         const { id } = req.params;
         const newOwnerId = typeof req.body?.ownerId === 'string' ? req.body.ownerId.trim() : '';
         if (!newOwnerId) {
-            return res.status(400).json({ error: 'Informe o novo responsável.' });
+            return reject(400, 'Informe o novo responsável.');
         }
 
         const { data: appt, error: apptErr } = await supabase
@@ -1670,9 +1676,9 @@ router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
             .eq('id', id)
             .maybeSingle();
         if (apptErr) throw new Error(apptErr.message);
-        if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado.' });
+        if (!appt) return reject(404, 'Agendamento não encontrado.');
         if (!appt.created_by) {
-            return res.status(422).json({ error: 'Agendamento sem criador registrado.' });
+            return reject(422, 'Agendamento sem criador registrado.');
         }
 
         const currentOwnerId = appt.owner ?? appt.created_by;
@@ -1689,12 +1695,12 @@ router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
         const mySectors = sectorAliases(me.sector);
 
         if (!creator || !mySectors.includes(creator.sector)) {
-            return res.status(403).json({ error: 'Você só pode trocar o responsável de agendamentos criados pelo seu setor.' });
+            return reject(403, 'Você só pode trocar o responsável de agendamentos criados pelo seu setor.');
         }
 
         const enabledSectors = await getOwnerChangeSectors();
         if (!isOwnerChangeEnabledFor(enabledSectors, creator.sector)) {
-            return res.status(403).json({ error: `A troca de responsável não está habilitada para o setor ${creator.sector}.` });
+            return reject(403, `A troca de responsável não está habilitada para o setor ${creator.sector}.`);
         }
 
         const isCreator = newOwnerId === appt.created_by;
@@ -1702,7 +1708,7 @@ router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
             && ['Colaborador', 'Co-líder'].includes(newOwner.role)
             && mySectors.includes(newOwner.sector);
         if (!newOwner || (!isCreator && !isEligible)) {
-            return res.status(400).json({ error: 'O novo responsável precisa ser um Colaborador ou Co-líder ativo do seu setor.' });
+            return reject(400, 'O novo responsável precisa ser um Colaborador ou Co-líder ativo do seu setor.');
         }
 
         if (newOwnerId === currentOwnerId) {
@@ -1747,7 +1753,7 @@ router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
 
         res.json({ ownerId: updated.owner, ownerName: newOwner.name, ownerChangedAt: updated.owner_changedAt });
     } catch (err: any) {
-        console.error('Change Owner Error:', err?.message);
+        console.error(`[OWNER CHANGE] Erro 500 | agendamento=${req.params.id} |`, err?.message);
         res.status(500).json({ error: 'Erro Interno do Servidor' });
     }
 });

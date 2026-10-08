@@ -1065,9 +1065,6 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                     </span>
                                 </div>
                             )}
-                            {initialData && (
-                                <AppointmentOwnerField appointment={initialData} attendants={attendants} onPendingChange={setPendingOwnerId} />
-                            )}
                         </div>
 
                         {/* Row 4: Google Meet (if editing) */}
@@ -1079,6 +1076,13 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                 className="text-blue-500"
                                 disabled={isEditing}
                             />
+                        )}
+
+                        {/* Row 5: Criador e responsável — linha própria, na largura toda. Dentro
+                            da coluna do Atendente, nomes longos empurravam o botão "Salvar
+                            responsável" para baixo do campo Google Meet, que bloqueava o clique. */}
+                        {initialData && (
+                            <AppointmentOwnerField appointment={initialData} attendants={attendants} onPendingChange={setPendingOwnerId} />
                         )}
 
 

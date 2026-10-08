@@ -79,7 +79,7 @@ export class SupabaseApiService implements ApiService {
             });
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || 'Falha ao trocar o owner');
+                throw new Error(errorData.error || `Falha ao trocar o responsável (erro ${response.status}).`);
             }
             return await response.json();
         },
