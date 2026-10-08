@@ -19,11 +19,11 @@ import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
 import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors';
+import { isAldeiaToCloser, isAldeiaToCloserEvent } from '../constants/events';
 
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
 const ON_THE_ROAD_EVENT_ID = '62936e18-6042-43c9-8526-6ec920184351';
-const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
 
 
 const isCloserBlockedForSelectedEvent = (eventId: string, attendantId: string) => {
@@ -124,7 +124,9 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
-    const isAction14Dias = formData.eventId === ACTION_14_DIAS_EVENT_ID;
+    // Eventos da Aldeia em que ela marca com um Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias).
+    const isAction14Dias = isAldeiaToCloserEvent(formData.eventId);
+    const isAldeiaCloserPick = isAldeiaToCloser(formData.eventId, formData.type);
 
     const allowedTypes = React.useMemo(() => {
         const allTypes: { value: AppointmentType, label: string }[] = [
@@ -220,13 +222,13 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                 filteredAttendantsForBlock = filteredAttendantsForBlock.filter(a => a.sector !== 'Closer');
             }
 
-            if (!isGlobalViewer && user?.sector) {
+            if (!isGlobalViewer && user?.sector && !isAldeiaCloserPick) {
                 filteredAttendantsForBlock = filteredAttendantsForBlock.filter(
                     a => a.sector === user.sector || a.id === initialData?.attendantId
                 );
             }
 
-            if (isAction14Dias && formData.type === 'Ligação Closer') {
+            if (isAldeiaCloserPick) {
                 return filteredAttendantsForBlock
                     .filter(a => (a.role === 'Colaborador' || a.role === 'Co-líder') && ['Closer', 'Co-líder'].includes(a.sector))
                     .map(a => ({ value: a.id, label: a.name }));
@@ -252,12 +254,13 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                         return false;
                     }
 
-                    if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
-                        return false;
+                    // Antes do filtro de setor: aqui a Aldeia escolhe um Closer.
+                    if (isAldeiaCloserPick) {
+                        return a.sector === 'Closer' && (a.role === 'Colaborador' || a.role === 'Co-líder');
                     }
 
-                    if (isAction14Dias && formData.type === 'Ligação Closer') {
-                        return ['Closer', 'Co-líder'].includes(a.sector) && (a.role === 'Colaborador' || a.role === 'Co-líder');
+                    if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
+                        return false;
                     }
 
                     const selectedEvent = events.find(e => e.id === formData.eventId);
@@ -281,14 +284,14 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
         // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call/Fora da agenda, mostrar apenas Distribuição Automática
         if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda')) {
-            if (isAction14Dias && formData.type === 'Ligação Closer') {
+            if (isAldeiaCloserPick) {
                 return options;
             }
             return options.filter(opt => opt.value === 'distribuicao_automatica');
         }
 
         return options;
-    }, [isEditing, formData.type, formData.eventId, attendants, events, user, isAction14Dias]);
+    }, [isEditing, formData.type, formData.eventId, attendants, events, user, isAction14Dias, isAldeiaCloserPick]);
 
     const eventOptions = React.useMemo(() => {
         // Filter active events by sector (or if user is privileged)
@@ -1036,7 +1039,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                         disabled={
                                             isEditing
                                                 ? !(user && ['Co-líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
-                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && !(isAction14Dias && formData.type === 'Ligação Closer'))
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && !(isAldeiaCloserPick))
                                         }
                                         error={errors.attendantId}
                                     />

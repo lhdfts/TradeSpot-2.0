@@ -25,7 +25,7 @@ interface Appointment {
 // for a given event, even if they have schedule availability.
 // MOVED TO DYNAMIC CHECK via user.denied_events
 
-const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
+import { isAldeiaToCloser } from '../constants/events.js';
 
 export const isAttendantBlockedForEvent = (
     attendant: Attendant | null | undefined,
@@ -281,11 +281,14 @@ export const findBestAttendantWithLogs = async (
         sectorLimitCheck = 'Aldeia';
     }
 
-    if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
+    // Eventos da Aldeia com Closer: o pool é o Closer, não o setor do evento (Aldeia).
+    const aldeiaToCloser = isAldeiaToCloser(eventId, type);
+    if (aldeiaToCloser) {
+        sectors = ['Closer'];
         roleFilters = ['Colaborador', 'Co-líder'];
     }
 
-    if (eventId && type !== 'Ligação Equipe Aldeia') {
+    if (eventId && type !== 'Ligação Equipe Aldeia' && !aldeiaToCloser) {
         const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
         if (eventData) {
             if (isPreVendas(eventData.sector)) {

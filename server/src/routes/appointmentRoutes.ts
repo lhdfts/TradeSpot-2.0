@@ -9,7 +9,7 @@ import { supabase } from '../utils/supabaseClient.js';
 import { PRE_VENDAS_ALIASES, sectorAliases } from '../constants/sectors.js';
 import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
-const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
+import { isAldeiaToCloser } from '../constants/events.js';
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
 
@@ -214,8 +214,8 @@ const loadDistributionContext = async (
         if (eventId === BLOCKED_EVENT_ID) {
             candidates = candidates.filter(a => a.id !== BLOCKED_CLOSER_ID);
         }
-        if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
-            candidates = candidates.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
+        if (isAldeiaToCloser(eventId as string, type as string)) {
+            candidates = candidates.filter(a => ['Colaborador', 'Co-líder'].includes(a.role) && a.sector === 'Closer');
         }
 
         const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento', 'Direcionar Closer'].includes(type);
@@ -951,8 +951,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
-            // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
-            if (data.eventId === ACTION_14_DIAS_EVENT_ID && data.type === 'Ligação Closer') {
+            // Eventos da Aldeia com Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias)
+            if (isAldeiaToCloser(data.eventId, data.type)) {
                 if (!['Closer', 'Co-líder'].includes(attendant.sector) || !['Colaborador', 'Co-líder'].includes(attendant.role)) {
                     return res.status(409).json({
                         error: `Para este evento, o atendente deve ser um Colaborador ou Co-líder do setor Closer (atual: ${attendant.role} - ${attendant.sector}).`
@@ -1334,9 +1334,9 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
-            // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
+            // Eventos da Aldeia com Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias)
             const currentType = updates.type || currentApp.type;
-            if (targetEventId === ACTION_14_DIAS_EVENT_ID && currentType === 'Ligação Closer') {
+            if (isAldeiaToCloser(targetEventId, currentType)) {
                 if (targetAttendant && (!['Closer', 'Co-líder'].includes(targetAttendant.sector) || !['Colaborador', 'Co-líder'].includes(targetAttendant.role))) {
                     return res.status(409).json({
                         error: `Para este evento, o atendente deve ser um Colaborador ou Co-líder do setor Closer (atual: ${targetAttendant.role} - ${targetAttendant.sector}).`
