@@ -563,7 +563,11 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
         if (!isEditing && !formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
 
         // Final Validation Gatekeeper
-        if (formData.type === 'Reagendamento Closer') {
+        // Na edição de um agendamento que JÁ era Reagendamento Closer, o histórico foi
+        // validado na criação. Rechecar aqui usava só a lista carregada na tela (que
+        // depende do período filtrado) e bloqueava edições válidas.
+        const alreadyReagendamento = isEditing && initialData?.type === 'Reagendamento Closer';
+        if (formData.type === 'Reagendamento Closer' && !alreadyReagendamento) {
             if (!checkEligibility(formData.phone)) {
                 toastManager.add({
                     title: "Erro",
