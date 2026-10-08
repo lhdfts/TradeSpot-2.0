@@ -259,6 +259,13 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                         return a.sector === 'Closer' && (a.role === 'Colaborador' || a.role === 'Co-líder');
                     }
 
+                    // Fora da agenda é marcado por outro setor (ex.: Pré-vendas) para um Closer:
+                    // precisa ser resolvido antes da restrição ao próprio setor logo abaixo,
+                    // senão todos os Closers somem e sobra só a Distribuição Automática.
+                    if (formData.type === 'Fora da agenda') {
+                        return a.sector === 'Closer';
+                    }
+
                     if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
                         return false;
                     }
@@ -267,7 +274,6 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                     const eventSector = selectedEvent?.sector;
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
-                    if (formData.type === 'Fora da agenda') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder', 'Aldeia'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia' || (a.sector === 'Aldeia' && a.role === 'Co-líder');

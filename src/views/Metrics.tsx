@@ -86,6 +86,7 @@ export const Metrics: React.FC = () => {
         type: string;
         title: string;
         data: any[];
+        showTotal?: boolean;
     }>({
         isOpen: false,
         type: 'general',
@@ -491,7 +492,8 @@ export const Metrics: React.FC = () => {
                                             isOpen: true,
                                             type: displaySector,
                                             title: `Ranking ${displaySector} Completo`,
-                                            data: ranking
+                                            data: ranking,
+                                            showTotal: showOtherTotal
                                         })}
                                     >
                                         Expandir
@@ -690,6 +692,7 @@ export const Metrics: React.FC = () => {
                 title={rankingModal.title}
                 data={rankingModal.data}
                 type={rankingModal.type}
+                showTotal={rankingModal.showTotal}
             />
         </div>
     );
