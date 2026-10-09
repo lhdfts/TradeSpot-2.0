@@ -29,6 +29,8 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Button } from './components/ui/button';
 import { ToastProvider } from './components/ui/toast';
 import { UpdateNotification } from './components/UpdateNotification';
+import { AberturaPosLogin } from './components/abertura/AberturaPosLogin';
+import { PreviaAbertura } from './views/public/PreviaAbertura';
 
 // Wrapper for Create Appointment to handle search params
 const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
@@ -252,6 +254,11 @@ const MainRouter: React.FC = () => {
     );
   }
 
+  // Prévia da vinheta de abertura - Public (assistir sem fazer login)
+  if (currentView === '/abertura') {
+    return <PreviaAbertura />;
+  }
+
   // Documentation Route - Public
   if (currentView === '/docs') {
     return (
@@ -280,6 +287,7 @@ function App() {
         <ThemeProvider>
           <ToastProvider position="top-right">
             <MainRouter />
+            <AberturaPosLogin />
             <UpdateNotification />
           </ToastProvider>
         </ThemeProvider>

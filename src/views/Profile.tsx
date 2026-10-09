@@ -15,6 +15,7 @@ import { cn } from '../components/ui/button';
 import { User, Mail, Clock, Coffee, BarChart3, Building2 } from 'lucide-react';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { FloatingSelect } from '../components/FloatingSelect';
+import { aberturaLigada, salvarAberturaLigada } from '../components/abertura/controleAbertura';
 
 const DAYS_OF_WEEK = [
     { key: 'mon', label: 'Segunda-feira', short: 'Seg' },
@@ -31,6 +32,7 @@ export const Profile: React.FC = () => {
     const { appointments } = useAppointments();
     const { attendants } = useFormData();
 
+    const [vinhetaLigada, setVinhetaLigada] = useState(() => aberturaLigada());
     const [selectedMonth, setSelectedMonth] = useState(() => String(new Date().getMonth() + 1).padStart(2, '0'));
     const [selectedYear, setSelectedYear] = useState(() => String(new Date().getFullYear()));
     const [selectedStatuses, setSelectedStatuses] = useState<AppointmentStatus[]>([...APPOINTMENT_STATUSES]);
@@ -374,6 +376,39 @@ export const Profile: React.FC = () => {
                         </button>
                     ))}
                 </div>
+            </div>
+
+            {/* Vinheta de abertura: preferência deste navegador */}
+            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex items-center justify-between gap-4">
+                <div>
+                    <h3 className="text-lg font-bold text-foreground">Vinheta de abertura</h3>
+                    <p className="text-sm text-secondary mt-1">
+                        Animação de alguns segundos ao entrar no sistema. Vale para este navegador.{' '}
+                        <a href="/abertura" target="_blank" rel="noreferrer" className="underline hover:text-foreground">Assistir</a>
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={vinhetaLigada}
+                    aria-label="Vinheta de abertura"
+                    onClick={() => {
+                        const ligada = !vinhetaLigada;
+                        setVinhetaLigada(ligada);
+                        salvarAberturaLigada(ligada);
+                    }}
+                    className={cn(
+                        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                        vinhetaLigada ? "bg-[#070707] dark:bg-white" : "bg-gray-300 dark:bg-gray-600"
+                    )}
+                >
+                    <span
+                        className={cn(
+                            "inline-block h-5 w-5 rounded-full bg-white dark:bg-[#070707] shadow transition-transform",
+                            vinhetaLigada ? "translate-x-5" : "translate-x-0.5"
+                        )}
+                    />
+                </button>
             </div>
         </div>
     );
