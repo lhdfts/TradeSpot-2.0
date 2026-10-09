@@ -6,8 +6,10 @@ import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAtte
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
+import { PRE_VENDAS_ALIASES, sectorAliases } from '../constants/sectors.js';
+import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
-const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
+import { isAldeiaToCloser } from '../constants/events.js';
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
 
@@ -23,71 +25,109 @@ const ALL_TIME_SLOTS: string[] = (() => {
 
 const router = Router();
 
+// Limite por requisição do Supabase (db-max-rows) e teto da listagem com período.
+const PAGE_SIZE = 1000;
+const MAX_ROWS_WITH_DATE = 20000;
+
 // GET /api/appointments - List all appointments
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
-        let query = supabase
-            .from('appointments')
-            .select(`
-                *,
-                clients (
-                    name,
-                    phone,
-                    email
-                ),
-                attendant:user!attendant_id (
-                    name
-                ),
-                updater:user!updatedBy (
-                    name,
-                    sector
-                )
-            `)
-            .order('date', { ascending: false })
-            .order('time', { ascending: false });
-
         // Filtro de data no Backend (Solução 1 - Recomendada)
         const { startDate, endDate } = req.query;
-        const hasDateFilter = (startDate && typeof startDate === 'string' && startDate.trim() !== '') ||
-                              (endDate && typeof endDate === 'string' && endDate.trim() !== '');
-
-        if (startDate && typeof startDate === 'string' && startDate.trim() !== '') {
-            query = query.gte('date', startDate);
-        }
-        if (endDate && typeof endDate === 'string' && endDate.trim() !== '') {
-            query = query.lte('date', endDate);
-        }
+        const start = typeof startDate === 'string' && startDate.trim() !== '' ? startDate : null;
+        const end = typeof endDate === 'string' && endDate.trim() !== '' ? endDate : null;
+        const hasDateFilter = !!(start || end);
 
         // Correção VULN-006: Data Minimization & Least Privilege
         const userRole = req.user?.role;
         const userSector = req.user?.sector;
         const userId = req.user?.id;
 
+        // Escopo de visibilidade (filtro `or` do PostgREST); null = vê tudo.
+        let scopeFilter: string | null = null;
         if (userSector === 'TEI' || userSector === 'Suporte') {
             // Regra 1: TEI e Suporte podem ver tudo de todos os setores
-            query = query.limit(hasDateFilter ? 5000 : 2000);
+            scopeFilter = null;
         } else if (userSector === 'Closer' && userRole === 'Colaborador') {
-            // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos
-            query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
-            query = query.limit(hasDateFilter ? 2000 : 500);
+            // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos.
+            // "Próprio" = atendente ou owner. O criador perde a visibilidade quando o
+            // Líder passa o agendamento para outro owner. Linhas sem owner (anteriores
+            // à coluna) continuam valendo pelo criador.
+            scopeFilter = `attendant_id.eq.${userId},owner.eq.${userId},and(owner.is.null,created_by.eq.${userId})`;
         } else {
             // Regra 3: Outros setores (e Líderes/Admins do Closer) podem ver todos do SEU PRÓPRIO setor
-            const { data: sectorUsers } = await supabase.from('user').select('id').eq('sector', userSector);
+            const { data: sectorUsers } = await supabase.from('user').select('id').in('sector', sectorAliases(userSector));
             const sectorUserIds = sectorUsers ? sectorUsers.map(u => u.id) : [];
-            
+
             if (sectorUserIds.length > 0) {
                 const inFilter = `(${sectorUserIds.join(',')})`;
-                query = query.or(`attendant_id.in.${inFilter},created_by.in.${inFilter}`);
+                scopeFilter = `attendant_id.in.${inFilter},created_by.in.${inFilter},owner.in.${inFilter}`;
             } else {
-                // Fallback de segurança 
-                query = query.or(`attendant_id.eq.${userId},created_by.eq.${userId}`);
+                // Fallback de segurança
+                scopeFilter = `attendant_id.eq.${userId},created_by.eq.${userId}`;
             }
-            query = query.limit(hasDateFilter ? 3000 : 1000);
         }
 
-        const { data, error } = await query;
+        // Teto de linhas. Com período (Métricas, Todos os Agendamentos) vem tudo
+        // até MAX_ROWS_WITH_DATE; sem período (carga inicial) só os mais recentes.
+        const maxRows = hasDateFilter
+            ? MAX_ROWS_WITH_DATE
+            : (userSector === 'Closer' && userRole === 'Colaborador' ? 500 : 1000);
 
-        if (error) throw new Error(error.message);
+        // O Supabase devolve no máximo PAGE_SIZE linhas por requisição, por isso a
+        // busca é paginada. A ordenação inclui o id para as páginas não se
+        // sobreporem quando vários agendamentos têm a mesma data e hora.
+        const buildPage = (from: number, to: number, withCount: boolean) => {
+            let q = supabase
+                .from('appointments')
+                .select(`
+                    *,
+                    clients (
+                        name,
+                        phone,
+                        email
+                    ),
+                    attendant:user!attendant_id (
+                        name
+                    ),
+                    updater:user!updatedBy (
+                        name,
+                        sector
+                    ),
+                    owner_user:user!owner (
+                        name,
+                        sector
+                    )
+                `, withCount ? { count: 'exact' } : undefined)
+                .order('date', { ascending: false })
+                .order('time', { ascending: false })
+                .order('id', { ascending: true })
+                .range(from, to);
+            if (start) q = q.gte('date', start);
+            if (end) q = q.lte('date', end);
+            if (scopeFilter) q = q.or(scopeFilter);
+            return q;
+        };
+
+        const firstPage = await buildPage(0, Math.min(PAGE_SIZE, maxRows) - 1, true);
+        if (firstPage.error) throw new Error(firstPage.error.message);
+
+        const totalAvailable = firstPage.count ?? firstPage.data.length;
+        const target = Math.min(totalAvailable, maxRows);
+        const pageStarts: number[] = [];
+        for (let from = PAGE_SIZE; from < target; from += PAGE_SIZE) pageStarts.push(from);
+
+        const otherPages = await Promise.all(
+            pageStarts.map(from => buildPage(from, Math.min(from + PAGE_SIZE, target) - 1, false))
+        );
+        const pageError = otherPages.find(p => p.error)?.error;
+        if (pageError) throw new Error(pageError.message);
+
+        const data = [firstPage.data, ...otherPages.map(p => p.data || [])].flat();
+
+        // Avisa o front quando o período tem mais agendamentos do que o teto.
+        res.setHeader('X-Total-Count', String(totalAvailable));
+        res.setHeader('X-Truncated', hasDateFilter && totalAvailable > maxRows ? 'true' : 'false');
 
         const mappedData = data.map((app: any) => ({
             id: app.id,
@@ -106,6 +146,9 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             notes: app.notes,
             additionalInfo: app.additional_info,
             createdBy: app.created_by,
+            ownerId: app.owner ?? app.created_by,
+            ownerName: app.owner_user?.name,
+            ownerChangedAt: app.owner_changedAt,
             studentProfile: {
                 interest: app.interest_level,
                 knowledge: app.knowledge_level,
@@ -171,15 +214,19 @@ const loadDistributionContext = async (
         if (eventId === BLOCKED_EVENT_ID) {
             candidates = candidates.filter(a => a.id !== BLOCKED_CLOSER_ID);
         }
-        if (eventId === ACTION_14_DIAS_EVENT_ID && type === 'Ligação Closer') {
-            candidates = candidates.filter(a => a.role === 'Colaborador' && a.sector === 'Closer');
+        if (isAldeiaToCloser(eventId as string, type as string)) {
+            candidates = candidates.filter(a => ['Colaborador', 'Co-líder'].includes(a.role) && a.sector === 'Closer');
         }
 
         const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento', 'Direcionar Closer'].includes(type);
         if (type === 'Ligação Equipe Aldeia') {
             candidates = candidates.filter(a => a.sector === 'Aldeia');
         } else if (isCloserType) {
-            candidates = candidates.filter(a => ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder');
+            // Só o SETOR conta. Aceitar também o cargo 'Co-líder' colocava no pool
+            // Co-líderes de Aldeia, Tribo, Cobrança e Financeiro — que o guard de
+            // setor do POST recusa depois (409), e que por não terem carga de closer
+            // ficavam em primeiro no balanceamento e eram escolhidos quase sempre.
+            candidates = candidates.filter(a => ['Closer', 'Co-líder'].includes(a.sector));
         }
     }
 
@@ -242,7 +289,7 @@ router.get('/available-times', async (req: AuthenticatedRequest, res: Response) 
 // GET /api/appointments/resolve-attendant - Escolhe qual atendente recebe o agendamento.
 //
 // Essa decisão era tomada no navegador (src/utils/distribution.ts), que só enxerga
-// os agendamentos do próprio setor do usuário. Um usuário de Perpétuos, por exemplo,
+// os agendamentos do próprio setor do usuário. Um usuário de Pré-vendas, por exemplo,
 // não recebe a agenda dos closers: via todos com carga zero e sorteava um, acertando
 // um closer realmente livre só por sorte. Aqui a escolha é feita com a base completa.
 router.get('/resolve-attendant', async (req: AuthenticatedRequest, res: Response) => {
@@ -328,7 +375,7 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
         // which sector books them, so hiding that sector breaks scheduling for
         // everyone else. Email/PII stays hidden below for non-management viewers.
         if (!isManagement && !hasCrossSectorAccess) {
-            query = query.in('sector', [userSector, 'Closer']);
+            query = query.in('sector', [...sectorAliases(userSector), 'Closer']);
         }
 
         const { data, error } = await query;
@@ -904,8 +951,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
-            // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
-            if (data.eventId === ACTION_14_DIAS_EVENT_ID && data.type === 'Ligação Closer') {
+            // Eventos da Aldeia com Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias)
+            if (isAldeiaToCloser(data.eventId, data.type)) {
                 if (!['Closer', 'Co-líder'].includes(attendant.sector) || !['Colaborador', 'Co-líder'].includes(attendant.role)) {
                     return res.status(409).json({
                         error: `Para este evento, o atendente deve ser um Colaborador ou Co-líder do setor Closer (atual: ${attendant.role} - ${attendant.sector}).`
@@ -917,7 +964,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             const closerTypes = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Direcionar Closer'];
             const closerSectors = ['Closer', 'Co-líder'];
             if (data.type === 'Gold Call' || data.type === 'Ligação Closer') {
-                closerSectors.push('Perpétuos');
+                closerSectors.push(...PRE_VENDAS_ALIASES);
             }
 
             const allowedSectors = [...closerSectors];
@@ -1087,13 +1134,18 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             financial_amount: financialAmount,
             created_at: new Date().toISOString(),
             // created_by logic
-            created_by: data.createdBy
+            created_by: data.createdBy,
+            // Owner nasce igual ao criador; só o Líder troca depois (PUT /:id/owner).
+            owner: data.createdBy
         };
 
         // Validate createdBy
         if (appointmentPayload.created_by) {
             const { data: u } = await supabase.from('user').select('id').eq('id', appointmentPayload.created_by).maybeSingle();
-            if (!u) appointmentPayload.created_by = undefined;
+            if (!u) {
+                appointmentPayload.created_by = undefined;
+                appointmentPayload.owner = undefined;
+            }
         }
 
         const { data: createdAppointment, error: appError } = await supabase
@@ -1114,16 +1166,19 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             return res.status(500).json({ error: 'Erro no Banco de Dados' });
         }
 
-        if (distributionChecksLog && finalAttendantId && createdAppointment && clientId) {
+        // Log de criação: distribuição automática (com as verificações do algoritmo)
+        // ou atendente escolhido manualmente por quem criou.
+        if (finalAttendantId && createdAppointment && clientId) {
             const { data: selectedUser } = await supabase.from('user').select('name').eq('id', finalAttendantId).maybeSingle();
             const attName = selectedUser?.name || 'Atendente Selecionado';
             supabase.from('execution_logs').insert({
                 client_id: clientId,
-                execution_type: 'Distribuição Automática',
+                execution_type: distributionChecksLog ? 'Distribuição Automática' : 'Atribuição Manual',
                 selected_attendant_id: finalAttendantId,
                 selected_attendant_name: attName,
                 appointment_id: createdAppointment.id,
-                checks_log: distributionChecksLog
+                changed_by_name: req.user?.name || null,
+                checks_log: distributionChecksLog || []
             }).then(({ error: logErr }) => {
                 if (logErr) console.error('[EXECUTION LOGS] Error inserting log in appointmentRoutes:', logErr);
             });
@@ -1179,9 +1234,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             attendant_sector: names.attendant_sector || names.event_sector || null,
             created_by_name: names.created_by_name,
             creator_sector: names.creator_sector,
+            // Na criação o owner é sempre o próprio criador.
+            owner_id: appointmentPayload.owner ?? null,
+            owner_name: names.created_by_name,
+            owner_sector: names.creator_sector,
             event_name: names.event_name,
             event_sector: names.event_sector,
-            attendant_id: undefined, created_by: undefined, event_id: undefined
+            attendant_id: undefined, created_by: undefined, event_id: undefined, owner: undefined, owner_changedAt: undefined
         };
 
         const allWebhooks = getAppointmentWebhooks();
@@ -1275,9 +1334,9 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
-            // SPECIAL ACTION 14 DIAS EVENT RESTRICTION
+            // Eventos da Aldeia com Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias)
             const currentType = updates.type || currentApp.type;
-            if (targetEventId === ACTION_14_DIAS_EVENT_ID && currentType === 'Ligação Closer') {
+            if (isAldeiaToCloser(targetEventId, currentType)) {
                 if (targetAttendant && (!['Closer', 'Co-líder'].includes(targetAttendant.sector) || !['Colaborador', 'Co-líder'].includes(targetAttendant.role))) {
                     return res.status(409).json({
                         error: `Para este evento, o atendente deve ser um Colaborador ou Co-líder do setor Closer (atual: ${targetAttendant.role} - ${targetAttendant.sector}).`
@@ -1469,7 +1528,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (updates.attendantId && currentApp.attendant_id !== updates.attendantId && currentApp.google_event_id && updated.status !== 'Cancelado') {
             // ... (Skipping verbose sync recreation for brevity, it's non-critical, but should preserve if possible)
             // I'll keep it simple: fire and forget or simple sync
-            const guestIds = [updated.attendant_id, updated.created_by].filter(Boolean);
+            const guestIds = [updated.attendant_id, updated.owner ?? updated.created_by].filter(Boolean);
             const { data: usersData } = await supabase.from('user').select('email').in('id', guestIds);
             const { data: clientData } = await supabase.from('clients').select('email').eq('id', updated.client_id).single();
             const attendees: string[] = [];
@@ -1542,7 +1601,22 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                     }
                 }
 
-                // 4. Send Webhook
+                // 5. Owner (quem recebe a comissão; nasce igual ao criador)
+                const ownerId = updated.owner ?? updated.created_by;
+                enrichedPayload.owner_id = ownerId ?? null;
+                if (ownerId) {
+                    const { data: ownerUser } = await supabase
+                        .from('user')
+                        .select('name, sector')
+                        .eq('id', ownerId)
+                        .maybeSingle();
+                    if (ownerUser) {
+                        enrichedPayload.owner_name = ownerUser.name;
+                        enrichedPayload.owner_sector = ownerUser.sector;
+                    }
+                }
+
+                // 6. Send Webhook
                 await axios.post(updateWebhookUrl, enrichedPayload);
                 console.log('Update Webhook sent successfully with enriched data');
 
@@ -1560,6 +1634,126 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
     } catch (err: any) {
         console.error("Update Error:", err);
+        res.status(500).json({ error: 'Erro Interno do Servidor' });
+    }
+});
+
+/**
+ * PUT /api/appointments/:id/owner  { ownerId }
+ *
+ * Troca o owner (quem recebe a comissão) de um agendamento. O criador
+ * (created_by) nunca muda: owner ≠ criador é o que registra que o criador não
+ * compareceu no próprio agendamento.
+ *
+ * Regras:
+ *  - só o Líder, e só em agendamentos criados por alguém do setor dele;
+ *  - o setor precisa estar habilitado em Configurações (owner_change_sectors);
+ *  - o novo owner é Colaborador ou Co-líder do mesmo setor (setor "Desativado"
+ *    fica de fora por definição), ou o próprio criador, para desfazer a troca.
+ */
+router.put('/:id/owner', async (req: AuthenticatedRequest, res: Response) => {
+    // Toda recusa vai para o log do servidor (Vercel), para dar para diagnosticar
+    // o motivo sem depender de print da tela.
+    const reject = (status: number, error: string) => {
+        console.warn(`[OWNER CHANGE] Recusado ${status} | ${error} | usuário=${req.user?.name} (${req.user?.role}/${req.user?.sector}) | agendamento=${req.params.id} | novo=${req.body?.ownerId}`);
+        return res.status(status).json({ error });
+    };
+    try {
+        const me = req.user;
+        if (!me || me.role !== 'Líder') {
+            return reject(403, 'Somente o Líder pode trocar o responsável do agendamento.');
+        }
+
+        const { id } = req.params;
+        const newOwnerId = typeof req.body?.ownerId === 'string' ? req.body.ownerId.trim() : '';
+        if (!newOwnerId) {
+            return reject(400, 'Informe o novo responsável.');
+        }
+
+        const { data: appt, error: apptErr } = await supabase
+            .from('appointments')
+            .select('id, client_id, attendant_id, created_by, owner, owner_changedAt, google_event_id, status')
+            .eq('id', id)
+            .maybeSingle();
+        if (apptErr) throw new Error(apptErr.message);
+        if (!appt) return reject(404, 'Agendamento não encontrado.');
+        if (!appt.created_by) {
+            return reject(422, 'Agendamento sem criador registrado.');
+        }
+
+        const currentOwnerId = appt.owner ?? appt.created_by;
+        const userIds = [...new Set([appt.created_by, newOwnerId, currentOwnerId])];
+        const { data: users, error: usersErr } = await supabase
+            .from('user')
+            .select('id, name, sector, role')
+            .in('id', userIds);
+        if (usersErr) throw new Error(usersErr.message);
+
+        const creator = users?.find(u => u.id === appt.created_by);
+        const newOwner = users?.find(u => u.id === newOwnerId);
+        const currentOwner = users?.find(u => u.id === currentOwnerId);
+        const mySectors = sectorAliases(me.sector);
+
+        if (!creator || !mySectors.includes(creator.sector)) {
+            return reject(403, 'Você só pode trocar o responsável de agendamentos criados pelo seu setor.');
+        }
+
+        const enabledSectors = await getOwnerChangeSectors();
+        if (!isOwnerChangeEnabledFor(enabledSectors, creator.sector)) {
+            return reject(403, `A troca de responsável não está habilitada para o setor ${creator.sector}.`);
+        }
+
+        const isCreator = newOwnerId === appt.created_by;
+        const isEligible = !!newOwner
+            && ['Colaborador', 'Co-líder'].includes(newOwner.role)
+            && mySectors.includes(newOwner.sector);
+        if (!newOwner || (!isCreator && !isEligible)) {
+            return reject(400, 'O novo responsável precisa ser um Colaborador ou Co-líder ativo do seu setor.');
+        }
+
+        if (newOwnerId === currentOwnerId) {
+            return res.json({ ownerId: currentOwnerId, ownerName: newOwner.name, ownerChangedAt: appt.owner_changedAt });
+        }
+
+        const { data: updated, error: updErr } = await supabase
+            .from('appointments')
+            .update({ owner: newOwnerId, owner_changedAt: new Date().toISOString() })
+            .eq('id', id)
+            .select('owner, owner_changedAt')
+            .single();
+        if (updErr) throw new Error(updErr.message);
+
+        supabase.from('execution_logs').insert({
+            client_id: appt.client_id,
+            execution_type: 'Alteração de Owner',
+            selected_attendant_id: newOwnerId,
+            selected_attendant_name: newOwner.name,
+            appointment_id: id,
+            old_value: currentOwner?.name || 'Não informado',
+            new_value: newOwner.name,
+            changed_by_name: me.name || null,
+            checks_log: []
+        }).then(({ error: logErr }) => {
+            if (logErr) console.error('[EXECUTION LOGS] Error inserting owner-change log:', logErr);
+        });
+
+        // Quem entra na reunião é o owner: o convite do Google passa a ser dele.
+        if (appt.google_event_id && appt.status !== 'Cancelado') {
+            const guestIds = [appt.attendant_id, newOwnerId].filter(Boolean);
+            const { data: guests } = await supabase.from('user').select('email').in('id', guestIds);
+            const { data: clientData } = await supabase.from('clients').select('email').eq('id', appt.client_id).maybeSingle();
+            const attendees: string[] = [];
+            if (clientData?.email) attendees.push(clientData.email);
+            guests?.forEach((u: any) => { if (u.email) attendees.push(u.email); });
+            if (!attendees.includes('di01@tradestars.com.br')) attendees.push('di01@tradestars.com.br');
+            updateGoogleMeetEvent(appt.google_event_id, attendees);
+        }
+
+        logSuccessfulAction(req, 'UPDATE_OWNER', 'Appointment', id);
+
+        res.json({ ownerId: updated.owner, ownerName: newOwner.name, ownerChangedAt: updated.owner_changedAt });
+    } catch (err: any) {
+        console.error(`[OWNER CHANGE] Erro 500 | agendamento=${req.params.id} |`, err?.message);
         res.status(500).json({ error: 'Erro Interno do Servidor' });
     }
 });

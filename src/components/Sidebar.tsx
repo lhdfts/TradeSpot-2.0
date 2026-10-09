@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut, Webhook, History } from 'lucide-react';
+import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut, Webhook, History, Settings as SettingsIcon } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { cn } from './ui/button';
 import { Logo } from './Logo';
@@ -153,8 +153,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                     {!effectiveCollapsed && <span className="w-full">Criar agendamento</span>}
                 </NavLink>
 
-                {/* Metrics - usually for managers */}
-                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Co-líder' || user?.role === 'Dev' || user?.role === 'Qualidade') && (
+                {/* Metrics - gestão vê rankings; Colaborador vê só os próprios números */}
+                {(user?.role === 'Admin' || user?.role === 'Líder' || user?.role === 'Co-líder' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.role === 'Colaborador') && (
                     <NavItem
                         icon={<PieChart size={20} />}
                         label={effectiveCollapsed ? "" : "Métricas"}
@@ -200,6 +200,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                         icon={<History size={20} />}
                         label={effectiveCollapsed ? "" : "Logs"}
                         to="/logs"
+                        collapsed={effectiveCollapsed}
+                    />
+                )}
+
+                {/* Configurações do sistema - Admin, Dev */}
+                {(user?.role === 'Admin' || user?.role === 'Dev') && (
+                    <NavItem
+                        icon={<SettingsIcon size={20} />}
+                        label={effectiveCollapsed ? "" : "Configurações"}
+                        to="/settings"
                         collapsed={effectiveCollapsed}
                     />
                 )}

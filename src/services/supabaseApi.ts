@@ -1,10 +1,20 @@
 import { getAuthHeaders } from '../lib/firebase';
 import type { ApiService } from './api';
 import type { Appointment, Attendant, Event, UnnichatConnection } from '../types';
+import { normalizeSector } from '../constants/sectors';
+
+// Setores chegam aqui já com o nome atual, mesmo que o banco ainda guarde um
+// nome antigo. Assim o restante do frontend compara sempre contra um único nome.
+const withNormalizedSector = <T extends { sector?: string | null }>(rows: T[]): T[] =>
+    rows.map(row => ({ ...row, sector: normalizeSector(row.sector) }));
 
 export class SupabaseApiService implements ApiService {
     appointments = {
         list: async (params?: { startDate?: string; endDate?: string }): Promise<Appointment[]> => {
+            return (await this.appointments.listWithMeta(params)).appointments;
+        },
+        // `truncated`: o período tem mais agendamentos do que o teto do servidor.
+        listWithMeta: async (params?: { startDate?: string; endDate?: string }): Promise<{ appointments: Appointment[]; truncated: boolean; total: number }> => {
             const authHeaders = await getAuthHeaders();
             let url = '/api/appointments';
             if (params?.startDate || params?.endDate) {
@@ -21,7 +31,12 @@ export class SupabaseApiService implements ApiService {
                 throw new Error('Failed to fetch appointments');
             }
 
-            return await response.json();
+            const appointments: Appointment[] = await response.json();
+            return {
+                appointments,
+                truncated: response.headers.get('X-Truncated') === 'true',
+                total: Number(response.headers.get('X-Total-Count')) || appointments.length
+            };
         },
         getAvailableTimes: async (params: { date: string; type: string; eventId?: string; attendantId?: string }): Promise<string[]> => {
             const authHeaders = await getAuthHeaders();
@@ -53,6 +68,19 @@ export class SupabaseApiService implements ApiService {
                 throw new Error('Failed to resolve attendant');
             }
 
+            return await response.json();
+        },
+        changeOwner: async (id: string, ownerId: string): Promise<{ ownerId: string; ownerName: string; ownerChangedAt: string | null }> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/appointments/${id}/owner`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify({ ownerId })
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Falha ao trocar o responsável (erro ${response.status}).`);
+            }
             return await response.json();
         },
         create: async (data: Omit<Appointment, 'id'>): Promise<Appointment> => {
@@ -93,6 +121,8 @@ export class SupabaseApiService implements ApiService {
                 notes: createdAppointment.notes,
                 additionalInfo: createdAppointment.additional_info,
                 createdBy: createdAppointment.created_by,
+                ownerId: createdAppointment.owner ?? createdAppointment.created_by,
+                ownerChangedAt: createdAppointment.owner_changedAt,
                 studentProfile: createdAppointment.student_profile || {
                     interest: createdAppointment.interest_level,
                     knowledge: createdAppointment.knowledge_level,
@@ -140,6 +170,8 @@ export class SupabaseApiService implements ApiService {
                 notes: updatedAppointment.notes,
                 additionalInfo: updatedAppointment.additional_info,
                 createdBy: updatedAppointment.created_by,
+                ownerId: updatedAppointment.owner ?? updatedAppointment.created_by,
+                ownerChangedAt: updatedAppointment.owner_changedAt,
                 studentProfile: updatedAppointment.student_profile || {
                     interest: updatedAppointment.interest_level,
                     knowledge: updatedAppointment.knowledge_level,
@@ -149,6 +181,32 @@ export class SupabaseApiService implements ApiService {
                     }
                 }
             } as Appointment;
+        }
+    };
+
+    settings = {
+        getOwnerChangeSectors: async (): Promise<{ sectors: string[]; availableSectors: string[] }> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/settings/owner-change-sectors', { headers: authHeaders });
+            if (!response.ok) throw new Error('Failed to fetch settings');
+            const data = await response.json();
+            return {
+                sectors: (data.sectors || []).map((s: string) => normalizeSector(s)),
+                availableSectors: data.availableSectors || []
+            };
+        },
+        updateOwnerChangeSectors: async (sectors: string[]): Promise<{ sectors: string[] }> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/settings/owner-change-sectors', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify({ sectors })
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Falha ao salvar configurações');
+            }
+            return await response.json();
         }
     };
 
@@ -164,7 +222,7 @@ export class SupabaseApiService implements ApiService {
                 return [];
             }
 
-            return await response.json();
+            return withNormalizedSector(await response.json());
         },
         create: async (data: Omit<Attendant, 'id'>): Promise<Attendant> => {
             const authHeaders = await getAuthHeaders();
@@ -228,7 +286,7 @@ export class SupabaseApiService implements ApiService {
                 return [];
             }
 
-            return await response.json();
+            return withNormalizedSector(await response.json());
         },
         listFeeds: async (sector: string): Promise<Event[]> => {
             const response = await fetch(`/api/public/events/feeds?sector=${encodeURIComponent(sector)}`);
@@ -244,7 +302,7 @@ export class SupabaseApiService implements ApiService {
                 end_date: event.end_date,
                 status: event.status,
                 created_at: event.created_at,
-                sector: event.sector,
+                sector: normalizeSector(event.sector),
                 self_scheduling_link: event.self_scheduling_link
             }));
         },
@@ -302,7 +360,7 @@ export class SupabaseApiService implements ApiService {
                 headers: authHeaders
             });
             if (!response.ok) throw new Error('Failed to fetch unnichat connections');
-            return await response.json();
+            return withNormalizedSector(await response.json());
         },
         create: async (data: Omit<UnnichatConnection, 'id' | 'created_at'>): Promise<UnnichatConnection> => {
             const authHeaders = await getAuthHeaders();

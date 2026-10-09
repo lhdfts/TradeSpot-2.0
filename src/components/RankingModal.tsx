@@ -8,9 +8,12 @@ interface RankingModalProps {
     title: string;
     data: any[];
     type: string;
+    // Visão "Para outros setores": a coluna mostra o total de agendamentos marcados
+    // como responsável, já que "Total Recebido" (como atendente) é sempre 0 ali.
+    showTotal?: boolean;
 }
 
-export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, title, data, type }) => {
+export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, title, data, type, showTotal }) => {
     const isSdrRanking = type === 'SDR' || type === 'Leads' || type === 'sdr';
 
     return (
@@ -41,7 +44,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                     ) : (
                         <>
                             <div className="col-span-3">Nome</div>
-                            <div className="col-span-2 text-center">Total Recebido</div>
+                            <div className="col-span-2 text-center">{showTotal ? 'Agendamentos' : 'Total Recebido'}</div>
                             <div className="col-span-1 text-center text-emerald-500">Realizado</div>
                             <div className="col-span-1 text-center text-red-500">Cancelado</div>
                             <div className="col-span-2 text-center text-violet-500">Esquecimento</div>
@@ -107,7 +110,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                                             {item.name}
                                         </div>
                                         <div className="col-span-2 text-center font-bold text-foreground text-xs">
-                                            {item.totalRecebido}
+                                            {showTotal ? item.total : item.totalRecebido}
                                         </div>
                                         <div className="col-span-1 text-center font-bold text-emerald-500 text-xs">
                                             {item.Realizado}

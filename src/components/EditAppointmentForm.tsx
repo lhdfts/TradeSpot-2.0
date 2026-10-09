@@ -13,15 +13,17 @@ import type { Appointment, AppointmentType, ProfileLevel, KnowledgeLevel, Appoin
 import { isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit } from '../utils/distribution';
 import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
+import { AppointmentOwnerField } from './AppointmentOwnerField';
 import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
+import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors';
+import { isAldeiaToCloser, isAldeiaToCloserEvent } from '../constants/events';
 
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
 const ON_THE_ROAD_EVENT_ID = '62936e18-6042-43c9-8526-6ec920184351';
-const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
 
 
 const isCloserBlockedForSelectedEvent = (eventId: string, attendantId: string) => {
@@ -45,7 +47,8 @@ if (!API_URL) {
 }
 
 export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initialData, prefillData, onSuccess }) => {
-    const { createAppointment, updateAppointment, appointments } = useAppointments();
+    const { createAppointment, updateAppointment, changeOwner, appointments } = useAppointments();
+    const [pendingOwnerId, setPendingOwnerId] = useState<string | null>(null);
     const { attendants, events, loading } = useFormData();
     const { user } = useAuth();
     const [rates, setRates] = useState<Record<string, number>>({});
@@ -121,7 +124,9 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
-    const isAction14Dias = formData.eventId === ACTION_14_DIAS_EVENT_ID;
+    // Eventos da Aldeia em que ela marca com um Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias).
+    const isAction14Dias = isAldeiaToCloserEvent(formData.eventId);
+    const isAldeiaCloserPick = isAldeiaToCloser(formData.eventId, formData.type);
 
     const allowedTypes = React.useMemo(() => {
         const allTypes: { value: AppointmentType, label: string }[] = [
@@ -141,7 +146,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
         // Mantém o rótulo visível ao editar um agendamento que já é desse tipo, seja qual for o
         // setor de quem abriu a edição.
-        if (formData.type === 'Direcionar Closer' || (user?.sector === 'Perpétuos' && selectedEvent?.event_name === 'Partners')) {
+        if (formData.type === 'Direcionar Closer' || (isPreVendas(user?.sector) && selectedEvent?.event_name === 'Partners')) {
             allTypes.push({ value: 'Direcionar Closer', label: 'Direcionar Closer' });
         }
 
@@ -177,8 +182,8 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
         if (user.sector === 'Social Seller') {
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
-        if (user.sector === 'Perpétuos') {
-            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
+        if (isPreVendas(user.sector)) {
+            return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer', 'Fora da agenda'].includes(t.value));
         }
 
         return allTypes;
@@ -190,7 +195,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
             const typeToSectors: Record<string, string[]> = {
                 'Ligação Closer': ['Closer', 'Co-líder'],
                 'Ligação Equipe Aldeia': ['Aldeia'],
-                'Gold Call': ['Closer', 'Co-líder', 'Perpétuos'],
+                'Gold Call': ['Closer', 'Co-líder', SECTOR_PRE_VENDAS],
                 'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
                 'Upgrade': ['Closer', 'Co-líder'],
                 'Ligação SDR': ['SDR'],
@@ -217,13 +222,13 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                 filteredAttendantsForBlock = filteredAttendantsForBlock.filter(a => a.sector !== 'Closer');
             }
 
-            if (!isGlobalViewer && user?.sector) {
+            if (!isGlobalViewer && user?.sector && !isAldeiaCloserPick) {
                 filteredAttendantsForBlock = filteredAttendantsForBlock.filter(
                     a => a.sector === user.sector || a.id === initialData?.attendantId
                 );
             }
 
-            if (isAction14Dias && formData.type === 'Ligação Closer') {
+            if (isAldeiaCloserPick) {
                 return filteredAttendantsForBlock
                     .filter(a => (a.role === 'Colaborador' || a.role === 'Co-líder') && ['Closer', 'Co-líder'].includes(a.sector))
                     .map(a => ({ value: a.id, label: a.name }));
@@ -249,19 +254,26 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                         return false;
                     }
 
-                    if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
-                        return false;
+                    // Antes do filtro de setor: aqui a Aldeia escolhe um Closer.
+                    if (isAldeiaCloserPick) {
+                        return a.sector === 'Closer' && (a.role === 'Colaborador' || a.role === 'Co-líder');
                     }
 
-                    if (isAction14Dias && formData.type === 'Ligação Closer') {
-                        return ['Closer', 'Co-líder'].includes(a.sector) && (a.role === 'Colaborador' || a.role === 'Co-líder');
+                    // Fora da agenda é marcado por outro setor (ex.: Pré-vendas) para um Closer:
+                    // precisa ser resolvido antes da restrição ao próprio setor logo abaixo,
+                    // senão todos os Closers somem e sobra só a Distribuição Automática.
+                    if (formData.type === 'Fora da agenda') {
+                        return a.sector === 'Closer';
+                    }
+
+                    if (!isGlobalViewer && user?.sector && a.sector !== user.sector) {
+                        return false;
                     }
 
                     const selectedEvent = events.find(e => e.id === formData.eventId);
                     const eventSector = selectedEvent?.sector;
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
-                    if (formData.type === 'Fora da agenda') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder', 'Aldeia'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia' || (a.sector === 'Aldeia' && a.role === 'Co-líder');
@@ -278,20 +290,20 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
         // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call/Fora da agenda, mostrar apenas Distribuição Automática
         if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda')) {
-            if (isAction14Dias && formData.type === 'Ligação Closer') {
+            if (isAldeiaCloserPick) {
                 return options;
             }
             return options.filter(opt => opt.value === 'distribuicao_automatica');
         }
 
         return options;
-    }, [isEditing, formData.type, formData.eventId, attendants, events, user, isAction14Dias]);
+    }, [isEditing, formData.type, formData.eventId, attendants, events, user, isAction14Dias, isAldeiaCloserPick]);
 
     const eventOptions = React.useMemo(() => {
         // Filter active events by sector (or if user is privileged)
         const filtered = events.filter(e => {
             if (e.status !== true) return false;
-            if (user?.sector === 'Perpétuos') return e.sector === 'Perpétuos';
+            if (isPreVendas(user?.sector)) return isPreVendas(e.sector);
 
             // Special case for On The Road 2.0 and Aldeia
             // if (e.id === ON_THE_ROAD_EVENT_ID && user?.sector === 'Aldeia') return true;
@@ -377,8 +389,8 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
 
-            // Special case for Tribo, Aldeia and Perpétuos: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
-            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || user.sector === 'Perpétuos') && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
+            // Special case for Tribo, Aldeia and Pré-vendas: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
+            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || isPreVendas(user.sector)) && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
             // 4. Reagendamento Closer
@@ -560,7 +572,11 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
         if (!isEditing && !formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
 
         // Final Validation Gatekeeper
-        if (formData.type === 'Reagendamento Closer') {
+        // Na edição de um agendamento que JÁ era Reagendamento Closer, o histórico foi
+        // validado na criação. Rechecar aqui usava só a lista carregada na tela (que
+        // depende do período filtrado) e bloqueava edições válidas.
+        const alreadyReagendamento = isEditing && initialData?.type === 'Reagendamento Closer';
+        if (formData.type === 'Reagendamento Closer' && !alreadyReagendamento) {
             if (!checkEligibility(formData.phone)) {
                 toastManager.add({
                     title: "Erro",
@@ -733,6 +749,16 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                 if (!updatePayload.email) delete updatePayload.email;
 
                 await updateAppointment(initialData.id, updatePayload);
+
+                // Troca de responsável escolhida no campo próprio, mas sem clicar em
+                // "Salvar responsável": salva junto com o agendamento.
+                if (pendingOwnerId) {
+                    try {
+                        await changeOwner(initialData.id, pendingOwnerId);
+                    } catch (err: any) {
+                        toastManager.add({ title: 'Responsável não alterado', description: err?.message || 'Não foi possível trocar o responsável.', type: 'error' });
+                    }
+                }
             } else {
                 await createAppointment({
                     ...formData,
@@ -995,7 +1021,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                         {/* Row 3: Atendente and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={!initialData ? "col-span-2" : ""}>
-                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || user?.sector === 'Perpétuos') && !initialData && user ? (
+                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || isPreVendas(user?.sector)) && !initialData && user ? (
                                     <FloatingInput
                                         label="Atendente"
                                         value={user.name}
@@ -1019,7 +1045,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                         disabled={
                                             isEditing
                                                 ? !(user && ['Co-líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
-                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && !(isAction14Dias && formData.type === 'Ligação Closer'))
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && !(isAldeiaCloserPick))
                                         }
                                         error={errors.attendantId}
                                     />
@@ -1034,6 +1060,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                     disabled={
                                         !user || (
                                             user.id !== initialData.createdBy &&
+                                            user.id !== initialData.ownerId &&
                                             user.id !== initialData.attendantId &&
                                             !['Líder', 'Co-líder', 'Admin', 'Dev', 'Qualidade', 'Suporte'].includes(user.role)
                                         ) || (
@@ -1062,6 +1089,13 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                 className="text-blue-500"
                                 disabled={isEditing}
                             />
+                        )}
+
+                        {/* Row 5: Criador e responsável — linha própria, na largura toda. Dentro
+                            da coluna do Atendente, nomes longos empurravam o botão "Salvar
+                            responsável" para baixo do campo Google Meet, que bloqueava o clique. */}
+                        {initialData && (
+                            <AppointmentOwnerField appointment={initialData} attendants={attendants} onPendingChange={setPendingOwnerId} />
                         )}
 
 

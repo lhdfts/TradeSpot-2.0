@@ -31,10 +31,12 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
+    // "Meus" = sou o atendente ou o owner. Quando o Líder passa o agendamento
+    // para outro owner, ele some daqui para o criador.
     const optionsBaseAppointments = React.useMemo(() => {
         return appointments.filter(a => {
             if (!user) return false;
-            return a.attendantId === user.id || a.createdBy === user.id;
+            return a.attendantId === user.id || (a.ownerId ?? a.createdBy) === user.id;
         });
     }, [appointments, user]);
 
@@ -65,7 +67,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     }, [optionsBaseAppointments]);
 
     const filtered = appointments.filter(a => {
-        const matchesUser = user && (a.attendantId === user.id || a.createdBy === user.id);
+        const matchesUser = user && (a.attendantId === user.id || (a.ownerId ?? a.createdBy) === user.id);
         if (!matchesUser) return false;
 
         const cleanSearch = search.replace(/\D/g, '');

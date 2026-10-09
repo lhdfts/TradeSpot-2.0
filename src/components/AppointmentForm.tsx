@@ -17,11 +17,12 @@ import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
+import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors';
+import { isAldeiaToCloser, isAldeiaToCloserEvent } from '../constants/events';
 
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
 const BLOCKED_CLOSER_ID = '5b2553e4-6c1a-434d-909d-ae479f74faee';
 const ON_THE_ROAD_EVENT_ID = '62936e18-6042-43c9-8526-6ec920184351';
-const ACTION_14_DIAS_EVENT_ID = '81fc2528-e0be-4240-a5b0-05c1a0b8986a';
 
 
 const isCloserBlockedForSelectedEvent = (eventId: string, attendantId: string) => {
@@ -116,7 +117,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
-    const isAction14Dias = formData.eventId === ACTION_14_DIAS_EVENT_ID;
+    // Eventos da Aldeia em que ela marca com um Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias).
+    const isAction14Dias = isAldeiaToCloserEvent(formData.eventId);
+    const isAldeiaCloserPick = isAldeiaToCloser(formData.eventId, formData.type);
     // Em 'Direcionar Closer' a disponibilidade é a agenda de um closer específico, então data e
     // horário só fazem sentido depois que ele for escolhido.
     const isCloserDirecionado = !!formData.attendantId && formData.attendantId !== 'distribuicao_automatica';
@@ -137,10 +140,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             allTypes.push({ value: 'Gold Call', label: 'Gold Call' });
         }
 
-        // Perpétuos direcionando um lead do Partners para um Closer específico (sem distribuição automática).
-        // O dropdown de eventos já restringe Perpétuos aos eventos do próprio setor, então o Partners
+        // Pré-vendas direcionando um lead do Partners para um Closer específico (sem distribuição automática).
+        // O dropdown de eventos já restringe Pré-vendas aos eventos do próprio setor, então o Partners
         // do setor Closer nunca chega aqui.
-        if (user?.sector === 'Perpétuos' && selectedEvent?.event_name === 'Partners') {
+        if (isPreVendas(user?.sector) && selectedEvent?.event_name === 'Partners') {
             allTypes.push({ value: 'Direcionar Closer', label: 'Direcionar Closer' });
         }
 
@@ -176,8 +179,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (user.sector === 'Social Seller') {
             return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
-        if (user.sector === 'Perpétuos') {
-            return allTypes.filter(t => ['Gold Call', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer'].includes(t.value));
+        if (isPreVendas(user.sector)) {
+            return allTypes.filter(t => ['Gold Call', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer', 'Fora da agenda'].includes(t.value));
         }
 
         return allTypes;
@@ -189,7 +192,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const typeToSectors: Record<string, string[]> = {
                 'Ligação Closer': ['Closer', 'Co-líder'],
                 'Ligação Equipe Aldeia': ['Aldeia'],
-                'Gold Call': ['Closer', 'Co-líder', 'Perpétuos'],
+                'Gold Call': ['Closer', 'Co-líder', SECTOR_PRE_VENDAS],
                 'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
                 'Upgrade': ['Closer', 'Co-líder'],
                 'Ligação SDR': ['SDR'],
@@ -216,13 +219,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 filteredAttendantsForBlock = filteredAttendantsForBlock.filter(a => a.sector !== 'Closer');
             }
 
-            if (!isGlobalViewer && user?.sector) {
+            if (!isGlobalViewer && user?.sector && !isAldeiaCloserPick) {
                 filteredAttendantsForBlock = filteredAttendantsForBlock.filter(
                     a => a.sector === user.sector || a.id === initialData?.attendantId
                 );
             }
 
-            if (isAction14Dias && formData.type === 'Ligação Closer') {
+            if (isAldeiaCloserPick) {
                 return filteredAttendantsForBlock
                     .filter(a => (a.role === 'Colaborador' || a.role === 'Co-líder') && ['Closer', 'Co-líder'].includes(a.sector))
                     .map(a => ({ value: a.id, label: a.name }));
@@ -248,10 +251,22 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         return false;
                     }
 
-                    // 'Direcionar Closer' is cross-sector by design (Perpétuos hands the lead to a
+                    // 'Direcionar Closer' is cross-sector by design (Pré-vendas hands the lead to a
                     // Closer), so it has to be resolved before the own-sector restriction below.
                     // Líderes já foram descartados no topo do filtro.
                     if (formData.type === 'Direcionar Closer') {
+                        return a.sector === 'Closer';
+                    }
+
+                    // Antes do filtro de setor: aqui a Aldeia escolhe um Closer.
+                    if (isAldeiaCloserPick) {
+                        return a.sector === 'Closer' && (a.role === 'Colaborador' || a.role === 'Co-líder');
+                    }
+
+                    // Fora da agenda é marcado por outro setor (ex.: Pré-vendas) para um Closer:
+                    // precisa ser resolvido antes da restrição ao próprio setor logo abaixo,
+                    // senão todos os Closers somem e sobra só a Distribuição Automática.
+                    if (formData.type === 'Fora da agenda') {
                         return a.sector === 'Closer';
                     }
 
@@ -259,15 +274,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         return false;
                     }
 
-                    if (isAction14Dias && formData.type === 'Ligação Closer') {
-                        return ['Closer', 'Co-líder'].includes(a.sector) && (a.role === 'Colaborador' || a.role === 'Co-líder');
-                    }
-
                     const selectedEvent = events.find(e => e.id === formData.eventId);
                     const eventSector = selectedEvent?.sector;
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
-                    if (formData.type === 'Fora da agenda') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fechamento') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder', 'Aldeia'].includes(a.sector) || a.role === 'Co-líder';
                     if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia' || (a.sector === 'Aldeia' && a.role === 'Co-líder');
@@ -284,7 +294,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
         // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call/Fora da agenda, mostrar apenas Distribuição Automática
         if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda')) {
-            if (isAction14Dias && formData.type === 'Ligação Closer') {
+            if (isAldeiaCloserPick) {
                 return options;
             }
             return options.filter(opt => opt.value === 'distribuicao_automatica');
@@ -300,13 +310,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         }
 
         return options;
-    }, [isEditing, formData.type, formData.eventId, attendants, events, user, isAction14Dias]);
+    }, [isEditing, formData.type, formData.eventId, attendants, events, user, isAction14Dias, isAldeiaCloserPick]);
 
     const eventOptions = React.useMemo(() => {
         // Filter active events by sector (or if user is privileged)
         const filtered = events.filter(e => {
             if (e.status !== true) return false;
-            if (user?.sector === 'Perpétuos') return e.sector === 'Perpétuos';
+            if (isPreVendas(user?.sector)) return isPreVendas(e.sector);
 
             // Special case for On The Road 2.0 and Aldeia
             // if (e.id === ON_THE_ROAD_EVENT_ID && user?.sector === 'Aldeia') return true;
@@ -402,8 +412,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 });
             }
 
-            // Special case for Tribo, Aldeia and Perpétuos: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
-            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || user.sector === 'Perpétuos') && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
+            // Special case for Tribo, Aldeia and Pré-vendas: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
+            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || isPreVendas(user.sector)) && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
             // 4. Reagendamento Closer
@@ -1027,7 +1037,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         {/* Row 3: Atendente and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={!initialData ? "col-span-2" : ""}>
-                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || user?.sector === 'Perpétuos') && !initialData && user ? (
+                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || isPreVendas(user?.sector)) && !initialData && user ? (
                                     <FloatingInput
                                         label="Atendente"
                                         value={user.name}
@@ -1051,7 +1061,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                         disabled={
                                             isEditing
                                                 ? !(user && ['Co-líder', 'Líder', 'Admin', 'Dev', 'Qualidade'].includes(user.role))
-                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && formData.type !== 'Direcionar Closer' && !(isAction14Dias && formData.type === 'Ligação Closer'))
+                                                : (formData.type !== 'Upgrade' && formData.type !== 'Fora da agenda' && formData.type !== 'Direcionar Closer' && !(isAldeiaCloserPick))
                                         }
                                         error={errors.attendantId}
                                     />

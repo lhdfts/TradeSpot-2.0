@@ -9,6 +9,7 @@ import { Attendants } from './views/Attendants';
 import { Events } from './views/Events';
 import { UnnichatConnections } from './views/UnnichatConnections';
 import { CeoScheduler } from './views/CeoScheduler';
+import { Settings } from './views/Settings';
 import { Profile } from './views/Profile';
 import { Logs } from './views/Logs';
 import { Login } from './views/Login';
@@ -28,6 +29,8 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Button } from './components/ui/button';
 import { ToastProvider } from './components/ui/toast';
 import { UpdateNotification } from './components/UpdateNotification';
+import { AberturaPosLogin } from './components/abertura/AberturaPosLogin';
+import { PreviaAbertura } from './views/public/PreviaAbertura';
 
 // Wrapper for Create Appointment to handle search params
 const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
@@ -124,6 +127,7 @@ const InternalLayout: React.FC = () => {
                 {currentView === '/profile' && 'Perfil'}
                 {currentView === '/unnichat-connections' && 'Conexões Unnichat'}
                 {currentView === '/logs' && 'Logs'}
+                {currentView === '/settings' && 'Configurações'}
               </h1>
               <div className="flex items-center gap-4">
                 <div id="header-actions" style={{ display: 'flex', alignItems: 'center' }}></div>
@@ -152,8 +156,8 @@ const InternalLayout: React.FC = () => {
                 <Route path="/profile" element={<Profile />} />
               </Route>
 
-              {/* Metrics - Admin, Líder, Co-líder */}
-              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-líder', 'Dev', 'Qualidade']} />}>
+              {/* Metrics - gestão vê rankings; Colaborador vê só os próprios números */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-líder', 'Dev', 'Qualidade', 'Colaborador']} />}>
                 <Route path="/metrics" element={<Metrics />} />
               </Route>
 
@@ -174,6 +178,11 @@ const InternalLayout: React.FC = () => {
               {/* Logs de Execução / Distribuição - Admin, Dev */}
               <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev']} />}>
                 <Route path="/logs" element={<Logs />} />
+              </Route>
+
+              {/* Configurações do sistema - Admin, Dev */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev']} />}>
+                <Route path="/settings" element={<Settings />} />
               </Route>
 
               {/* CEO Only Management */}
@@ -245,6 +254,11 @@ const MainRouter: React.FC = () => {
     );
   }
 
+  // Prévia da vinheta de abertura - Public (assistir sem fazer login)
+  if (currentView === '/abertura') {
+    return <PreviaAbertura />;
+  }
+
   // Documentation Route - Public
   if (currentView === '/docs') {
     return (
@@ -273,6 +287,7 @@ function App() {
         <ThemeProvider>
           <ToastProvider position="top-right">
             <MainRouter />
+            <AberturaPosLogin />
             <UpdateNotification />
           </ToastProvider>
         </ThemeProvider>
