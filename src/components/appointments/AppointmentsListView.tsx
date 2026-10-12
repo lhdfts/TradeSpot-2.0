@@ -7,9 +7,13 @@
 //    das reais, em vez do aviso de lista vazia;
 //  - numa nova busca, a lista atual continua no lugar (esmaecida);
 //  - o "Limpar filtros" reserva o espaço mesmo quando está escondido.
-import React, { useState } from 'react';
+//
+// Filtros: a barra mostra só pesquisa + filtros principais; o resto fica no
+// painel "Filtros avançados", que abre animando altura e opacidade (padrão
+// "Base Collapsible" do 21st.dev).
+import React, { useId, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar as CalendarIcon, CalendarDays, CalendarPlus, Clock, List, Search, SearchX, X } from 'lucide-react';
+import { Calendar as CalendarIcon, CalendarDays, CalendarPlus, ChevronDown, Clock, List, Search, SearchX, SlidersHorizontal, X } from 'lucide-react';
 import type { Appointment } from '../../types';
 import { cn } from '../../lib/utils';
 import { staggerStyle } from '../../lib/motion';
@@ -40,8 +44,12 @@ interface AppointmentsListViewProps {
     truncated?: boolean;
     search: string;
     onSearchChange: (value: string) => void;
-    /** Filtros da página; recebe o modo para esconder os que não valem no calendário. */
-    renderFilters: (viewMode: ViewMode) => React.ReactNode;
+    /** Filtros sempre visíveis na barra; recebem o modo para esconder os que não valem no calendário. */
+    primaryFilters: (viewMode: ViewMode) => React.ReactNode;
+    /** Filtros do painel "Filtros avançados". */
+    advancedFilters: (viewMode: ViewMode) => React.ReactNode;
+    /** Quantos filtros avançados estão fora do padrão (contador no botão). */
+    advancedActiveCount: number;
     hasActiveFilters: boolean;
     onClearFilters: () => void;
     page: number;
@@ -73,7 +81,9 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
     truncated,
     search,
     onSearchChange,
-    renderFilters,
+    primaryFilters,
+    advancedFilters,
+    advancedActiveCount,
     hasActiveFilters,
     onClearFilters,
     page,
@@ -86,6 +96,8 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
     emptyDescription,
 }) => {
     const [viewMode, setViewMode] = useState<ViewMode>('table');
+    const [advancedOpen, setAdvancedOpen] = useState(false);
+    const advancedPanelId = useId();
 
     // Esqueleto só quando não há nada para mostrar ainda; com dados antigos na
     // tela, eles ficam (esmaecidos) até a busca nova chegar.
@@ -160,23 +172,42 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
             )}
 
             {/* Barra de controles */}
-            <div className="flex flex-col xl:flex-row gap-4 bg-surface p-4 rounded-lg border border-border shadow-sm">
-                <div className="flex-1 min-w-[250px]">
-                    <FloatingInput
-                        label="Pesquisa"
-                        startIcon={<Search size={18} />}
-                        value={search}
-                        onChange={e => onSearchChange(e.target.value)}
-                        placeholder=""
-                        className="bg-background"
-                    />
-                </div>
+            <div className="bg-surface p-4 rounded-lg border border-border shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex-1 min-w-[220px]">
+                        <FloatingInput
+                            label="Pesquisa"
+                            startIcon={<Search size={18} />}
+                            value={search}
+                            onChange={e => onSearchChange(e.target.value)}
+                            placeholder=""
+                            className="bg-background"
+                        />
+                    </div>
 
-                <div className="flex flex-wrap gap-2 items-end">
-                    {renderFilters(viewMode)}
-                </div>
+                    {primaryFilters(viewMode)}
 
-                <div className="flex items-center gap-2 xl:border-l border-border xl:pl-4 xl:ml-auto">
+                    <Button
+                        variant="outline"
+                        onClick={() => setAdvancedOpen(open => !open)}
+                        aria-expanded={advancedOpen}
+                        aria-controls={advancedPanelId}
+                        className={cn('h-11 gap-2', advancedOpen && 'bg-accent text-accent-foreground')}
+                        title="Filtros avançados"
+                    >
+                        <SlidersHorizontal size={16} />
+                        <span className="hidden sm:inline">Filtros avançados</span>
+                        {advancedActiveCount > 0 && (
+                            <span
+                                className="grid place-items-center min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums animate-in zoom-in-50 duration-200"
+                                aria-label={`${advancedActiveCount} filtro${advancedActiveCount > 1 ? 's' : ''} avançado${advancedActiveCount > 1 ? 's' : ''} ativo${advancedActiveCount > 1 ? 's' : ''}`}
+                            >
+                                {advancedActiveCount}
+                            </span>
+                        )}
+                        <ChevronDown size={16} className={cn('transition-transform duration-200', advancedOpen && 'rotate-180')} />
+                    </Button>
+
                     <Button
                         variant="ghost"
                         onClick={onClearFilters}
@@ -192,7 +223,8 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         Limpar filtros
                     </Button>
 
-                    <div className="flex bg-background rounded-lg p-1 border border-border h-11 items-center">
+                    {/* Seletor de visualização: sempre na barra, encostado à direita */}
+                    <div className="ml-auto flex bg-background rounded-lg p-1 border border-border h-11 items-center">
                         <button
                             onClick={() => setViewMode('table')}
                             aria-pressed={viewMode === 'table'}
@@ -211,6 +243,23 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         >
                             <CalendarIcon size={18} />
                         </button>
+                    </div>
+                </div>
+
+                {/* Painel de filtros avançados: fechado, sai da ordem de tabulação (inert) */}
+                <div
+                    id={advancedPanelId}
+                    inert={!advancedOpen}
+                    className={cn(
+                        'grid transition-[grid-template-rows,opacity] duration-300 ease-in-out',
+                        advancedOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                    )}
+                >
+                    <div className="overflow-hidden">
+                        {/* pt-5: espaço para o rótulo flutuante dos campos, que sobe acima da borda */}
+                        <div className="mt-4 pt-5 border-t border-border flex flex-wrap items-end gap-2">
+                            {advancedFilters(viewMode)}
+                        </div>
                     </div>
                 </div>
             </div>

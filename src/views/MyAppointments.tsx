@@ -4,7 +4,7 @@ import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import type { Appointment } from '../types';
 import { FloatingSelect } from '../components/FloatingSelect';
-import { DateRangePicker } from '../components/DateRangePicker';
+import { FloatingDateInput } from '../components/FloatingDateInput';
 import { AppointmentsListView } from '../components/appointments/AppointmentsListView';
 import { STATUS_FILTER_OPTIONS, FILTER_WIDTH } from '../constants/appointmentStatus';
 import { brazilTodayISO } from '../lib/dates';
@@ -117,6 +117,9 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
         search !== '' || statusFilter !== 'all' || eventFilter !== 'all' || typeFilter !== 'all' ||
         dateRange.start !== brazilTodayISO() || dateRange.end !== '';
 
+    const advancedActiveCount =
+        [eventFilter !== 'all', typeFilter !== 'all', dateRange.end !== ''].filter(Boolean).length;
+
     const clearFilters = () => {
         setSearch('');
         setStatusFilter('all');
@@ -146,20 +149,32 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
             onOpen={onEdit}
             onCreate={() => navigate('/create-appointment')}
             emptyDescription="Os agendamentos em que você é atendente ou responsável aparecem aqui."
-            renderFilters={viewMode => (
+            primaryFilters={viewMode => viewMode === 'table' && (
                 <>
-                    {viewMode === 'table' && (
-                        <FloatingSelect
-                            label="Status"
-                            className={FILTER_WIDTH}
-                            value={statusFilter}
-                            onChange={e => {
-                                setStatusFilter(e.target.value);
-                                setCurrentPage(1);
-                            }}
-                            options={STATUS_FILTER_OPTIONS}
-                        />
-                    )}
+                    <FloatingSelect
+                        label="Status"
+                        className={FILTER_WIDTH}
+                        value={statusFilter}
+                        onChange={e => {
+                            setStatusFilter(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                        options={STATUS_FILTER_OPTIONS}
+                    />
+                    <FloatingDateInput
+                        label="Data Inicial"
+                        className={FILTER_WIDTH}
+                        value={dateRange.start}
+                        onChange={e => {
+                            setDateRange({ ...dateRange, start: e.target.value });
+                            setCurrentPage(1);
+                        }}
+                    />
+                </>
+            )}
+            advancedActiveCount={advancedActiveCount}
+            advancedFilters={viewMode => (
+                <>
                     <FloatingSelect
                         label="Evento"
                         className={FILTER_WIDTH}
@@ -181,15 +196,12 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                         options={typeOptions}
                     />
                     {viewMode === 'table' && (
-                        <DateRangePicker
-                            startDate={dateRange.start}
-                            endDate={dateRange.end}
-                            onStartDateChange={(date) => {
-                                setDateRange({ ...dateRange, start: date });
-                                setCurrentPage(1);
-                            }}
-                            onEndDateChange={(date) => {
-                                setDateRange({ ...dateRange, end: date });
+                        <FloatingDateInput
+                            label="Data Final"
+                            className={FILTER_WIDTH}
+                            value={dateRange.end}
+                            onChange={e => {
+                                setDateRange({ ...dateRange, end: e.target.value });
                                 setCurrentPage(1);
                             }}
                         />

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
 import type { Appointment } from '../types';
 import { FloatingSelect } from '../components/FloatingSelect';
-import { DateRangePicker } from '../components/DateRangePicker';
+import { FloatingDateInput } from '../components/FloatingDateInput';
 import { AppointmentsListView, type ExtraColumn } from '../components/appointments/AppointmentsListView';
 import { STATUS_FILTER_OPTIONS, FILTER_WIDTH } from '../constants/appointmentStatus';
 import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
@@ -208,6 +208,11 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         ownerFilter !== 'all' || eventFilter !== 'all' || sectorFilter !== 'all' ||
         dateRange.start !== getBrazilTodayISO() || dateRange.end !== '';
 
+    const advancedActiveCount = [
+        creatorFilter !== 'all', ownerFilter !== 'all', sectorFilter !== 'all',
+        attendantFilter !== 'all', eventFilter !== 'all', dateRange.end !== '',
+    ].filter(Boolean).length;
+
     const clearFilters = () => {
         setSearch('');
         setStatusFilter('all');
@@ -258,17 +263,26 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             onOpen={onEdit}
             onCreate={() => navigate('/create-appointment')}
             emptyDescription="Quando houver agendamentos no seu setor, eles aparecem aqui."
-            renderFilters={viewMode => (
+            primaryFilters={viewMode => viewMode === 'table' && (
                 <>
-                    {viewMode === 'table' && (
-                        <FloatingSelect
-                            label="Status"
-                            className={FILTER_WIDTH}
-                            value={statusFilter}
-                            onChange={e => setStatusFilter(e.target.value)}
-                            options={STATUS_FILTER_OPTIONS}
-                        />
-                    )}
+                    <FloatingSelect
+                        label="Status"
+                        className={FILTER_WIDTH}
+                        value={statusFilter}
+                        onChange={e => setStatusFilter(e.target.value)}
+                        options={STATUS_FILTER_OPTIONS}
+                    />
+                    <FloatingDateInput
+                        label="Data Inicial"
+                        className={FILTER_WIDTH}
+                        value={dateRange.start}
+                        onChange={e => setDateRange({ ...dateRange, start: e.target.value })}
+                    />
+                </>
+            )}
+            advancedActiveCount={advancedActiveCount}
+            advancedFilters={viewMode => (
+                <>
                     <FloatingSelect
                         label="Criador"
                         className={FILTER_WIDTH}
@@ -313,11 +327,11 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         ]}
                     />
                     {viewMode === 'table' && (
-                        <DateRangePicker
-                            startDate={dateRange.start}
-                            endDate={dateRange.end}
-                            onStartDateChange={(date) => setDateRange({ ...dateRange, start: date })}
-                            onEndDateChange={(date) => setDateRange({ ...dateRange, end: date })}
+                        <FloatingDateInput
+                            label="Data Final"
+                            className={FILTER_WIDTH}
+                            value={dateRange.end}
+                            onChange={e => setDateRange({ ...dateRange, end: e.target.value })}
                         />
                     )}
                 </>
