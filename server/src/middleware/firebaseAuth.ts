@@ -116,7 +116,7 @@ export const verifyFirebaseToken = async (
         // Fetch REAL user data from database - this CANNOT be faked
         let { data: userData, error } = await supabase
             .from('user')
-            .select('id, name, role, sector, status')
+            .select('id, name, role, sector')
             .eq('email', email)
             .single();
 
@@ -147,7 +147,7 @@ export const verifyFirebaseToken = async (
                     sector: 'Suporte',       // Default sector
                     status: true         // Make sure they are active
                 })
-                .select('id, name, role, sector, status')
+                .select('id, name, role, sector')
                 .single();
 
             if (insertError || !newUser) {
@@ -168,27 +168,6 @@ export const verifyFirebaseToken = async (
             }
 
             userData = newUser;
-        }
-
-        // Usuário desativado (status = false) não acessa nada. A checagem roda em
-        // toda requisição, então a desativação vale na hora, inclusive para quem
-        // já está logado. Só false explícito bloqueia: linhas antigas com status
-        // vazio continuam ativas.
-        if (userData.status === false) {
-            logActivity({
-                timestamp: new Date().toISOString(),
-                userId: userData.id,
-                userName: userData.name,
-                userRole: userData.role,
-                userSector: userData.sector,
-                action: req.method,
-                resource: req.originalUrl,
-                ipAddress,
-                userAgent,
-                success: false,
-                errorMessage: 'Inactive user'
-            });
-            return res.status(403).json({ error: 'Usuário inativo', code: 'USER_INACTIVE' });
         }
 
         // Attach verified user to request

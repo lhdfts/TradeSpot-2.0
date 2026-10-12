@@ -4,8 +4,6 @@ import { auth } from '../lib/firebase';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import { normalizeSector } from '../constants/sectors';
 
-const INACTIVE_USER_MESSAGE = 'Seu acesso ao sistema está desativado. Entre em contato com sua liderança.';
-
 interface AuthContextType {
     user: User | null;
     login: (user: User) => void;
@@ -105,9 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Se o erro for 401 ou 403, e o usuário já está autenticado no Firebase,
                 // significa que ele não está no banco de dados
                 if (response.status === 401 || response.status === 403) {
-                    setAuthError(errorText.includes('USER_INACTIVE')
-                        ? INACTIVE_USER_MESSAGE
-                        : "Credenciais validadas, mas o usuário não foi encontrado, abra um chamado ou entre em contato com sua liderança solicitando a liberação do acesso");
+                    setAuthError("Credenciais validadas, mas o usuário não foi encontrado, abra um chamado ou entre em contato com sua liderança solicitando a liberação do acesso");
                     await logout();
                 }
                 
@@ -167,14 +163,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 body: JSON.stringify({ _integrity: roleIntegrityHash })
             });
 
-            if (!response.ok) {
-                // Desativado durante a sessão: encerra já, com o aviso certo.
-                if (response.status === 403 && (await response.text()).includes('USER_INACTIVE')) {
-                    setAuthError(INACTIVE_USER_MESSAGE);
-                    await logout();
-                }
-                return false;
-            }
+            if (!response.ok) return false;
 
             const { valid } = await response.json();
             if (!valid) {
