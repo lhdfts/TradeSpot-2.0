@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 interface FloatingDateInputProps {
     id?: string;
@@ -338,27 +339,20 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
 
     const hasValue = value && value.length > 0;
 
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 768); // md breakpoint
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
+    // Abaixo de md usa o seletor de data nativo do aparelho (ver o return do celular)
+    const isMobile = useMediaQuery('(max-width: 767px)');
 
     const calendarContent = (
         <div
             className={cn(
-                "bg-surface border border-border rounded-lg shadow-lg p-4",
-                isMobile ? "w-full mt-2 relative z-0" : "absolute z-[9999] w-80 datepicker-portal"
+                "bg-surface border border-border rounded-lg shadow-lg p-4 absolute z-[9999] w-80 datepicker-portal"
             )}
-            style={!isMobile ? {
+            style={{
                 top: coords.top,
                 left: coords.left,
                 // Aberto para cima: a borda de baixo encosta no campo
                 transform: coords.above ? 'translateY(-100%)' : undefined
-            } : undefined}
+            }}
             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
         >
             {/* Header com navegação */}
@@ -450,6 +444,52 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
         </div>
     );
 
+    // Celular: <input type="date"> abre o calendário nativo do aparelho em vez do
+    // customizado, que embutido no campo espremia filtros e formulários.
+    if (isMobile) {
+        const toISO = (d?: Date) =>
+            d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : undefined;
+        return (
+            <div className={cn("relative", className)}>
+                <input
+                    type="date"
+                    id={id}
+                    name={name}
+                    value={value}
+                    min={toISO(minDate)}
+                    max={toISO(maxDate)}
+                    disabled={disabled}
+                    onChange={(e) => onChange?.({ target: { id, name, value: e.target.value } })}
+                    aria-invalid={error ? true : undefined}
+                    aria-label={label}
+                    className={cn(
+                        "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-base bg-surface text-foreground appearance-none text-left",
+                        // iOS centraliza a data e encolhe o campo vazio
+                        "[&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:min-h-[1.5em]",
+                        // Indicador nativo (Android) invisível sobre o campo todo: tocar em qualquer ponto abre o calendário
+                        "relative [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0",
+                        error
+                            ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"
+                            : "border-border focus:border-[#070707] dark:focus:border-gray-400 focus:ring-1 focus:ring-[#070707] dark:focus:ring-gray-400",
+                        disabled && "opacity-50 cursor-not-allowed"
+                    )}
+                />
+                {/* Rótulo sempre no alto: o campo nativo mostra o próprio formato (dd/mm/aaaa) quando vazio */}
+                <label
+                    htmlFor={id}
+                    className={cn(
+                        "absolute left-2 -top-2 bg-surface px-1 text-xs pointer-events-none z-10",
+                        error ? "text-destructive" : "text-muted-foreground"
+                    )}
+                >
+                    {label}
+                </label>
+                <CalendarIcon size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                {error && <p className="mt-1 text-xs text-destructive">{error.message}</p>}
+            </div>
+        );
+    }
+
     return (
         <div className={cn("relative", className)} ref={containerRef}>
             <input
@@ -459,12 +499,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                 value={displayValue}
                 onChange={handleChange}
                 onClick={openDatePicker} // Ensure click opens it
-                onFocus={() => {
-                    // Mobile: Do nothing on focus to verify if readOnly handles it better or if we need to blur
-                    if (!isMobile) openDatePicker();
-                }}
-                inputMode={isMobile ? "none" : "text"} // Prevent virtual keyboard on mobile
-                readOnly={isMobile} // Specific for mobile to prevent keyboard
+                onFocus={openDatePicker}
                 onBlur={handleBlur}
                 placeholder=" "
                 disabled={disabled}
@@ -506,17 +541,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
             </button>
 
             {/* Datepicker customizado */}
-            {isOpen && !disabled && (
-                isMobile ? (
-                    // Inline for Mobile
-                    <div className="w-full">
-                        {calendarContent}
-                    </div>
-                ) : (
-                    // Portal for Desktop
-                    createPortal(calendarContent, document.body)
-                )
-            )}
+            {isOpen && !disabled && createPortal(calendarContent, document.body)}
 
             {/* Mensagem de erro */}
             {
