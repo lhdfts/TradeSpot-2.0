@@ -167,3 +167,14 @@
     .animate-shimmer { animation: none; }
   }
 }
+
+@layer base {
+  /* Barra de rolagem fina, na cor da borda do tema. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+}

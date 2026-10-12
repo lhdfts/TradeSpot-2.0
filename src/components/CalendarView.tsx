@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { staggerStyle } from '../lib/motion';
-import { ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+import { CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Clock } from 'lucide-react';
 import type { Appointment } from '../types';
+import { cn } from '../lib/utils';
+import { StatusBadge } from './appointments/StatusBadge';
+
+// "YYYY-MM-DD" no fuso local (toISOString usaria UTC e pularia de dia à noite).
+const toLocalISO = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 interface CalendarViewProps {
     appointments: Appointment[];
@@ -51,35 +57,35 @@ const SimpleCalendar: React.FC<{
             today.getFullYear() === currentMonth.getFullYear();
     };
 
-    const hasAppointments = (day: number) => {
-        if (!isSearching) return false;
-        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        const dateStr = `${y}-${m}-${d}`;
-        return appointments.some(a => a.date === dateStr);
+    const countFor = (day: number) => {
+        const dateStr = toLocalISO(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day));
+        return appointments.filter(a => a.date === dateStr).length;
     };
+
+    // Destaque forte só durante a busca (como antes); fora dela, um ponto discreto.
+    const hasAppointments = (day: number) => isSearching && countFor(day) > 0;
 
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
                 <button
                     onClick={handlePrevMonth}
-                    className="p-1 hover:bg-black/30 rounded transition-colors"
+                    className="p-1.5 hover:bg-foreground/10 rounded-md transition-all active:scale-90"
+                    aria-label="Mês anterior"
                 >
                     <ChevronLeft size={20} className="text-foreground" />
                 </button>
-                <h3 className="text-sm font-semibold text-foreground capitalize">{monthName}</h3>
+                <h3 key={monthName} className="text-sm font-semibold text-foreground capitalize animate-in fade-in duration-300">{monthName}</h3>
                 <button
                     onClick={handleNextMonth}
-                    className="p-1 hover:bg-black/30 rounded transition-colors"
+                    className="p-1.5 hover:bg-foreground/10 rounded-md transition-all active:scale-90"
+                    aria-label="Próximo mês"
                 >
                     <ChevronRight size={20} className="text-foreground" />
                 </button>
             </div>
 
-            <div className="grid grid-cols-7 gap-1">
+            <div key={monthName} className="grid grid-cols-7 gap-1 animate-in fade-in slide-in-from-bottom-1 duration-300">
                 {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].map(day => (
                     <div key={day} className="text-center text-xs font-semibold text-foreground/70 py-2">
                         {day}
@@ -90,22 +96,39 @@ const SimpleCalendar: React.FC<{
                     <div key={`empty-${i}`} className="aspect-square" />
                 ))}
 
-                {days.map(day => (
-                    <button
-                        key={day}
-                        onClick={() => handleSelectDay(day)}
-                        className={`aspect-square rounded text-sm transition-colors flex items-center justify-center ${isSelected(day)
-                            ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                            : isToday(day)
-                                ? 'bg-[#172554] text-white font-semibold'
-                                : hasAppointments(day)
-                                    ? 'bg-[#172554] text-white font-semibold'
-                                    : 'text-foreground hover:bg-accent'
-                            }`}
-                    >
-                        {day}
-                    </button>
-                ))}
+                {days.map(day => {
+                    const count = countFor(day);
+                    const selected = isSelected(day);
+                    return (
+                        <button
+                            key={day}
+                            onClick={() => handleSelectDay(day)}
+                            aria-pressed={!!selected}
+                            aria-label={`${day}${count ? `, ${count} agendamento${count > 1 ? 's' : ''}` : ''}`}
+                            className={cn(
+                                'relative aspect-square rounded-md text-sm transition-all duration-150 flex items-center justify-center active:scale-95',
+                                selected
+                                    ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                                    : isToday(day)
+                                        ? 'bg-[#172554] text-white font-semibold'
+                                        : hasAppointments(day)
+                                            ? 'bg-[#172554] text-white font-semibold'
+                                            : 'text-foreground hover:bg-accent hover:ring-1 hover:ring-border'
+                            )}
+                        >
+                            {day}
+                            {count > 0 && (
+                                <span
+                                    className={cn(
+                                        'absolute bottom-1.5 left-1/2 -translate-x-1/2 h-1 rounded-full transition-all',
+                                        count > 3 ? 'w-3' : 'w-1',
+                                        selected || isToday(day) || hasAppointments(day) ? 'bg-white' : 'bg-blue-500'
+                                    )}
+                                />
+                            )}
+                        </button>
+                    );
+                })}
             </div>
         </div >
     );
@@ -121,23 +144,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEdit
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
     const getAppointmentsForDate = (date: Date) => {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = toLocalISO(date);
         return appointments.filter(appt => appt.date === dateStr);
     };
 
     const appointmentsForSelectedDate = selectedDate ? getAppointmentsForDate(selectedDate) : [];
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'Realizado': return 'bg-[#00E676]/10 text-[#00E676] border-[#00E676]/20';
-            case 'Pendente': return 'bg-[#B2B2B2]/10 text-[#B2B2B2] border-[#B2B2B2]/20';
-            case 'Cancelado': return 'bg-[#FF1744]/10 text-[#FF1744] border-[#FF1744]/20';
-            case 'Reagendado': return 'bg-[#2979FF]/10 text-[#2979FF] border-[#2979FF]/20';
-            case 'Esquecimento': return 'bg-[#D500F9]/10 text-[#D500F9] border-[#D500F9]/20';
-            case 'No-show': return 'bg-[#FF9100]/10 text-[#FF9100] border-[#FF9100]/20';
-            default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
-        }
-    };
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -149,44 +160,52 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEdit
 
             {/* Appointments for selected date */}
             <div style={staggerStyle(1, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border p-6 shadow-sm flex flex-col">
-                <h3 className="text-lg font-bold text-foreground mb-4">
-                    {selectedDate ? selectedDate.toLocaleDateString('pt-BR') : 'Selecione uma data'}
-                </h3>
+                <div className="flex items-baseline justify-between gap-2 mb-4">
+                    <h3 className="text-lg font-bold text-foreground capitalize">
+                        {selectedDate
+                            ? selectedDate.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })
+                            : 'Selecione uma data'}
+                    </h3>
+                    {appointmentsForSelectedDate.length > 0 && (
+                        <span className="text-xs font-semibold text-secondary tabular-nums">
+                            {appointmentsForSelectedDate.length} agendamento{appointmentsForSelectedDate.length > 1 ? 's' : ''}
+                        </span>
+                    )}
+                </div>
 
                 <div className="space-y-2 flex-1 overflow-y-auto">
                     {appointmentsForSelectedDate.length > 0 ? (
-                        appointmentsForSelectedDate.map(appt => (
-                            <div
+                        [...appointmentsForSelectedDate].sort((x, y) => x.time.localeCompare(y.time)).map((appt, i) => (
+                            <button
+                                type="button"
                                 key={appt.id}
-                                className="bg-white dark:bg-gray-800 rounded-md p-3 border border-border hover:border-primary/50 transition-colors flex justify-between items-stretch gap-3 shadow-sm"
+                                onClick={() => onEditAppointment?.(appt)}
+                                style={staggerStyle(i, 40)}
+                                className="group w-full text-left animate-fade-up bg-background rounded-lg p-3 border border-border hover:border-primary/60 hover:-translate-y-0.5 transition-all flex items-center gap-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                aria-label={`Detalhes de ${appt.lead}`}
                             >
-                                <div className="flex-1 min-w-0 text-xs text-muted-foreground space-y-1">
-                                    <p className="font-bold text-foreground truncate">{appt.lead}</p>
-                                    <p className="truncate">{appt.email}</p>
-                                    <p>{appt.phone}</p>
-                                    <p>{appt.type}</p>
-                                    <p>{appt.time}</p>
+                                <div className="flex flex-col items-center justify-center shrink-0 w-12 text-foreground">
+                                    <Clock size={14} className="text-secondary mb-0.5" />
+                                    <span className="text-sm font-bold tabular-nums">{appt.time}</span>
                                 </div>
-                                <div className="flex flex-col justify-between items-end flex-shrink-0">
-                                    <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${getStatusColor(appt.status)}`}>
-                                        {appt.status}
-                                    </span>
-                                    <button
-                                        onClick={() => onEditAppointment?.(appt)}
-                                        className="p-1 text-foreground hover:bg-accent rounded transition-colors"
-                                        aria-label="Detalhes do agendamento"
-                                    >
-                                        <Menu size={16} />
-                                    </button>
+                                <div className="flex-1 min-w-0 text-xs text-muted-foreground space-y-0.5 border-l border-border pl-3">
+                                    <p className="font-bold text-sm text-foreground truncate">{appt.lead}</p>
+                                    <p className="truncate">{appt.type}</p>
+                                    <p className="truncate tabular-nums">{appt.phone}</p>
                                 </div>
-                            </div>
+                                <div className="flex flex-col items-end justify-between self-stretch shrink-0">
+                                    <StatusBadge status={appt.status} />
+                                    <Chevron size={16} className="text-secondary transition-transform group-hover:translate-x-0.5" />
+                                </div>
+                            </button>
                         ))
                     ) : (
-                        <div className="flex items-center justify-center h-32 text-center">
-                            <div>
-                                <p className="text-foreground/50">Nenhum agendamento</p>
-                                <p className="text-xs text-foreground/30 mt-1">para esta data</p>
+                        <div className="flex flex-col items-center justify-center h-40 text-center animate-in fade-in duration-300">
+                            <div className="size-10 grid place-items-center rounded-xl ring-1 ring-border mb-3">
+                                <CalendarX size={18} className="text-muted-foreground" />
                             </div>
+                            <p className="text-sm font-medium text-foreground/70">Nenhum agendamento</p>
+                            <p className="text-xs text-foreground/40 mt-0.5">para esta data</p>
                         </div>
                     )}
                 </div>

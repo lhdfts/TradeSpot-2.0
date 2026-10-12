@@ -114,3 +114,24 @@ export const Pagination: React.FC<PaginationProps> = ({
         </div>
     );
 };
+
+interface PaginationBarProps extends PaginationProps {
+    totalItems: number;
+    pageSize: number;
+}
+
+/** Paginação com o resumo "Mostrando X–Y de Z" ao lado. */
+export const PaginationBar: React.FC<PaginationBarProps> = ({ totalItems, pageSize, className, ...props }) => {
+    if (totalItems === 0) return null;
+    const first = (props.currentPage - 1) * pageSize + 1;
+    const last = Math.min(props.currentPage * pageSize, totalItems);
+    return (
+        <div className={cn("flex flex-col sm:flex-row items-center justify-between gap-3", className)}>
+            <span className="text-sm text-secondary tabular-nums">
+                Mostrando <span className="font-semibold text-foreground">{first}–{last}</span> de{' '}
+                <span className="font-semibold text-foreground">{totalItems}</span>
+            </span>
+            <Pagination {...props} />
+        </div>
+    );
+};

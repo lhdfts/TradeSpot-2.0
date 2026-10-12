@@ -5,6 +5,9 @@ import { api } from '../services/api';
 interface AppointmentContextType {
     appointments: Appointment[];
     loading: boolean;
+    // A primeira busca já terminou (com sucesso ou erro). Antes disso a lista
+    // vazia não significa "sem agendamentos".
+    loaded: boolean;
     // A última busca com período bateu no teto do servidor (lista incompleta).
     truncated: boolean;
     refresh: (params?: { startDate?: string; endDate?: string }) => Promise<void>;
@@ -19,13 +22,21 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(false);
     const [truncated, setTruncated] = useState(false);
+    const [loaded, setLoaded] = useState(false);
 
     // Só a busca mais recente pode gravar o resultado. Sem isso, uma busca
     // antiga e mais lenta (ex.: a carga inicial de 1.000 linhas) terminava
     // depois da busca pelo período e sobrescrevia a lista com dados incompletos.
     const latestRequest = useRef(0);
 
+    // Período da última busca. `refresh()` sem parâmetros (botão de atualizar,
+    // salvar uma edição) repete esse período em vez de trocar a lista da tela
+    // pela carga padrão.
+    const lastParams = useRef<{ startDate?: string; endDate?: string } | undefined>(undefined);
+
     const refresh = async (params?: { startDate?: string; endDate?: string }) => {
+        if (params) lastParams.current = params;
+        else params = lastParams.current;
         const requestId = ++latestRequest.current;
         setLoading(true);
         try {
@@ -36,7 +47,10 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
         } catch (error) {
             console.error('Failed to fetch appointments', error);
         } finally {
-            if (requestId === latestRequest.current) setLoading(false);
+            if (requestId === latestRequest.current) {
+                setLoading(false);
+                setLoaded(true);
+            }
         }
     };
 
@@ -58,12 +72,14 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
             : a));
     };
 
+    // Os efeitos das páginas rodam antes deste: se a página já buscou o período
+    // dela, a carga padrão seria uma segunda busca à toa.
     useEffect(() => {
-        refresh();
+        if (latestRequest.current === 0) refresh();
     }, []);
 
     return (
-        <AppointmentContext.Provider value={{ appointments, loading, truncated, refresh, createAppointment, updateAppointment, changeOwner }}>
+        <AppointmentContext.Provider value={{ appointments, loading, loaded, truncated, refresh, createAppointment, updateAppointment, changeOwner }}>
             {children}
         </AppointmentContext.Provider>
     );

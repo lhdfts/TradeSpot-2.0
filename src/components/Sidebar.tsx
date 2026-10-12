@@ -69,6 +69,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
     const effectiveCollapsed = isCollapsed && !isHovered;
 
     return (
+        // O espaço no layout segue só o estado fixado (isCollapsed). A expansão
+        // pelo hover fica por cima do conteúdo, sem empurrar a página.
+        <div className={cn("relative shrink-0 transition-[width] duration-300 ease-in-out", isCollapsed ? "w-20" : "w-64")}>
         <aside
             onMouseEnter={() => {
                 if (isCollapsed) {
@@ -81,7 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 }
             }}
             className={cn(
-                "bg-black border-r border-white/10 flex flex-col transition-all duration-300 ease-in-out relative text-white",
+                "absolute inset-y-0 left-0 z-40 bg-black border-r border-white/10 flex flex-col transition-all duration-300 ease-in-out text-white overflow-hidden",
                 effectiveCollapsed ? "w-20 p-4" : "w-64 p-6"
             )}
         >
@@ -326,5 +329,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 </div>
             </div>
         </aside>
+        </div>
     );
 };

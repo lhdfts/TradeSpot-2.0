@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AppointmentProvider } from './context/AppointmentContext';
 import { Sidebar } from './components/Sidebar';
@@ -106,6 +106,13 @@ const InternalLayout: React.FC = () => {
 
   const currentView = location.pathname;
 
+  // A rolagem é deste container, não da janela: sem isso a página nova abre
+  // na altura em que a anterior estava.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [currentView]);
+
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       <Sidebar
@@ -113,7 +120,8 @@ const InternalLayout: React.FC = () => {
       />
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background transition-colors duration-300">
-        <div className="flex-1 overflow-y-auto p-8">
+        {/* scrollbar-gutter: o espaço da barra fica reservado e o conteúdo não pula para o lado quando ela aparece */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 [scrollbar-gutter:stable]">
           <div className="max-w-7xl mx-auto space-y-8">
             <header className="flex justify-between items-center">
               <h1 key={currentView} className="text-3xl font-bold text-foreground animate-slide-in-left">
