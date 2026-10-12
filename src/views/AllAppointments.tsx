@@ -13,6 +13,7 @@ import { FloatingSelect } from '../components/FloatingSelect';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { CalendarView } from '../components/CalendarView';
 import { toastManager } from '../components/ui/toast';
+import { staggerStyle } from '../lib/motion';
 import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
 
 interface AllAppointmentsProps {
@@ -420,8 +421,8 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {paginated.map(appt => (
-                                    <tr key={appt.id} className="hover:bg-background/50 transition-colors group">
+                                {paginated.map((appt, i) => (
+                                    <tr key={appt.id} style={staggerStyle(i, 30)} className="animate-fade-up hover:bg-background/50 transition-colors group">
 
                                         <td className="px-6 py-4">
                                             <div className="text-foreground font-medium">{new Date(appt.date + 'T12:00:00').toLocaleDateString('pt-BR')}</div>

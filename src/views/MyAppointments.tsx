@@ -11,6 +11,7 @@ import { DateRangePicker } from '../components/DateRangePicker';
 import { Pagination } from '../components/ui/pagination';
 import { toastManager } from '../components/ui/toast';
 import { useFormData } from '../hooks/useFormData';
+import { staggerStyle } from '../lib/motion';
 
 
 interface MyAppointmentsProps {
@@ -242,8 +243,8 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {paginated.map(appt => (
-                            <tr key={appt.id} className="hover:bg-background/50 transition-colors group">
+                        {paginated.map((appt, i) => (
+                            <tr key={appt.id} style={staggerStyle(i, 30)} className="animate-fade-up hover:bg-background/50 transition-colors group">
                                 <td className="px-6 py-4">
                                     <div className="text-foreground font-medium">{new Date(appt.date + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
                                     <div className="text-sm text-secondary">{appt.time}</div>
@@ -289,8 +290,8 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
 
             {/* Mobile Cards */}
             <div className="md:hidden space-y-4">
-                {paginated.map(appt => (
-                    <div key={appt.id} className="bg-surface p-4 rounded-lg border border-border shadow-sm space-y-3">
+                {paginated.map((appt, i) => (
+                    <div key={appt.id} style={staggerStyle(i, 40)} className="animate-fade-up bg-surface p-4 rounded-lg border border-border shadow-sm space-y-3">
                         <div className="flex justify-between items-start">
                             <div>
                                 <h3 className="text-foreground font-semibold">{appt.lead}</h3>

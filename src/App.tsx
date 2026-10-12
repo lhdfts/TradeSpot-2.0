@@ -116,7 +116,7 @@ const InternalLayout: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-8">
           <div className="max-w-7xl mx-auto space-y-8">
             <header className="flex justify-between items-center">
-              <h1 className="text-3xl font-bold text-foreground">
+              <h1 key={currentView} className="text-3xl font-bold text-foreground animate-slide-in-left">
                 {(currentView === '/' || currentView === '/my-appointments') && 'Meus Agendamentos'}
                 {currentView === '/all-appointments' && 'Todos os Agendamentos'}
                 {currentView === '/create-appointment' && 'Criar Agendamento'}
@@ -144,6 +144,8 @@ const InternalLayout: React.FC = () => {
               </div>
             </header>
 
+            {/* key por rota: a página nova reentra com animação a cada navegação */}
+            <div key={currentView} className="animate-fade-up">
             <Routes>
               {/* Login Route for consistency, though handled above */}
               <Route path="/login" element={<Navigate to="/" replace />} />
@@ -193,6 +195,7 @@ const InternalLayout: React.FC = () => {
               {/* Catch all internal routes */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </div>
           </div>
         </div>
       </main>

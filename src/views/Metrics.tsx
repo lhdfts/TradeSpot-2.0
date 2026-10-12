@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
 import { Filter } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { FadeIn, CountUp } from '../components/ui/animate';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
 import { Input as BaseInput } from '../components/ui/input';
@@ -406,11 +407,11 @@ export const Metrics: React.FC = () => {
                             Agendamentos em que você é o atendente ou o responsável. Taxa de realização: {total ? Math.round(done / total * 100) : 0}%
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
-                            {tiles.map(([label, value]) => (
-                                <div key={label} className="rounded-lg bg-background p-3">
-                                    <div className="text-2xl font-bold text-foreground tabular-nums">{value}</div>
+                            {tiles.map(([label, value], i) => (
+                                <FadeIn key={label} index={i} className="rounded-lg bg-background p-3 transition-transform duration-200 hover:-translate-y-0.5">
+                                    <CountUp value={value} className="block text-2xl font-bold text-foreground tabular-nums" />
                                     <div className="text-xs text-secondary">{label}</div>
-                                </div>
+                                </FadeIn>
                             ))}
                         </div>
                     </div>
