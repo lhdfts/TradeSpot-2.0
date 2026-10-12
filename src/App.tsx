@@ -31,6 +31,8 @@ import { ToastProvider } from './components/ui/toast';
 import { UpdateNotification } from './components/UpdateNotification';
 import { AberturaPosLogin } from './components/abertura/AberturaPosLogin';
 import { PreviaAbertura } from './views/public/PreviaAbertura';
+import { NotificationPrompt } from './components/NotificationPrompt';
+import { useMeetingReminders } from './hooks/useMeetingReminders';
 
 // Wrapper for Create Appointment to handle search params
 const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
@@ -72,7 +74,7 @@ const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void }> = ({ onSucce
 const InternalLayout: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAppt, setEditingAppt] = useState<Appointment | null>(null);
-  const { refresh, loading } = useAppointments();
+  const { refresh, loading, appointments } = useAppointments();
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -88,6 +90,15 @@ const InternalLayout: React.FC = () => {
     setEditingAppt(appt);
     setIsModalOpen(true);
   };
+
+  // Aviso 5 minutos antes dos agendamentos em que o usuário é o atendente.
+  // Clique na notificação (sem link de reunião): abre os detalhes se o
+  // agendamento estiver na lista carregada; senão, Meus Agendamentos (hoje em diante).
+  useMeetingReminders(user?.id, (appointmentId) => {
+    const appt = appointments.find(a => a.id === appointmentId);
+    if (appt) handleEdit(appt);
+    else navigate('/');
+  });
 
   const handleCreate = () => {
     setEditingAppt(null);
@@ -123,6 +134,7 @@ const InternalLayout: React.FC = () => {
         {/* scrollbar-gutter: o espaço da barra fica reservado e o conteúdo não pula para o lado quando ela aparece */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 [scrollbar-gutter:stable]">
           <div className="max-w-7xl mx-auto space-y-8">
+            <NotificationPrompt />
             <header className="flex justify-between items-center">
               <h1 key={currentView} className="text-3xl font-bold text-foreground animate-slide-in-left">
                 {(currentView === '/' || currentView === '/my-appointments') && 'Meus Agendamentos'}

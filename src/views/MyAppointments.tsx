@@ -9,6 +9,8 @@ import { AppointmentsListView } from '../components/appointments/AppointmentsLis
 import { STATUS_FILTER_OPTIONS, FILTER_WIDTH } from '../constants/appointmentStatus';
 import { brazilTodayISO } from '../lib/dates';
 import { useFormData } from '../hooks/useFormData';
+import { getDisplayStatus } from '../lib/appointmentStatus';
+import { useNow } from '../hooks/useNow';
 
 interface MyAppointmentsProps {
     onEdit: (appt: Appointment) => void;
@@ -21,6 +23,8 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    // Status "Iniciando"/"Ao Vivo" dependem da hora; atualiza nas viradas de 5 min.
+    const now = useNow();
     const [eventFilter, setEventFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: brazilTodayISO(), end: '' });
@@ -80,7 +84,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
             (cleanSearch ? a.phone.toString().replace(/\D/g, '').includes(cleanSearch) : false) ||
             a.phone.toString().includes(search) ||
             a.email?.toLowerCase().includes(search.toLowerCase());
-        const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
+        const matchesStatus = statusFilter === 'all' || getDisplayStatus(a, now) === statusFilter;
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
         const matchesType = typeFilter === 'all' || a.type === typeFilter;
 

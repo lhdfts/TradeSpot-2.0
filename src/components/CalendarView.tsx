@@ -4,6 +4,8 @@ import { CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Clock } 
 import type { Appointment } from '../types';
 import { cn } from '../lib/utils';
 import { StatusBadge } from './appointments/StatusBadge';
+import { getDisplayStatus } from '../lib/appointmentStatus';
+import { useNow } from '../hooks/useNow';
 
 // "YYYY-MM-DD" no fuso local (toISOString usaria UTC e pularia de dia à noite).
 const toLocalISO = (date: Date) =>
@@ -142,6 +144,7 @@ interface CalendarViewProps {
 
 export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEditAppointment, isSearching }) => {
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+    const now = useNow();
 
     const getAppointmentsForDate = (date: Date) => {
         const dateStr = toLocalISO(date);
@@ -194,7 +197,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEdit
                                     <p className="truncate tabular-nums">{appt.phone}</p>
                                 </div>
                                 <div className="flex flex-col items-end justify-between self-stretch shrink-0">
-                                    <StatusBadge status={appt.status} />
+                                    <StatusBadge status={getDisplayStatus(appt, now)} />
                                     <Chevron size={16} className="text-secondary transition-transform group-hover:translate-x-0.5" />
                                 </div>
                             </button>

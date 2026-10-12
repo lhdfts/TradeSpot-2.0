@@ -245,6 +245,56 @@ const loadDistributionContext = async (
 // Mirrors the eligibility/schedule/conflict rules used by the create flow (src/utils/distribution.ts),
 // but against fresh Supabase data instead of the client's locally cached appointment list.
 // Response is intentionally minimal (only "HH:MM" strings) — no attendant identities or appointment details.
+// GET /api/appointments/reminder-slot?date=YYYY-MM-DD&time=HH:mm
+// Lembrete do navegador (5 min antes): os agendamentos Pendentes em que o
+// usuário logado é o atendente, só no horário informado. Os horários são
+// sempre :00/:15/:30/:45, então cada aba faz 4 chamadas por hora, com poucas
+// linhas e poucos campos, em vez de baixar a lista do dia.
+//
+// Segurança: o atendente é sempre o usuário do token (req.user, buscado no banco
+// pelo e-mail verificado pelo Firebase); nenhum parâmetro permite consultar outra
+// pessoa. A resposta leva só o necessário para a notificação (sem telefone,
+// e-mail ou dados do perfil do aluno) e não pode ficar em cache.
+router.get('/reminder-slot', async (req: AuthenticatedRequest, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+        const userId = req.user?.id;
+        if (!userId) return res.status(401).json({ error: 'Não autenticado' });
+
+        const { date, time } = req.query;
+        // Só datas reais e só os horários em que existem agendamentos (:00/:15/:30/:45).
+        // (Invalid Date em toISOString lança erro, por isso o teste de NaN antes.)
+        const parsedDate = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00Z`) : null;
+        const isValidDate = !!parsedDate && !Number.isNaN(parsedDate.getTime()) &&
+            parsedDate.toISOString().slice(0, 10) === date;
+        const isValidSlot = typeof time === 'string' && /^([01]\d|2[0-3]):(00|15|30|45)$/.test(time);
+        if (!isValidDate || !isValidSlot) {
+            return res.status(400).json({ error: 'Parâmetros inválidos' });
+        }
+
+        const { data, error } = await supabase
+            .from('appointments')
+            .select('id, date, time, type, meet_link, clients ( name )')
+            .eq('attendant_id', userId)
+            .eq('status', 'Pendente')
+            .eq('date', date)
+            .eq('time', `${time}:00`);
+        if (error) throw new Error(error.message);
+
+        res.json((data || []).map((app: any) => ({
+            id: app.id,
+            lead: app.clients?.name || 'Unknown',
+            date: app.date,
+            time: app.time ? app.time.slice(0, 5) : time,
+            type: app.type,
+            meetLink: app.meet_link,
+        })));
+    } catch (err: any) {
+        console.error('Reminder Slot Error:', err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
 router.get('/available-times', async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { date, type, eventId, attendantId } = req.query as {

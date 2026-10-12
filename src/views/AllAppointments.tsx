@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
+import { getDisplayStatus } from '../lib/appointmentStatus';
+import { useNow } from '../hooks/useNow';
 import type { Appointment } from '../types';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
@@ -39,6 +41,8 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    // Status "Iniciando"/"Ao Vivo" dependem da hora; atualiza nas viradas de 5 min.
+    const now = useNow();
     // Initialize attendant filter from URL param if present
     const [attendantFilter, setAttendantFilter] = useState('all');
     const [creatorFilter, setCreatorFilter] = useState('all');
@@ -144,7 +148,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             a.id.includes(search) ||
             a.email?.toLowerCase().includes(search.toLowerCase());
 
-        const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
+        const matchesStatus = statusFilter === 'all' || getDisplayStatus(a, now) === statusFilter;
 
         const matchesAttendant = attendantFilter === 'all' || a.attendantId === attendantFilter;
 
@@ -232,7 +236,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     };
 
     const extraColumns: ExtraColumn[] = [
-        { header: 'Criado Por', width: 'w-[12%]', render: appt => getCreatorName(appt.createdBy) },
+        { header: 'Criado Por', width: 'w-[12%]', render: appt => getCreatorName(appt.createdBy), onlyWithAdvanced: true },
         { header: 'Responsável', width: 'w-[12%]', render: appt => appt.ownerName || getCreatorName(appt.ownerId ?? appt.createdBy) },
     ];
 

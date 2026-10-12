@@ -6,7 +6,8 @@
 //  - enquanto a primeira busca não termina, linhas-esqueleto da mesma altura
 //    das reais, em vez do aviso de lista vazia;
 //  - numa nova busca, a lista atual continua no lugar (esmaecida);
-//  - o "Limpar filtros" reserva o espaço mesmo quando está escondido.
+//  - o "Limpar filtros" só aparece com filtro ativo e quem cede o espaço é a
+//    pesquisa (flex-1), então nenhum outro campo muda de lugar.
 //
 // Filtros: a barra mostra só pesquisa + filtros principais; o resto fica no
 // painel "Filtros avançados", que abre animando altura e opacidade (padrão
@@ -18,6 +19,8 @@ import type { Appointment } from '../../types';
 import { cn } from '../../lib/utils';
 import { staggerStyle } from '../../lib/motion';
 import { openUnlessSelecting } from '../../lib/dates';
+import { getDisplayStatus } from '../../lib/appointmentStatus';
+import { useNow } from '../../hooks/useNow';
 import { Button } from '../ui/button';
 import { PaginationBar } from '../ui/pagination';
 import { EmptyState } from '../ui/empty-state';
@@ -33,6 +36,8 @@ export interface ExtraColumn {
     /** Classe de largura da coluna, ex.: "w-[12%]" (colunas de texto cortam com reticências). */
     width: string;
     render: (appt: Appointment) => React.ReactNode;
+    /** Só aparece com o painel "Filtros avançados" aberto. */
+    onlyWithAdvanced?: boolean;
 }
 
 interface AppointmentsListViewProps {
@@ -89,7 +94,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
     page,
     onPageChange,
     pageSize,
-    extraColumns = [],
+    extraColumns: allExtraColumns = [],
     actionLabel,
     onOpen,
     onCreate,
@@ -98,6 +103,8 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
     const [viewMode, setViewMode] = useState<ViewMode>('table');
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const advancedPanelId = useId();
+    const now = useNow();
+    const extraColumns = allExtraColumns.filter(col => !col.onlyWithAdvanced || advancedOpen);
 
     // Esqueleto só quando não há nada para mostrar ainda; com dados antigos na
     // tela, eles ficam (esmaecidos) até a busca nova chegar.
@@ -171,10 +178,14 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                 </div>
             )}
 
-            {/* Barra de controles */}
+            {/* Barra de controles. Breakpoints seguem a largura em CSS, que já inclui o zoom
+                da página (ex.: 1920px a 125% = 1536px):
+                - xl+: uma linha; a pesquisa ocupa todo o espaço livre.
+                - abaixo de xl: pesquisa sozinha na 1ª linha, filtros e botões na 2ª.
+                - celular: filtros principais dividem a linha; botões só com ícone. */}
             <div className="bg-surface p-4 rounded-lg border border-border shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex-1 min-w-[220px]">
+                    <div className="basis-full xl:basis-0 xl:flex-1 min-w-0 xl:min-w-[200px]">
                         <FloatingInput
                             label="Pesquisa"
                             startIcon={<Search size={18} />}
@@ -192,7 +203,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         onClick={() => setAdvancedOpen(open => !open)}
                         aria-expanded={advancedOpen}
                         aria-controls={advancedPanelId}
-                        className={cn('h-11 gap-2', advancedOpen && 'bg-accent text-accent-foreground')}
+                        className={cn('h-11 gap-2 shrink-0', advancedOpen && 'bg-accent text-accent-foreground')}
                         title="Filtros avançados"
                     >
                         <SlidersHorizontal size={16} />
@@ -208,23 +219,24 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         <ChevronDown size={16} className={cn('transition-transform duration-200', advancedOpen && 'rotate-180')} />
                     </Button>
 
-                    <Button
-                        variant="ghost"
-                        onClick={onClearFilters}
-                        className={cn(
-                            'h-11 text-secondary hover:text-foreground transition-opacity duration-200',
-                            !hasActiveFilters && 'invisible opacity-0'
+                    {/* Seletor de visualização: sempre na barra, encostado à direita.
+                        "Limpar filtros" vem antes dele só quando há filtro ativo. */}
+                    <div className="ml-auto flex items-center gap-2">
+                        {hasActiveFilters && (
+                            <Button
+                                variant="ghost"
+                                onClick={onClearFilters}
+                                className="h-11 px-3 text-secondary hover:text-foreground animate-in fade-in zoom-in-95 duration-200"
+                                title="Limpar filtros"
+                                aria-label="Limpar filtros"
+                            >
+                                {/* Em xl (1280–1535px) a linha única é apertada: só o ícone,
+                                    senão o seletor de visualização quebraria para a linha de baixo. */}
+                                <X size={16} className="sm:mr-1 xl:mr-0 2xl:mr-1" />
+                                <span className="hidden sm:inline xl:hidden 2xl:inline">Limpar filtros</span>
+                            </Button>
                         )}
-                        title="Voltar aos filtros padrão"
-                        tabIndex={hasActiveFilters ? 0 : -1}
-                        aria-hidden={!hasActiveFilters}
-                    >
-                        <X size={16} className="mr-1" />
-                        Limpar filtros
-                    </Button>
-
-                    {/* Seletor de visualização: sempre na barra, encostado à direita */}
-                    <div className="ml-auto flex bg-background rounded-lg p-1 border border-border h-11 items-center">
+                    <div className="flex bg-background rounded-lg p-1 border border-border h-11 items-center">
                         <button
                             onClick={() => setViewMode('table')}
                             aria-pressed={viewMode === 'table'}
@@ -243,6 +255,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         >
                             <CalendarIcon size={18} />
                         </button>
+                    </div>
                     </div>
                 </div>
 
@@ -279,7 +292,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         {loading && <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary/40 animate-shimmer" />}
                         <div className="overflow-x-auto">
                             {/* Colunas de conteúdo previsível em px; as de nomes em %; Aluno(a) fica com o resto. */}
-                            <table className={cn('w-full table-fixed text-left', extraColumns.length ? 'min-w-[1040px]' : 'min-w-[860px]')}>
+                            <table className={cn('w-full table-fixed text-left', ['min-w-[860px]', 'min-w-[960px]', 'min-w-[1040px]'][Math.min(extraColumns.length, 2)])}>
                                 <colgroup>
                                     <col className="w-[150px]" />
                                     <col />
@@ -328,7 +341,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                                 </td>
                                                 <td className="px-4 py-4 text-sm text-foreground truncate" title={appt.type}>{appt.type}</td>
                                                 <td className="px-4 py-4">
-                                                    <StatusBadge status={appt.status} />
+                                                    <StatusBadge status={getDisplayStatus(appt, now)} />
                                                 </td>
                                                 {extraColumns.map(col => (
                                                     <td key={col.header} className="px-4 py-4 text-sm text-foreground truncate">
@@ -374,7 +387,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                                 <CopyPhoneButton phone={appt.phone} size={14} />
                                             </div>
                                         </div>
-                                        <StatusBadge status={appt.status} className="shrink-0" />
+                                        <StatusBadge status={getDisplayStatus(appt, now)} className="shrink-0" />
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2 text-sm">

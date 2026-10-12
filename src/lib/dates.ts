@@ -12,6 +12,16 @@ export function brazilTodayISO(): string {
   }).format(new Date());
 }
 
+/** Data "YYYY-MM-DD" em Brasília (UTC-3 fixo, sem horário de verão) de um instante. */
+export function brazilDateISO(ms: number): string {
+  return new Date(ms - 3 * 3_600_000).toISOString().slice(0, 10);
+}
+
+/** Instante (ms) em que o agendamento começa; data e hora são gravadas em Brasília. */
+export function appointmentStart(date: string, time: string): number {
+  return Date.parse(`${date}T${time}:00-03:00`);
+}
+
 function toNoon(iso: string): Date {
   return new Date(iso + 'T12:00:00');
 }
