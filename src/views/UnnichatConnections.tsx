@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { LoadingState } from '../components/ui/loading-state';
+import { staggerStyle } from '../lib/motion';
 import { createPortal } from 'react-dom';
 import { api } from '../services/api';
 import type { UnnichatConnection } from '../types';
@@ -69,7 +71,7 @@ export const UnnichatConnections: React.FC = () => {
         setIsModalOpen(true);
     };
 
-    if (loading) return <div className="p-4 text-foreground">Carregando...</div>;
+    if (loading) return <LoadingState />;
 
     const canManageConnections = ['Dev', 'Admin', 'Líder'].includes(user?.role || '') || user?.sector === 'TEI';
 
@@ -114,7 +116,7 @@ export const UnnichatConnections: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
                 <table className="w-full text-left">
                     <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                         <tr>
@@ -133,8 +135,8 @@ export const UnnichatConnections: React.FC = () => {
                                 </td>
                             </tr>
                         ) : (
-                            displayConnections.map(conn => (
-                                <tr key={conn.id} className="hover:bg-background/50 transition-colors">
+                            displayConnections.map((conn, i) => (
+                                <tr style={staggerStyle(i, 30)} key={conn.id} className="animate-fade-up hover:bg-background/50 transition-colors">
                                     <td className="px-6 py-4 text-foreground font-medium">
                                         {conn.name}
                                     </td>

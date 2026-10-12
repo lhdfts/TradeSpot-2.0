@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { LoadingState } from '../components/ui/loading-state';
+import { staggerStyle } from '../lib/motion';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
@@ -124,7 +126,7 @@ export const Events: React.FC = () => {
         navigate(`/all-appointments?event=${encodeURIComponent(eventName)}`);
     };
 
-    if (loading) return <div>Carregando...</div>;
+    if (loading) return <LoadingState />;
 
     const canCreateEvents = ['Dev', 'Admin', 'Líder'].includes(user?.role || '') || user?.sector === 'TEI';
     const canEditEvents = ['Dev', 'Admin', 'Líder'].includes(user?.role || '');
@@ -212,7 +214,7 @@ export const Events: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
                 <table className="w-full text-left">
                     <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                         <tr>
@@ -225,8 +227,8 @@ export const Events: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {displayEvents.map(event => (
-                            <tr key={event.id} className="hover:bg-background/50 transition-colors">
+                        {displayEvents.map((event, i) => (
+                            <tr style={staggerStyle(i, 30)} key={event.id} className="animate-fade-up hover:bg-background/50 transition-colors">
                                 <td className="px-6 py-4 text-foreground font-medium">
                                     <span
                                         onClick={() => navigateToAppointments(event.event_name)}

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { staggerStyle } from '../lib/motion';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
@@ -246,7 +247,7 @@ export const Metrics: React.FC = () => {
     return (
         <div className="space-y-6">
             {/* Header & Controls */}
-            <div className="flex flex-col gap-4 bg-surface p-4 rounded-xl border border-border">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade flex flex-col gap-4 bg-surface p-4 rounded-xl border border-border">
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-2">
                         <Filter size={18} className="text-secondary" />
@@ -460,7 +461,7 @@ export const Metrics: React.FC = () => {
 
                     if (ranking.length === 0 && displaySector) {
                         return (
-                            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+                            <div style={staggerStyle(1, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm">
                                 <div className="flex flex-wrap justify-between items-start gap-3">
                                     <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
                                     {scopeSwitch}
@@ -471,7 +472,7 @@ export const Metrics: React.FC = () => {
                     }
 
                     return (
-                        <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+                        <div style={staggerStyle(2, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm">
                             <div className="flex justify-between items-start mb-6">
                                 <div>
                                     <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
@@ -551,7 +552,7 @@ export const Metrics: React.FC = () => {
 
             {/* Responsáveis (comissão) x criadores */}
             {ownerStats && !isCollaborator && (
-                <div className="bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
+                <div style={staggerStyle(3, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
                     <div className="mb-6">
                         <h3 className="text-lg font-bold text-foreground">Responsáveis — {ownerDisplaySector}</h3>
                         <p className="text-xs text-secondary mt-1">
@@ -585,7 +586,7 @@ export const Metrics: React.FC = () => {
             )}
 
             {/* Chart */}
-            <div className="bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
+            <div style={staggerStyle(4, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="text-lg font-bold text-foreground">
                         Agendamentos por Dia

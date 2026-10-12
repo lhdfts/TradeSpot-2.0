@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { staggerStyle } from '../lib/motion';
 import { ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 import type { Appointment } from '../types';
 
@@ -141,13 +142,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ appointments, onEdit
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Calendar */}
-            <div className="lg:col-span-2 bg-surface rounded-lg border border-border p-6 shadow-sm">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade lg:col-span-2 bg-surface rounded-lg border border-border p-6 shadow-sm">
 
                 <SimpleCalendar selectedDate={selectedDate} onSelectDate={setSelectedDate} appointments={appointments} isSearching={isSearching} />
             </div>
 
             {/* Appointments for selected date */}
-            <div className="bg-surface rounded-lg border border-border p-6 shadow-sm flex flex-col">
+            <div style={staggerStyle(1, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border p-6 shadow-sm flex flex-col">
                 <h3 className="text-lg font-bold text-foreground mb-4">
                     {selectedDate ? selectedDate.toLocaleDateString('pt-BR') : 'Selecione uma data'}
                 </h3>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { staggerStyle } from '../lib/motion';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { getAuthHeaders } from '../lib/firebase';
@@ -292,7 +293,7 @@ export const Logs: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left min-w-[900px]">
                         <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { staggerStyle } from '../lib/motion';
 import { Loader2, Save } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { api } from '../services/api';
@@ -44,7 +45,7 @@ export const Settings = () => {
 
     return (
         <div className="max-w-2xl space-y-6">
-            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
                 <div>
                     <h3 className="text-lg font-bold text-foreground">Troca de responsável</h3>
                     <p className="text-sm text-secondary mt-1">

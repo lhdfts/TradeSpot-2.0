@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { staggerStyle } from '../lib/motion';
 import { useAuth } from '../context/AuthContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
@@ -157,7 +158,7 @@ export const Profile: React.FC = () => {
     return (
         <div className="space-y-8">
             {/* User Info Card */}
-            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center text-primary shrink-0">
@@ -187,7 +188,7 @@ export const Profile: React.FC = () => {
             {/* Escala e Pausas */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Escala de Trabalho */}
-                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex flex-col">
+                <div style={staggerStyle(1, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm flex flex-col">
                     <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
                         <Clock size={20} className="text-primary" />
                         <h3 className="text-lg font-bold text-foreground">Escala de Trabalho</h3>
@@ -217,7 +218,7 @@ export const Profile: React.FC = () => {
                 </div>
 
                 {/* Pausas Registradas */}
-                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex flex-col">
+                <div style={staggerStyle(2, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm flex flex-col">
                     <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
                         <Coffee size={20} className="text-orange-500" />
                         <h3 className="text-lg font-bold text-foreground">Pausas Registradas</h3>
@@ -252,7 +253,7 @@ export const Profile: React.FC = () => {
             </div>
 
             {/* Agendamentos por Dia Chart */}
-            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+            <div style={staggerStyle(3, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-border">
                     <div className="flex items-center gap-2">
                         <BarChart3 size={22} className="text-primary" />
@@ -379,7 +380,7 @@ export const Profile: React.FC = () => {
             </div>
 
             {/* Vinheta de abertura: preferência deste navegador */}
-            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex items-center justify-between gap-4">
+            <div style={staggerStyle(4, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm flex items-center justify-between gap-4">
                 <div>
                     <h3 className="text-lg font-bold text-foreground">Vinheta de abertura</h3>
                     <p className="text-sm text-secondary mt-1">

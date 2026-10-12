@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { LoadingState } from '../components/ui/loading-state';
 import { useAuth } from '../context/AuthContext';
 import { Calendar } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -103,7 +104,7 @@ export const CeoScheduler = () => {
         '17:00', '18:00', '19:00', '20:00'
     ];
 
-    if (loading) return <div className="p-8 text-center text-secondary">Carregando seus horários...</div>;
+    if (loading) return <LoadingState rows={4} label="Carregando seus horários..." />;
 
     if (user?.sector !== 'CEO') {
         return (
