@@ -9,6 +9,10 @@ import { Button } from '../../components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { FloatingCountrySelect } from '../../components/FloatingCountrySelect';
 import { isPreVendas } from '../../constants/sectors';
+import { appointmentStart, brazilDateISO, brazilTimeHHmm, brazilTodayISO } from '../../lib/dates';
+
+// Antecedência mínima para agendar (o servidor aplica a mesma regra).
+const MIN_LEAD_MS = 10 * 60_000;
 
 export const SelfScheduling = () => {
     const { link } = useParams<{ link: string }>();
@@ -48,6 +52,7 @@ export const SelfScheduling = () => {
                 }
                 const data = await response.json();
                 setEvent(data);
+                document.title = `${data.event_name} · Agendamento`;
             } catch (err: any) {
                 setError(err.message || 'Erro ao carregar evento');
             } finally {
@@ -104,18 +109,26 @@ export const SelfScheduling = () => {
         if (!formData.date) newErrors.date = 'Selecione uma data';
         if (!formData.time) newErrors.time = 'Selecione um horário';
 
-        // Buffer check (frontend side)
+        // Antecedência mínima. Os horários são de Brasília, então a conta usa
+        // -03:00 e não o fuso do aparelho (o aluno pode estar em outro país).
         if (formData.date && formData.time) {
-            const apptTime = new Date(`${formData.date}T${formData.time}:00`);
-            const now = new Date();
-            const diff = (apptTime.getTime() - now.getTime()) / 60000;
-            if (diff < 10) {
+            if (appointmentStart(formData.date, formData.time) - Date.now() < MIN_LEAD_MS) {
                 newErrors.time = 'Agendamento deve ser futuro (mínimo 10 min)';
             }
         }
 
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        const valid = Object.keys(newErrors).length === 0;
+        if (!valid) {
+            // Leva ao primeiro campo com erro (no celular ele pode estar fora da tela)
+            requestAnimationFrame(() => {
+                const firstInvalid = document.querySelector<HTMLElement>('[aria-invalid="true"]')
+                    ?? (newErrors.time ? document.getElementById('campo-horario') : null);
+                firstInvalid?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (firstInvalid instanceof HTMLInputElement && !firstInvalid.readOnly) firstInvalid.focus({ preventScroll: true });
+            });
+        }
+        return valid;
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -192,13 +205,23 @@ export const SelfScheduling = () => {
 
     const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';
 
+    // Calendário e horários seguem o dia/hora de Brasília, não do aparelho.
+    const todayBRT = brazilTodayISO();
+    const minDate = new Date(`${todayBRT}T00:00:00`);
+    const minTimeFor = (date: string): string | undefined => {
+        if (date !== todayBRT) return undefined;
+        const earliest = Date.now() + MIN_LEAD_MS;
+        // Perto da meia-noite a antecedência já cai no dia seguinte: nada mais hoje.
+        return brazilDateISO(earliest) === todayBRT ? brazilTimeHHmm(earliest) : '24:00';
+    };
+
     if (success) {
         return (
-            <div className="p-12 text-center space-y-6">
+            <div className="p-6 sm:p-12 text-center space-y-6">
                 <div className="mx-auto w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center">
                     <CheckCircle2 className="w-8 h-8 text-green-500" />
                 </div>
-                <h2 className="text-2xl font-bold">Agendamento Realizado!</h2>
+                <h2 className="text-xl sm:text-2xl font-bold">Agendamento Realizado!</h2>
                 <p className="text-muted-foreground">
                     Obrigado, <strong>{formData.name}</strong>.
                     <br />
@@ -212,7 +235,7 @@ export const SelfScheduling = () => {
                         {formData.time}
                     </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground break-words">
                     Enviamos os detalhes para {formData.email}
                 </p>
 
@@ -234,26 +257,29 @@ export const SelfScheduling = () => {
     }
 
     return (
-        <div className="p-6 md:p-8">
-            <div className="mb-8 text-center border-b pb-6">
-                <h1 className="text-2xl font-bold mb-2">{event?.event_name}</h1>
+        <div className="p-5 sm:p-8">
+            <div className="mb-6 sm:mb-8 text-center border-b pb-5 sm:pb-6">
+                <h1 className="text-xl sm:text-2xl font-bold mb-2 break-words">{event?.event_name}</h1>
                 <p className="text-muted-foreground">Preencha seus dados para agendar sua participação.</p>
             </div>
 
             {error && (
-                <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-md flex items-center gap-2">
-                    <AlertCircle size={18} />
-                    <span>{error}</span>
+                <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-md flex items-start gap-2" role="alert">
+                    <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                    <span className="min-w-0 break-words">{error}</span>
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                 <div className="space-y-4">
-                    <h3 className="tex-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                         1. Seus Dados
                     </h3>
                     <FloatingInput
                         label="Nome Completo"
+                        name="name"
+                        autoComplete="name"
+                        autoCapitalize="words"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         error={errors.name}
@@ -261,19 +287,24 @@ export const SelfScheduling = () => {
                     <FloatingInput
                         label="E-mail"
                         type="email"
+                        name="email"
+                        autoComplete="email"
+                        inputMode="email"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         error={errors.email}
                     />
                     <div className="flex gap-3">
-                        <div className="w-[130px] flex-shrink-0">
+                        <div className="w-[120px] sm:w-[130px] flex-shrink-0">
                             <FloatingCountrySelect
                                 label="DDI"
                                 value={formData.ddi}
                                 onChange={(val) => setFormData({ ...formData, ddi: val })}
                             />
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                             <FloatingInput
                                 label="Telefone"
                                 value={formData.phone}
@@ -286,6 +317,8 @@ export const SelfScheduling = () => {
                                 placeholder={formData.ddi === '+55' ? "" : ""}
                                 error={errors.phone}
                                 type="tel"
+                                name="tel"
+                                autoComplete="tel-national"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                             />
@@ -304,12 +337,12 @@ export const SelfScheduling = () => {
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" id="campo-horario">
                         <FloatingDateInput
                             label="Data"
                             value={formData.date}
                             onChange={(e: any) => setFormData({ ...formData, date: e.target.value, time: '' })}
-                            minDate={new Date()}
+                            minDate={minDate}
                             error={errors.date ? { message: errors.date } : undefined}
                         />
                         <TimePickerInput
@@ -319,17 +352,13 @@ export const SelfScheduling = () => {
                             availableTimes={availableTimes}
                             disabled={!formData.date || loadingTimes}
                             // Optional: disable past times if today
-                            minTime={
-                                formData.date === format(new Date(), 'yyyy-MM-dd')
-                                    ? format(new Date(new Date().getTime() + 10 * 60000), 'HH:mm')
-                                    : undefined
-                            }
+                            minTime={minTimeFor(formData.date)}
                             hideUnavailable={false}
-                            pickerGridClass="grid-cols-3 md:grid-cols-4"
+                            pickerGridClass="grid-cols-3 sm:grid-cols-4"
                             isPreVendasEvent={isPreVendas(event?.sector)}
                         />
                     </div>
-                    {errors.time && <p className="text-xs text-destructive">{errors.time}</p>}
+                    {errors.time && <p className="text-xs text-destructive" role="alert">{errors.time}</p>}
                 </div>
 
                 <div className="pt-6">

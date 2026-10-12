@@ -1,0 +1,318 @@
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { AppointmentProvider } from './context/AppointmentContext';
+import { Sidebar } from './components/Sidebar';
+import { MyAppointments } from './views/MyAppointments';
+import { AllAppointments } from './views/AllAppointments';
+import { Metrics } from './views/Metrics';
+import { Attendants } from './views/Attendants';
+import { Events } from './views/Events';
+import { UnnichatConnections } from './views/UnnichatConnections';
+import { CeoScheduler } from './views/CeoScheduler';
+import { Settings } from './views/Settings';
+import { Profile } from './views/Profile';
+import { Logs } from './views/Logs';
+import { Login } from './views/Login';
+import Docs from './views/Docs';
+import { Modal } from './components/ui/modal';
+import { AppointmentForm } from './components/AppointmentForm';
+import { EditAppointmentForm } from './components/EditAppointmentForm';
+import type { Appointment } from './types';
+import { Menu, RefreshCw } from 'lucide-react';
+import { useAppointments } from './context/AppointmentContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { Button } from './components/ui/button';
+import { ToastProvider } from './components/ui/toast';
+import { UpdateNotification } from './components/UpdateNotification';
+import { AberturaPosLogin } from './components/abertura/AberturaPosLogin';
+import { PreviaAbertura } from './views/public/PreviaAbertura';
+import { NotificationPrompt } from './components/NotificationPrompt';
+import { useMeetingReminders } from './hooks/useMeetingReminders';
+
+// Wrapper for Create Appointment to handle search params
+const CreateAppointmentWrapper: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const prefillData = useMemo(() => {
+    const name = searchParams.get('name');
+    const email = searchParams.get('email');
+    const phone = searchParams.get('phone');
+    if (name || email || phone) {
+      return {
+        lead: name || undefined,
+        email: email || undefined,
+        phone: phone || undefined
+      };
+    }
+    return undefined;
+  }, [searchParams]);
+
+  // Clean URL if we have params to match original behavior
+  useEffect(() => {
+    if (prefillData) {
+      setSearchParams({}, { replace: true });
+    }
+  }, [prefillData, setSearchParams]);
+
+  return (
+    <div>
+      <AppointmentForm
+        prefillData={prefillData}
+        onSuccess={onSuccess}
+      />
+    </div>
+  );
+};
+
+// Internal Layout component that wraps authenticated routes
+// This component is responsible for providing the AppointmentContext ONLY to internal users
+const InternalLayout: React.FC = () => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Gaveta do menu (só abaixo de lg; no desktop o menu é fixo)
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editingAppt, setEditingAppt] = useState<Appointment | null>(null);
+  const { refresh, loading, appointments } = useAppointments();
+  const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Redirect if visiting login while authenticated
+  useEffect(() => {
+    if (user && location.pathname === '/login') {
+      navigate('/');
+    }
+  }, [user, location.pathname, navigate]);
+
+  const handleEdit = (appt: Appointment) => {
+    setEditingAppt(appt);
+    setIsModalOpen(true);
+  };
+
+  // Aviso 5 minutos antes dos agendamentos em que o usuário é o atendente.
+  // Clique na notificação (sem link de reunião): abre os detalhes se o
+  // agendamento estiver na lista carregada; senão, Meus Agendamentos (hoje em diante).
+  useMeetingReminders(user?.id, (appointmentId) => {
+    const appt = appointments.find(a => a.id === appointmentId);
+    if (appt) handleEdit(appt);
+    else navigate('/');
+  });
+
+  const handleCreate = () => {
+    setEditingAppt(null);
+    navigate('/create-appointment');
+  };
+
+  const handleSuccess = () => {
+    setIsModalOpen(false);
+    setEditingAppt(null);
+    if (location.pathname === '/create-appointment') {
+      navigate('/');
+    } else {
+      refresh(); // Refresh if we are staying on the same view (e.g. edit modal)
+    }
+  };
+
+  const currentView = location.pathname;
+
+  // A rolagem é deste container, não da janela: sem isso a página nova abre
+  // na altura em que a anterior estava.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [currentView]);
+
+  return (
+    // h-dvh: no celular acompanha a barra de endereço que aparece/some
+    <div className="flex h-dvh bg-background text-foreground overflow-hidden">
+      <Sidebar
+        onCreateClick={handleCreate}
+        mobileOpen={menuOpen}
+        onMobileClose={() => setMenuOpen(false)}
+      />
+
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background transition-colors duration-300">
+        {/* scrollbar-gutter: o espaço da barra fica reservado e o conteúdo não pula para o lado quando ela aparece */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 [scrollbar-gutter:stable]">
+          <div className="max-w-7xl mx-auto space-y-6 lg:space-y-8">
+            <NotificationPrompt />
+            <header className="flex flex-wrap justify-between items-center gap-x-4 gap-y-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMenuOpen(true)}
+                  className="lg:hidden rounded-full w-10 h-10 p-0 -ml-2 shrink-0"
+                  aria-label="Abrir menu"
+                  aria-expanded={menuOpen}
+                >
+                  <Menu size={22} />
+                </Button>
+              <h1 key={currentView} className="text-2xl sm:text-3xl font-bold text-foreground animate-slide-in-left truncate">
+                {(currentView === '/' || currentView === '/my-appointments') && 'Meus Agendamentos'}
+                {currentView === '/all-appointments' && 'Todos os Agendamentos'}
+                {currentView === '/create-appointment' && 'Criar Agendamento'}
+                {currentView === '/metrics' && 'Métricas'}
+                {currentView === '/attendants' && 'Gerenciar Atendentes'}
+                {currentView === '/events' && 'Gerenciar Eventos'}
+                {currentView === '/ceo-scheduler' && 'Configurações CEO'}
+                {currentView === '/profile' && 'Perfil'}
+                {currentView === '/unnichat-connections' && 'Conexões Unnichat'}
+                {currentView === '/logs' && 'Logs'}
+                {currentView === '/settings' && 'Configurações'}
+              </h1>
+              </div>
+              <div className="flex items-center gap-2 sm:gap-4 ml-auto">
+                <div id="header-actions" className="flex flex-wrap items-center justify-end gap-2"></div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refresh()}
+                  disabled={loading}
+                  className="rounded-full w-10 h-10 p-0"
+                  title="Atualizar"
+                >
+                  <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+                </Button>
+              </div>
+            </header>
+
+            {/* key por rota: a página nova reentra com animação a cada navegação */}
+            <div key={currentView} className="animate-fade-up">
+            <Routes>
+              {/* Login Route for consistency, though handled above */}
+              <Route path="/login" element={<Navigate to="/" replace />} />
+              {/* Protected Routes - All Authenticated Users */}
+              <Route element={<ProtectedRoute allowedRoles={[]} />}>
+                <Route path="/" element={<MyAppointments onEdit={handleEdit} />} />
+                <Route path="/my-appointments" element={<Navigate to="/" replace />} />
+                <Route path="/create-appointment" element={<CreateAppointmentWrapper onSuccess={handleSuccess} />} />
+                <Route path="/all-appointments" element={<AllAppointments onEdit={handleEdit} />} />
+                <Route path="/profile" element={<Profile />} />
+              </Route>
+
+              {/* Metrics - gestão vê rankings; Colaborador vê só os próprios números */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Co-líder', 'Dev', 'Qualidade', 'Colaborador']} />}>
+                <Route path="/metrics" element={<Metrics />} />
+              </Route>
+
+              {/* Admin/Líder Only Management */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-líder', 'Qualidade']} />}>
+                <Route path="/attendants" element={<Attendants />} />
+              </Route>
+
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Líder', 'Dev', 'Co-líder', 'Qualidade', 'Colaborador']} />}>
+                <Route path="/events" element={<Events />} />
+              </Route>
+
+              {/* Conexões Unnichat - Admin, Dev, Líder */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev', 'Líder']} />}>
+                <Route path="/unnichat-connections" element={<UnnichatConnections />} />
+              </Route>
+
+              {/* Logs de Execução / Distribuição - Admin, Dev */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev']} />}>
+                <Route path="/logs" element={<Logs />} />
+              </Route>
+
+              {/* Configurações do sistema - Admin, Dev */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin', 'Dev']} />}>
+                <Route path="/settings" element={<Settings />} />
+              </Route>
+
+              {/* CEO Only Management */}
+              <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
+                <Route path="/ceo-scheduler" element={<CeoScheduler />} />
+              </Route>
+
+              {/* Catch all internal routes */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Editar Agendamento"
+        // Mais largo que o padrão: Atendente e Status dividem metade da linha
+        maxWidthClass="max-w-3xl"
+      >
+        <EditAppointmentForm
+          initialData={editingAppt || undefined}
+          onSuccess={handleSuccess}
+        />
+      </Modal>
+    </div>
+  );
+};
+
+// Main Router component to handle Public vs Internal routing logic
+const MainRouter: React.FC = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+
+  const currentView = location.pathname;
+  const isLoginPage = currentView === '/login';
+
+  if (isLoginPage) {
+    if (user) {
+      return <Navigate to="/" replace />;
+    }
+    return (
+      <div className="flex h-screen bg-background text-foreground overflow-hidden">
+        <main className="flex-1 overflow-y-auto">
+          <Routes>
+            <Route path="/login" element={<Login />} />
+          </Routes>
+        </main>
+      </div>
+    );
+  }
+
+  // Prévia da vinheta de abertura - Public (assistir sem fazer login)
+  if (currentView === '/abertura') {
+    return <PreviaAbertura />;
+  }
+
+  // Documentation Route - Public
+  if (currentView === '/docs') {
+    return (
+      <Docs />
+    );
+  }
+
+  // If user is NOT logged in, and we haven't matched login or public routes by now,
+  // we should NOT show the sidebar/app shell. Show NotFound or Redirect.
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Only wrap internal app in AppointmentProvider
+  return (
+    <AppointmentProvider>
+      <InternalLayout />
+    </AppointmentProvider>
+  );
+};
+
+// Sistema interno (login, painel, docs). Carregado sob demanda pelo App: a
+// página pública de agendamento (/agendar) não baixa nada daqui.
+function InternalApp() {
+  return (
+    <AuthProvider>
+      <ThemeProvider>
+        <ToastProvider position="top-right">
+          <MainRouter />
+          <AberturaPosLogin />
+          <UpdateNotification />
+        </ToastProvider>
+      </ThemeProvider>
+    </AuthProvider>
+  );
+}
+
+export default InternalApp;

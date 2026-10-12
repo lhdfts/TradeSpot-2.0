@@ -249,27 +249,28 @@ export const Metrics: React.FC = () => {
             {/* Header & Controls */}
             <div style={staggerStyle(0, 80)} className="animate-blur-fade flex flex-col gap-4 bg-surface p-4 rounded-xl border border-border">
                 <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        <Filter size={18} className="text-secondary" />
+                    {/* No celular as datas dividem a linha inteira; a partir de sm voltam à largura fixa */}
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <Filter size={18} className="text-secondary shrink-0" />
                         <FloatingDateInput
                             label="Data Inicial"
                             value={startDate}
                             onChange={(e: any) => setStartDate(e.target.value)}
                             maxDate={endDate ? new Date(`${endDate}T12:00:00`) : undefined}
-                            className="w-36"
+                            className="flex-1 min-w-0 sm:flex-none sm:w-36"
                         />
                         <FloatingDateInput
                             label="Data Final"
                             value={endDate}
                             onChange={(e: any) => setEndDate(e.target.value)}
                             minDate={startDate ? new Date(`${startDate}T12:00:00`) : undefined}
-                            className="w-36"
+                            className="flex-1 min-w-0 sm:flex-none sm:w-36"
                         />
                     </div>
 
                     {/* Search by Name */}
                     {!isCollaborator && (
-                        <div className="w-64">
+                        <div className="w-full sm:w-64">
                             <BaseInput
                                 placeholder="Pesquisar por nome"
                                 value={searchTerm}
@@ -288,7 +289,7 @@ export const Metrics: React.FC = () => {
                                 { value: 'all', label: 'Todos os Setores' },
                                 ...getAllowedSectors(user).map(s => ({ value: s, label: s }))
                             ]}
-                            className="w-40"
+                            className="w-full sm:w-40"
                         />
                     )}
 
@@ -304,7 +305,7 @@ export const Metrics: React.FC = () => {
                                 { value: 'internal', label: 'Da equipe para a própria equipe' },
                                 { value: 'in', label: 'De outros setores para a equipe' }
                             ]}
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     )}
 
@@ -314,7 +315,7 @@ export const Metrics: React.FC = () => {
                         values={typeFilter}
                         onChange={setTypeFilter}
                         options={getAllowedTypesForSector()}
-                        className="w-48"
+                        className="w-full sm:w-48"
                     />
 
                     {!isCollaborator && <FloatingSelect
@@ -331,7 +332,7 @@ export const Metrics: React.FC = () => {
                                 })
                                 .map(a => ({ value: a.id, label: a.name }))
                         ]}
-                        className="w-48"
+                        className="w-full sm:w-48"
                     />}
 
                     <FloatingSelect
@@ -342,7 +343,7 @@ export const Metrics: React.FC = () => {
                             { value: '', label: 'Todos' },
                             ...eventOptions
                         ]}
-                        className="w-48"
+                        className="w-full sm:w-48"
                     />
 
                     <button
@@ -402,7 +403,7 @@ export const Metrics: React.FC = () => {
                     ['No-show', count('No-show')], ['Cancelados', count('Cancelado')], ['Reagendados', count('Reagendado')]
                 ];
                 return (
-                    <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+                    <div className="bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
                         <h3 className="text-lg font-bold text-foreground">Meus números</h3>
                         <p className="text-xs text-secondary mt-1">
                             Agendamentos em que você é o atendente ou o responsável. Taxa de realização: {total ? Math.round(done / total * 100) : 0}%
@@ -461,7 +462,7 @@ export const Metrics: React.FC = () => {
 
                     if (ranking.length === 0 && displaySector) {
                         return (
-                            <div style={staggerStyle(1, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm">
+                            <div style={staggerStyle(1, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
                                 <div className="flex flex-wrap justify-between items-start gap-3">
                                     <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
                                     {scopeSwitch}
@@ -472,9 +473,9 @@ export const Metrics: React.FC = () => {
                     }
 
                     return (
-                        <div style={staggerStyle(2, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm">
-                            <div className="flex justify-between items-start mb-6">
-                                <div>
+                        <div style={staggerStyle(2, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
+                                <div className="min-w-0">
                                     <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
                                     <p className="text-xs text-secondary mt-1">
                                         {hasScopeSwitch
@@ -485,7 +486,7 @@ export const Metrics: React.FC = () => {
                                     </p>
                                     {scopeSwitch && <div className="mt-3">{scopeSwitch}</div>}
                                 </div>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
                                     <span className="text-lg font-bold text-foreground">Total: {total}</span>
                                     <Button
                                         size="sm"
@@ -531,7 +532,8 @@ export const Metrics: React.FC = () => {
 
                                     return (
                                         <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
-                                            <div className="col-span-6 font-medium text-foreground text-[13px] truncate" title={item.name}>
+                                            {/* No celular o nome quebra linha em vez de ser cortado */}
+                                            <div className="col-span-6 font-medium text-foreground text-[13px] min-w-0 break-words sm:truncate" title={item.name}>
                                                 {item.name}
                                             </div>
                                             <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
@@ -552,7 +554,7 @@ export const Metrics: React.FC = () => {
 
             {/* Responsáveis (comissão) x criadores */}
             {ownerStats && !isCollaborator && (
-                <div style={staggerStyle(3, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
+                <div style={staggerStyle(3, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border mt-6 shadow-sm">
                     <div className="mb-6">
                         <h3 className="text-lg font-bold text-foreground">Responsáveis — {ownerDisplaySector}</h3>
                         <p className="text-xs text-secondary mt-1">
@@ -586,15 +588,15 @@ export const Metrics: React.FC = () => {
             )}
 
             {/* Chart */}
-            <div style={staggerStyle(4, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border mt-6 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
+            <div style={staggerStyle(4, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border mt-6 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                     <h3 className="text-lg font-bold text-foreground">
                         Agendamentos por Dia
                     </h3>
                     <span className="text-lg font-bold text-foreground">Total: {chartTotal}</span>
                 </div>
 
-                <div className="h-80 w-full mt-4">
+                <div className="h-64 sm:h-80 w-full mt-4">
                     <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
                             <XAxis
@@ -659,7 +661,7 @@ export const Metrics: React.FC = () => {
                 </div>
 
                 {/* Status Toggle Buttons */}
-                <div className="flex flex-wrap gap-3 justify-center mt-4">
+                <div className="flex flex-wrap gap-2 sm:gap-3 justify-center mt-4">
                     {['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'].map((status) => (
                         <button
                             key={status}

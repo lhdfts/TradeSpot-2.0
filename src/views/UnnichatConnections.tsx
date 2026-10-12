@@ -86,15 +86,16 @@ export const UnnichatConnections: React.FC = () => {
     return (
         <div className="space-y-6">
             {portalContainer && canManageConnections && createPortal(
-                <Button onClick={handleAddNew} variant="default">
-                    <Plus size={18} className="mr-2" /> Nova Conexão
+                // No celular só o ícone, para caber ao lado do título
+                <Button onClick={handleAddNew} variant="default" aria-label="Nova Conexão" title="Nova Conexão" className="px-2.5 sm:px-4">
+                    <Plus size={18} className="sm:mr-2" /><span className="hidden sm:inline">Nova Conexão</span>
                 </Button>,
                 portalContainer
             )}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-4">
-                    <div className="w-72">
+                <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+                    <div className="w-full sm:w-72">
                         <FloatingInput
                             label="Pesquisar por nome ou link"
                             value={searchTerm}
@@ -110,14 +111,16 @@ export const UnnichatConnections: React.FC = () => {
                                 { value: 'all', label: 'Todos os Setores' },
                                 ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
                             ]}
-                            className="w-48"
+                            className="w-full sm:w-48"
                         />
                     )}
                 </div>
             </div>
 
             <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
-                <table className="w-full text-left">
+                {/* Rolagem horizontal em telas pequenas para não cortar colunas */}
+                <div className="overflow-x-auto">
+                <table className="w-full text-left min-w-[760px]">
                     <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                         <tr>
                             <th className="px-6 py-4">Nome da Conexão</th>
@@ -146,35 +149,36 @@ export const UnnichatConnections: React.FC = () => {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-muted-foreground font-mono text-xs max-w-md truncate">
-                                        <div className="flex items-center gap-2">
-                                            <span className="truncate">{conn.unnichat_url}</span>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            {/* Link longo fica truncado; o title e o botão de copiar dão acesso ao valor completo */}
+                                            <span className="truncate" title={conn.unnichat_url}>{conn.unnichat_url}</span>
                                             <button
                                                 onClick={() => {
                                                     navigator.clipboard.writeText(conn.unnichat_url);
                                                     alert('Link copiado com sucesso!');
                                                 }}
-                                                className="text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
+                                                className="p-1.5 text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
                                                 title="Copiar Link"
                                             >
                                                 <Copy size={16} />
                                             </button>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-foreground text-sm">
+                                    <td className="px-6 py-4 text-foreground text-sm whitespace-nowrap">
                                         {conn.created_at ? new Date(conn.created_at).toLocaleDateString('pt-BR') : '-'}
                                     </td>
                                     {canManageConnections && (
-                                        <td className="px-6 py-4 text-center space-x-3">
+                                        <td className="px-6 py-4 text-center whitespace-nowrap space-x-1">
                                             <button
                                                 onClick={() => handleEdit(conn)}
-                                                className="text-foreground hover:text-primary transition-colors inline-block"
+                                                className="p-1.5 text-foreground hover:text-primary transition-colors inline-block"
                                                 title="Editar"
                                             >
                                                 <Edit size={18} />
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(conn)}
-                                                className="text-destructive hover:text-red-400 transition-colors inline-block"
+                                                className="p-1.5 text-destructive hover:text-red-400 transition-colors inline-block"
                                                 title="Excluir"
                                             >
                                                 <Trash2 size={18} />
@@ -186,6 +190,7 @@ export const UnnichatConnections: React.FC = () => {
                         )}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <UnnichatConnectionModal

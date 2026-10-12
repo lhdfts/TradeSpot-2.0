@@ -88,9 +88,9 @@ export const Attendants: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="w-64">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="w-full sm:w-64">
                         <FloatingInput
                             label="Pesquisar por nome ou email"
                             value={searchTerm}
@@ -106,7 +106,7 @@ export const Attendants: React.FC = () => {
                                 { value: 'all', label: 'Todos os Setores' },
                                 ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
                             ]}
-                            className="w-44"
+                            className="w-full sm:w-44"
                         />
                     )}
                 </div>
@@ -122,7 +122,9 @@ export const Attendants: React.FC = () => {
             </div>
 
             <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
-                <table className="w-full text-left">
+                {/* Rolagem horizontal em telas pequenas para não cortar colunas */}
+                <div className="overflow-x-auto">
+                <table className="w-full text-left min-w-[720px]">
                     <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                         <tr>
                             <th className="px-6 py-4">Nome</th>
@@ -155,10 +157,10 @@ export const Attendants: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 text-foreground">{attendant.role}</td>
                                 <td className="px-6 py-4">
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center justify-center gap-1">
                                     <button
                                         onClick={() => handleEdit(attendant)}
-                                        className="p-1 text-secondary hover:text-foreground transition-colors"
+                                        className="p-2 text-secondary hover:text-foreground transition-colors"
                                         title="Editar Atendente"
                                     >
                                         <Edit size={18} />
@@ -166,7 +168,7 @@ export const Attendants: React.FC = () => {
                                     {['Admin', 'Dev'].includes(user?.role || '') && (
                                         <button
                                             onClick={() => handleDelete(attendant.id)}
-                                            className="p-1 text-secondary hover:text-destructive transition-colors"
+                                            className="p-2 text-secondary hover:text-destructive transition-colors"
                                             title="Excluir Atendente"
                                         >
                                             <Trash2 size={18} />
@@ -178,6 +180,7 @@ export const Attendants: React.FC = () => {
                         ))}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <AttendantModal

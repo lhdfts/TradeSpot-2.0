@@ -32,7 +32,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const [displayValue, setDisplayValue] = useState("");
     const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const [coords, setCoords] = useState({ top: 0, left: 0, above: false });
     const inputRef = useRef<HTMLInputElement>(null);
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -132,9 +132,16 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                 }
             }
 
+            // Sem espaço abaixo (ex.: campo no fim da tela em 1280x720), abre para
+            // cima; senão o calendário ficaria fora da tela e rolar a página o fecha.
+            const CALENDAR_HEIGHT = 380;
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const above = spaceBelow < CALENDAR_HEIGHT && rect.top > spaceBelow;
+
             setCoords({
-                top: rect.bottom + window.scrollY + 4,
-                left: left
+                top: (above ? rect.top - 4 : rect.bottom + 4) + window.scrollY,
+                left: left,
+                above
             });
         }
     };
@@ -149,11 +156,12 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                     setIsOpen(false);
                 }
             };
+            const handleResize = () => setIsOpen(false);
             window.addEventListener('scroll', handleScroll, { capture: true });
-            window.addEventListener('resize', () => setIsOpen(false));
+            window.addEventListener('resize', handleResize);
             return () => {
                 window.removeEventListener('scroll', handleScroll, { capture: true });
-                window.removeEventListener('resize', () => setIsOpen(false));
+                window.removeEventListener('resize', handleResize);
             };
         }
     }, [isOpen]);
@@ -347,7 +355,9 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
             )}
             style={!isMobile ? {
                 top: coords.top,
-                left: coords.left
+                left: coords.left,
+                // Aberto para cima: a borda de baixo encosta no campo
+                transform: coords.above ? 'translateY(-100%)' : undefined
             } : undefined}
             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
         >
@@ -459,8 +469,10 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                 placeholder=" "
                 disabled={disabled}
                 maxLength={10}
+                aria-invalid={error ? true : undefined}
                 className={cn(
-                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-surface text-foreground",
+                    // text-base no celular: com menos de 16px o Safari do iPhone dá zoom ao focar o campo
+                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-base sm:text-sm bg-surface text-foreground",
                     error
                         ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"
                         : isOpen

@@ -17,6 +17,11 @@ export function brazilDateISO(ms: number): string {
   return new Date(ms - 3 * 3_600_000).toISOString().slice(0, 10);
 }
 
+/** Hora "HH:mm" em Brasília de um instante. */
+export function brazilTimeHHmm(ms: number): string {
+  return new Date(ms - 3 * 3_600_000).toISOString().slice(11, 16);
+}
+
 /** Instante (ms) em que o agendamento começa; data e hora são gravadas em Brasília. */
 export function appointmentStart(date: string, time: string): number {
   return Date.parse(`${date}T${time}:00-03:00`);

@@ -79,11 +79,12 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
             </div>
 
             {isOpen && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-surface border border-border rounded-lg shadow-lg p-6 w-96">
-                        <h2 className="text-lg font-bold text-foreground mb-6">Selecionar Horário</h2>
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+                    {/* w-full + max-w-sm em vez de w-96 fixo: não vaza da tela no celular; max-h-full + rolagem para telas baixas */}
+                    <div className="bg-surface border border-border rounded-lg shadow-lg p-4 sm:p-6 w-full max-w-sm max-h-full overflow-y-auto overscroll-contain">
+                        <h2 className="text-lg font-bold text-foreground mb-4 sm:mb-6">Selecionar Horário</h2>
 
-                        <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
                             {/* Start Time */}
                             <div className="space-y-2">
                                 <label className="block text-sm font-bold text-foreground">Início</label>
@@ -99,7 +100,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                                                 type="button"
                                                 onClick={() => setSelectedStartTime(time)}
                                                 className={cn(
-                                                    'w-full px-2 py-1 text-sm text-left rounded transition-colors',
+                                                    'w-full px-2 py-2 sm:py-1 text-sm text-left rounded transition-colors',
                                                     selectedStartTime === time
                                                         ? 'bg-primary text-primary-foreground font-semibold'
                                                         : 'text-foreground hover:bg-white/10'
@@ -130,17 +131,19 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                         </div>
 
                         {/* Buttons */}
-                        <div className="flex gap-3 justify-end">
+                        <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
                             <Button
                                 type="button"
                                 variant="secondary"
                                 onClick={handleCancel}
+                                className="w-full sm:w-auto h-11 sm:h-9"
                             >
                                 Cancelar
                             </Button>
                             <Button
                                 type="button"
                                 onClick={handleConfirm}
+                                className="w-full sm:w-auto h-11 sm:h-9"
                             >
                                 Confirmar
                             </Button>

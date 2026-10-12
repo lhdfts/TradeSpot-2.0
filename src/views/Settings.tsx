@@ -45,7 +45,7 @@ export const Settings = () => {
 
     return (
         <div className="max-w-2xl space-y-6">
-            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm space-y-4">
                 <div>
                     <h3 className="text-lg font-bold text-foreground">Troca de responsável</h3>
                     <p className="text-sm text-secondary mt-1">
@@ -65,14 +65,14 @@ export const Settings = () => {
                                     checked={selected.includes(sector)}
                                     onChange={() => toggle(sector)}
                                 />
-                                <span className="text-sm text-foreground">{sector}</span>
+                                <span className="text-sm text-foreground min-w-0 break-words">{sector}</span>
                             </label>
                         ))}
                     </div>
                 )}
 
                 <div className="flex justify-end">
-                    <Button onClick={handleSave} disabled={loading || saving || !isDirty}>
+                    <Button onClick={handleSave} disabled={loading || saving || !isDirty} className="w-full sm:w-auto">
                         {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                         <span className="ml-2">Salvar</span>
                     </Button>

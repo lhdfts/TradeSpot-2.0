@@ -116,7 +116,8 @@ export const CeoScheduler = () => {
     }
 
     return (
-        <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-6">
+        // Sem padding próprio: a área principal já aplica o espaçamento da página
+        <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Minha Agenda</h1>
@@ -124,9 +125,10 @@ export const CeoScheduler = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Três colunas só a partir de lg: com o menu lateral, em md a coluna da data ficaria estreita demais */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="space-y-4">
-                    <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+                    <div className="bg-card border border-border rounded-xl p-4 sm:p-5 shadow-sm space-y-4">
                         <div className="flex items-center gap-2 font-medium border-b border-border/50 pb-3">
                             <Calendar size={18} className="text-primary" />
                             Selecione a Data
@@ -146,15 +148,15 @@ export const CeoScheduler = () => {
                     )}
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="lg:col-span-2">
                     {selectedDate ? (
-                        <div className="bg-card border border-border rounded-xl p-6 shadow-sm min-h-[400px] flex flex-col">
-                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/50">
-                                <div>
+                        <div className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm min-h-[400px] flex flex-col">
+                            <div className="flex items-center justify-between gap-3 mb-6 pb-4 border-b border-border/50">
+                                <div className="min-w-0">
                                     <h3 className="font-semibold text-lg">Horários Disponíveis</h3>
                                     <p className="text-sm text-secondary">Para o dia {selectedDate.split('-').reverse().join('/')}</p>
                                 </div>
-                                <span className="text-xs font-semibold px-2 py-1 bg-primary/10 text-primary rounded-full">
+                                <span className="shrink-0 whitespace-nowrap text-xs font-semibold px-2 py-1 bg-primary/10 text-primary rounded-full">
                                     {times.length} Horários
                                 </span>
                             </div>
@@ -174,9 +176,11 @@ export const CeoScheduler = () => {
                                                     className="flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded-md text-sm font-medium"
                                                 >
                                                     {time}
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleRemoveTime(time)}
-                                                        className="hover:text-destructive hover:bg-destructive/10 rounded-full p-0.5 transition-colors"
+                                                        className="hover:text-destructive hover:bg-destructive/10 rounded-full p-1 -mr-1 transition-colors"
+                                                        aria-label={`Remover horário ${time}`}
+                                                        title="Remover horário"
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                                     </button>
@@ -207,7 +211,7 @@ export const CeoScheduler = () => {
                                     </div>
                                     
                                     <div className="mt-4 flex gap-2 items-end">
-                                        <div className="flex-1">
+                                        <div className="flex-1 min-w-0">
                                             <label className="text-xs font-medium text-secondary mb-1 block">Outro horário:</label>
                                             <input 
                                                 type="time" 

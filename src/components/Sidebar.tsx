@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut, Webhook, History, Settings as SettingsIcon } from 'lucide-react';
+import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut, Webhook, History, Settings as SettingsIcon, X } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { cn } from './ui/button';
 import { Logo } from './Logo';
@@ -7,9 +7,13 @@ import { LogoIcon } from './LogoIcon';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 interface SidebarProps {
     onCreateClick?: () => void;
+    /** Abaixo de lg o menu é uma gaveta: aberta/fechada pelo cabeçalho da página. */
+    mobileOpen?: boolean;
+    onMobileClose?: () => void;
 }
 
 interface NavItemProps {
@@ -58,7 +62,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, to, collapsed }) => (
     </NavLink>
 );
 
-export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = false, onMobileClose }) => {
     const [isCollapsed, setIsCollapsed] = React.useState(false);
     const [isHovered, setIsHovered] = React.useState(false);
     const [isAgendamentosOpen, setIsAgendamentosOpen] = React.useState(true);
@@ -66,29 +70,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
     const { theme } = useTheme();
     const navigate = useNavigate();
 
-    const effectiveCollapsed = isCollapsed && !isHovered;
+    // lg (1024px) para cima: menu lateral fixo. Abaixo: gaveta sobre a página.
+    const isDesktop = useMediaQuery('(min-width: 1024px)');
+    // Na gaveta o menu está sempre expandido (recolher só existe no desktop).
+    const effectiveCollapsed = isDesktop && isCollapsed && !isHovered;
 
-    return (
-        // O espaço no layout segue só o estado fixado (isCollapsed). A expansão
-        // pelo hover fica por cima do conteúdo, sem empurrar a página.
-        <div className={cn("relative shrink-0 transition-[width] duration-300 ease-in-out", isCollapsed ? "w-20" : "w-64")}>
-        <aside
-            onMouseEnter={() => {
-                if (isCollapsed) {
-                    setIsHovered(true);
-                }
-            }}
-            onMouseLeave={() => {
-                if (isCollapsed) {
-                    setIsHovered(false);
-                }
-            }}
-            className={cn(
-                "absolute inset-y-0 left-0 z-40 bg-black border-r border-white/10 flex flex-col transition-all duration-300 ease-in-out text-white overflow-hidden",
-                effectiveCollapsed ? "w-20 p-4" : "w-64 p-6"
-            )}
-        >
-            <div className="mb-8 flex items-center justify-center">
+    // Gaveta: Esc fecha.
+    React.useEffect(() => {
+        if (isDesktop || !mobileOpen) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onMobileClose?.();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isDesktop, mobileOpen, onMobileClose]);
+
+    // Gaveta: escolher um destino fecha o menu.
+    const closeOnNavigate = (e: React.MouseEvent) => {
+        if (!isDesktop && (e.target as Element).closest('a')) onMobileClose?.();
+    };
+
+    const content = (
+        <>
+            <div className="mb-6 lg:mb-8 flex items-center justify-center shrink-0">
                 <NavLink to="/">
                     {effectiveCollapsed ? (
                         <LogoIcon className="h-8 w-auto text-white transition-all duration-300" />
@@ -98,7 +102,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 </NavLink>
             </div>
 
-            <nav className="flex-1 space-y-2 stagger-children">
+            {/* min-h-0 + overflow: em telas baixas (ex.: 1280x720) a lista rola e o
+                rodapé com tema, perfil e Sair continua visível */}
+            <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1 space-y-2 stagger-children">
                 {/* Collapsible Agendamentos Group */}
                 <div>
                     <button
@@ -267,28 +273,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                 )}
             </nav>
 
-            <div className="mt-auto mb-2 flex flex-col gap-2">
+            <div className="mt-auto pt-2 mb-2 flex flex-col gap-2 shrink-0">
                 <ThemeToggle
                     className="w-full"
                     collapsed={effectiveCollapsed}
                     label={effectiveCollapsed ? null : (theme === 'dark' ? 'Modo Claro' : 'Modo Escuro')}
                 />
-                <button
-                    onClick={() => {
-                        setIsCollapsed(!isCollapsed);
-                        setIsHovered(false);
-                    }}
-                    className={cn(
-                        "w-full flex items-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-2 relative text-left",
-                        effectiveCollapsed ? "justify-center" : "!justify-start py-3 pl-12 pr-4"
-                    )}
-                >
-                    {effectiveCollapsed ? <ChevronRight size={20} /> : <div className="absolute left-4 top-1/2 -translate-y-1/2"><ChevronLeft size={20} /></div>}
-                    {!effectiveCollapsed && <span className="text-sm font-medium">{isCollapsed ? "Fixar Menu" : "Ocultar Menu"}</span>}
-                </button>
+                {isDesktop && (
+                    <button
+                        onClick={() => {
+                            setIsCollapsed(!isCollapsed);
+                            setIsHovered(false);
+                        }}
+                        className={cn(
+                            "w-full flex items-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-2 relative text-left",
+                            effectiveCollapsed ? "justify-center" : "!justify-start py-3 pl-12 pr-4"
+                        )}
+                    >
+                        {effectiveCollapsed ? <ChevronRight size={20} /> : <div className="absolute left-4 top-1/2 -translate-y-1/2"><ChevronLeft size={20} /></div>}
+                        {!effectiveCollapsed && <span className="text-sm font-medium">{isCollapsed ? "Fixar Menu" : "Ocultar Menu"}</span>}
+                    </button>
+                )}
             </div>
 
-            <div className="pt-4 border-t border-white/10">
+            <div className="pt-4 border-t border-white/10 shrink-0">
                 <div className={cn("flex items-center gap-3", effectiveCollapsed ? "justify-center px-0" : "px-2")}>
                     <NavLink
                         to="/profile"
@@ -328,6 +336,66 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick }) => {
                     )}
                 </div>
             </div>
+        </>
+    );
+
+    if (!isDesktop) {
+        return (
+            <div
+                className={cn('fixed inset-0 z-50', !mobileOpen && 'pointer-events-none')}
+                inert={!mobileOpen}
+                aria-hidden={!mobileOpen}
+            >
+                <div
+                    className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', mobileOpen ? 'opacity-100' : 'opacity-0')}
+                    onClick={onMobileClose}
+                />
+                <aside
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Menu"
+                    onClick={closeOnNavigate}
+                    className={cn(
+                        'absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-black border-r border-white/10 flex flex-col p-6 text-white',
+                        'transition-transform duration-300 ease-in-out',
+                        mobileOpen ? 'translate-x-0' : '-translate-x-full'
+                    )}
+                >
+                    <button
+                        type="button"
+                        onClick={onMobileClose}
+                        className="absolute right-3 top-3 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                        aria-label="Fechar menu"
+                    >
+                        <X size={20} />
+                    </button>
+                    {content}
+                </aside>
+            </div>
+        );
+    }
+
+    return (
+        // O espaço no layout segue só o estado fixado (isCollapsed). A expansão
+        // pelo hover fica por cima do conteúdo, sem empurrar a página.
+        <div className={cn("relative shrink-0 transition-[width] duration-300 ease-in-out", isCollapsed ? "w-20" : "w-64")}>
+        <aside
+            onMouseEnter={() => {
+                if (isCollapsed) {
+                    setIsHovered(true);
+                }
+            }}
+            onMouseLeave={() => {
+                if (isCollapsed) {
+                    setIsHovered(false);
+                }
+            }}
+            className={cn(
+                "absolute inset-y-0 left-0 z-40 bg-black border-r border-white/10 flex flex-col transition-all duration-300 ease-in-out text-white overflow-hidden",
+                effectiveCollapsed ? "w-20 p-4" : "w-64 p-6"
+            )}
+        >
+            {content}
         </aside>
         </div>
     );

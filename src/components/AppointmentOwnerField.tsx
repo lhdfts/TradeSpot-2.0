@@ -84,10 +84,10 @@ export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ ap
     return (
         <div className="col-span-1 md:col-span-2 rounded-lg border border-border p-3 space-y-3">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                <span className="text-muted-foreground">
+                <span className="text-muted-foreground min-w-0 break-words">
                     Criado por: <span className="text-foreground font-medium">{creator?.name || '-'}</span>
                 </span>
-                <span className="text-muted-foreground">
+                <span className="text-muted-foreground min-w-0 break-words">
                     Responsável: <span className="text-foreground font-medium">{nameOf(ownerId)}</span>
                     {ownerDiffers && ownerChangedAt && (
                         <span className="text-xs"> (alterado em {formatDateTime(ownerChangedAt)})</span>
@@ -111,7 +111,7 @@ export const AppointmentOwnerField: React.FC<AppointmentOwnerFieldProps> = ({ ap
                     </div>
                     <Button
                         type="button"
-                        className="shrink-0"
+                        className="shrink-0 h-11 sm:h-9"
                         variant="secondary"
                         onClick={handleSave}
                         disabled={saving || !selected || selected === ownerId}
