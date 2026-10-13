@@ -27,7 +27,8 @@ export const Input: React.FC<InputProps> = ({ label, error, className, unstyled,
       {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
       <input
         className={cn(
-          'w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors',
+          // max-sm:text-base: abaixo de 16px o Safari do iPhone dá zoom ao focar; no desktop o tamanho não muda
+          'w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors max-sm:text-base',
           error && 'border-danger focus:border-danger focus:ring-danger',
           className
         )}

@@ -165,7 +165,7 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
                         ref={searchInputRef}
                         type="text"
                         placeholder="Buscar país ou código..."
-                        className="w-full bg-muted/50 border border-border rounded-md pl-8 pr-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                        className="w-full bg-muted/50 border border-border rounded-md pl-8 pr-3 py-1.5 text-base sm:text-sm outline-none focus:ring-1 focus:ring-ring"
                         value={searchTerm}
                         onChange={(e) => {
                             const val = e.target.value;

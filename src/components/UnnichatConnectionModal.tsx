@@ -130,11 +130,12 @@ export const UnnichatConnectionModal: React.FC<UnnichatConnectionModalProps> = (
                     disabled={!isSuperUser}
                 />
 
-                <div className="flex justify-end gap-2 pt-4 border-t border-border">
-                    <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
+                {/* No celular: botões na largura toda, Salvar em cima */}
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4 border-t border-border">
+                    <Button type="button" variant="ghost" onClick={onClose} disabled={saving} className="w-full sm:w-auto h-11 sm:h-9">
                         Cancelar
                     </Button>
-                    <Button type="submit" variant="default" disabled={saving}>
+                    <Button type="submit" variant="default" disabled={saving} className="w-full sm:w-auto h-11 sm:h-9">
                         {saving ? 'Salvando...' : 'Salvar'}
                     </Button>
                 </div>

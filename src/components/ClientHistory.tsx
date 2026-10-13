@@ -57,8 +57,9 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
 
     if (combinedHistory.length === 0) return null;
 
+    // Abaixo de lg o histórico fica embaixo do formulário (antes era escondido no celular)
     return (
-        <div className="w-64 border-l border-border bg-card p-6 flex flex-col gap-6 hidden md:flex overflow-y-auto max-h-[600px]">
+        <div className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-border bg-card p-4 sm:p-6 flex flex-col gap-6 overflow-y-auto max-h-96 lg:max-h-[600px]">
             <h3 className="font-semibold text-lg text-foreground">Histórico</h3>
             <div className="relative flex flex-col gap-0">
                 {/* Continuous Vertical line */}
@@ -157,21 +158,21 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                     return (
                         <div key={`${isExternal ? 'ext' : 'int'}-${item.id}-${idx}`} className="flex gap-3 pb-8 last:pb-0 relative min-h-[32px]">
                             {/* Icon Container */}
-                            <div className="relative z-10 flex items-start pt-[2px]">
+                            <div className="relative z-10 flex items-start pt-[2px] shrink-0">
                                 <div className={`w-6 h-6 rounded-full ${bgColor} flex items-center justify-center shadow-sm`}>
                                     {Icon}
                                 </div>
                             </div>
 
                             {/* Text */}
-                            <div className="flex flex-col pt-0.5">
+                            <div className="flex flex-col pt-0.5 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <span className={`text-sm font-medium leading-none text-foreground`}>
+                                    <span className={`text-sm font-medium leading-tight break-words min-w-0 text-foreground`}>
                                         {displayType}
                                     </span>
                                     {/* Warning Icon for Blocked/Cancelled External Items */}
                                     {isExternal && (item as any).warn && (
-                                        <span title={(item as any).tooltip || undefined} className="cursor-help flex items-center">
+                                        <span title={(item as any).tooltip || undefined} className="cursor-help flex items-center shrink-0">
                                             <svg
                                                 xmlns="http://www.w3.org/2000/svg"
                                                 width="16"

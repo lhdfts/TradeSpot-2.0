@@ -42,8 +42,10 @@ export const FloatingInput: React.FC<FloatingInputProps> = ({
                 onFocus={handleFocus}
                 onBlur={handleBlur}
                 placeholder=" "
+                aria-invalid={error ? true : undefined}
                 className={cn(
-                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-surface text-foreground",
+                    // text-base no celular: com menos de 16px o Safari do iPhone dá zoom ao focar o campo
+                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-base sm:text-sm bg-surface text-foreground",
                     startIcon ? "pl-10" : "",
                     error
                         ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"

@@ -280,14 +280,18 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                             <div className="space-y-1">
                                 <label className="block text-sm font-medium text-secondary">Link de Auto-Agendamento</label>
                                 <div className="flex gap-2">
-                                    <BaseInput
-                                        readOnly
-                                        value={`${window.location.origin}/agendar/${event.self_scheduling_link}`}
-                                        className="bg-muted text-muted-foreground"
-                                    />
+                                    {/* min-w-0: o link longo não empurra o botão Copiar para fora do modal */}
+                                    <div className="flex-1 min-w-0">
+                                        <BaseInput
+                                            readOnly
+                                            value={`${window.location.origin}/agendar/${event.self_scheduling_link}`}
+                                            className="bg-muted text-muted-foreground"
+                                        />
+                                    </div>
                                     <Button
                                         type="button"
                                         variant="secondary"
+                                        className="shrink-0"
                                         onClick={() => {
                                             navigator.clipboard.writeText(`${window.location.origin}/agendar/${event.self_scheduling_link}`);
                                         }}
@@ -317,7 +321,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                                             />
                                             <label
                                                 htmlFor={`att-${att.id}`}
-                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                                                className="text-sm font-medium leading-tight peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1 min-w-0 break-words"
                                             >
                                                 {att.name} <span className="text-xs text-muted-foreground ml-2">({att.sector})</span>
                                             </label>
@@ -332,9 +336,10 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                     </TabsContent>
                 </Tabs>
 
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                    <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
-                    <Button type="submit" disabled={saving}>
+                {/* No celular: botões na largura toda, Salvar em cima */}
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4 border-t">
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={saving} className="w-full sm:w-auto h-11 sm:h-9">Cancelar</Button>
+                    <Button type="submit" disabled={saving} className="w-full sm:w-auto h-11 sm:h-9">
                         {saving ? 'Salvando...' : 'Salvar'}
                     </Button>
                 </div>

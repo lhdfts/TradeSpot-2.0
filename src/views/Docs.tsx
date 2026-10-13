@@ -187,8 +187,8 @@ const Docs: React.FC = () => {
                             <div>
                                 <h3 className="text-2xl font-semibold text-foreground mb-3">4.2 Tipos de Agendamento</h3>
                                 <p className="mb-4">O sistema suporta os seguintes tipos de agendamento:</p>
-                                <div className="border border-border rounded-lg overflow-hidden">
-                                    <table className="w-full text-sm">
+                                <div className="border border-border rounded-lg overflow-x-auto">
+                                    <table className="w-full min-w-[480px] text-sm">
                                         <thead className="bg-muted">
                                             <tr>
                                                 <th className="px-4 py-2 text-left font-medium">Tipo</th>

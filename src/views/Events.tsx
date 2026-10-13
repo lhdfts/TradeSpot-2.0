@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { LoadingState } from '../components/ui/loading-state';
+import { staggerStyle } from '../lib/motion';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
@@ -124,7 +126,7 @@ export const Events: React.FC = () => {
         navigate(`/all-appointments?event=${encodeURIComponent(eventName)}`);
     };
 
-    if (loading) return <div>Carregando...</div>;
+    if (loading) return <LoadingState />;
 
     const canCreateEvents = ['Dev', 'Admin', 'Líder'].includes(user?.role || '') || user?.sector === 'TEI';
     const canEditEvents = ['Dev', 'Admin', 'Líder'].includes(user?.role || '');
@@ -151,24 +153,25 @@ export const Events: React.FC = () => {
         <div className="space-y-6">
 
             {portalContainer && canCreateEvents && createPortal(
-                <Button onClick={handleAddNew}>
-                    <Plus size={18} className="mr-2" /> Novo Evento
+                // No celular só o ícone, para caber ao lado do título
+                <Button onClick={handleAddNew} aria-label="Novo Evento" title="Novo Evento" className="px-2.5 sm:px-4">
+                    <Plus size={18} className="sm:mr-2" /><span className="hidden sm:inline">Novo Evento</span>
                 </Button>,
                 portalContainer
             )}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 {(user?.sector === 'Closer' || canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || isDualLeader(user)) && (
-                    <div className="flex gap-2 p-1 bg-muted/30 rounded-lg w-fit">
+                    <div className="flex gap-2 p-1 bg-muted/30 rounded-lg w-full sm:w-fit">
                         <button
                             onClick={() => setActiveTab('meus')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'meus' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'meus' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                             Meus Eventos
                         </button>
                         <button
                             onClick={() => setActiveTab('feeds')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'feeds' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'feeds' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                             Eventos Recebidos ({feedEvents.filter(e => e.status === true).length})
                         </button>
@@ -176,7 +179,7 @@ export const Events: React.FC = () => {
                 )}
 
                 <div className="flex flex-wrap items-center gap-4">
-                    <div className="w-64">
+                    <div className="w-full sm:w-64">
                         <FloatingInput
                             label="Pesquisar por nome"
                             value={searchTerm}
@@ -192,7 +195,7 @@ export const Events: React.FC = () => {
                                 { value: 'all', label: 'Todos os Setores' },
                                 ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
                             ]}
-                            className="w-48"
+                            className="flex-1 min-w-[9rem] sm:flex-none sm:w-48"
                         />
                     )}
 
@@ -206,14 +209,16 @@ export const Events: React.FC = () => {
                                 { value: 'active', label: 'Ativos' },
                                 { value: 'archived', label: 'Arquivados' }
                             ]}
-                            className="w-40"
+                            className="flex-1 min-w-[9rem] sm:flex-none sm:w-40"
                         />
                     )}
                 </div>
             </div>
 
-            <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
-                <table className="w-full text-left">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
+                {/* Rolagem horizontal em telas pequenas para não cortar colunas */}
+                <div className="overflow-x-auto">
+                <table className="w-full text-left min-w-[760px]">
                     <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                         <tr>
                             <th className="px-6 py-4">Nome do Evento</th>
@@ -225,8 +230,8 @@ export const Events: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {displayEvents.map(event => (
-                            <tr key={event.id} className="hover:bg-background/50 transition-colors">
+                        {displayEvents.map((event, i) => (
+                            <tr style={staggerStyle(i, 30)} key={event.id} className="animate-fade-up hover:bg-background/50 transition-colors">
                                 <td className="px-6 py-4 text-foreground font-medium">
                                     <span
                                         onClick={() => navigateToAppointments(event.event_name)}
@@ -237,7 +242,7 @@ export const Events: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-foreground">{event.sector || '-'}</td>
-                                <td className="px-6 py-4 text-foreground">{event.created_at ? new Date(event.created_at).toLocaleDateString('pt-BR') : '-'}</td>
+                                <td className="px-6 py-4 text-foreground whitespace-nowrap">{event.created_at ? new Date(event.created_at).toLocaleDateString('pt-BR') : '-'}</td>
                                 <td className="px-6 py-4">
                                     <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${event.status ? 'bg-green-500/10 text-green-400 border-green-500/20' :
                                         'bg-gray-500/10 text-gray-400 border-gray-500/20'
@@ -253,7 +258,7 @@ export const Events: React.FC = () => {
                                                 navigator.clipboard.writeText(url);
                                                 alert('Link copiado!');
                                             }}
-                                            className="text-foreground hover:text-primary transition-colors"
+                                            className="inline-flex p-1.5 text-foreground hover:text-primary transition-colors"
                                             title="Copiar Link de Auto-Agendamento"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -264,11 +269,11 @@ export const Events: React.FC = () => {
                                     )}
                                 </td>
                                 {canManageEvents && (
-                                    <td className="px-6 py-4 text-center space-x-2">
+                                    <td className="px-6 py-4 text-center whitespace-nowrap space-x-1">
                                         {canEditEvents && (
                                             <button
                                                 onClick={() => handleEdit(event)}
-                                                className="text-foreground hover:text-primary transition-colors"
+                                                className="inline-flex p-1.5 text-foreground hover:text-primary transition-colors"
                                                 title="Editar"
                                             >
                                                 <Edit size={18} />
@@ -277,7 +282,7 @@ export const Events: React.FC = () => {
                                         {canExportEvents && (
                                             <button
                                                 onClick={() => handleExport(event)}
-                                                className="text-foreground hover:text-primary transition-colors"
+                                                className="inline-flex p-1.5 text-foreground hover:text-primary transition-colors"
                                                 title="Exportar Agendamentos"
                                             >
                                                 <ExportIcon size={18} />
@@ -289,6 +294,7 @@ export const Events: React.FC = () => {
                         ))}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <EventModal

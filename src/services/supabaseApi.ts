@@ -1,5 +1,5 @@
 import { getAuthHeaders } from '../lib/firebase';
-import type { ApiService } from './api';
+import type { ApiService, ReminderAppointment } from './api';
 import type { Appointment, Attendant, Event, UnnichatConnection } from '../types';
 import { normalizeSector } from '../constants/sectors';
 
@@ -37,6 +37,15 @@ export class SupabaseApiService implements ApiService {
                 truncated: response.headers.get('X-Truncated') === 'true',
                 total: Number(response.headers.get('X-Total-Count')) || appointments.length
             };
+        },
+        reminderSlot: async (params: { date: string; time: string }): Promise<ReminderAppointment[]> => {
+            const authHeaders = await getAuthHeaders();
+            const searchParams = new URLSearchParams({ date: params.date, time: params.time });
+            const response = await fetch(`/api/appointments/reminder-slot?${searchParams.toString()}`, {
+                headers: authHeaders
+            });
+            if (!response.ok) throw new Error('Failed to fetch reminder slot');
+            return response.json();
         },
         getAvailableTimes: async (params: { date: string; type: string; eventId?: string; attendantId?: string }): Promise<string[]> => {
             const authHeaders = await getAuthHeaders();

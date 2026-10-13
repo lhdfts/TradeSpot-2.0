@@ -916,8 +916,9 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="flex border border-border rounded-lg bg-surface shadow-sm overflow-hidden">
-                <div className="flex-1 p-6 space-y-4 min-w-0">
+            {/* Histórico ao lado só a partir de lg: com a sidebar aberta, em md sobrava pouco espaço para o formulário */}
+            <div className="flex flex-col lg:flex-row border border-border rounded-lg bg-surface shadow-sm overflow-hidden">
+                <div className="flex-1 p-4 sm:p-6 space-y-4 min-w-0">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Row 2: Telefone (First) and Aluno */}
                         <div className="col-span-1 md:col-span-2 relative mt-1 mb-2">
@@ -1020,7 +1021,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
                         {/* Row 3: Atendente and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className={!initialData ? "col-span-2" : ""}>
+                            <div className={!initialData ? "md:col-span-2" : "min-w-0"}>
                                 {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || isPreVendas(user?.sector)) && !initialData && user ? (
                                     <FloatingInput
                                         label="Atendente"
@@ -1196,7 +1197,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                         {/* Row 3: Moeda/Financeiro and Perfil de Conhecimento */}
                         <div className="space-y-1">
                             <div className="flex gap-2">
-                                <div className="w-24">
+                                <div className="w-24 shrink-0">
                                     <FloatingSelect
                                         label="Moeda"
                                         value={formData.studentProfile.financial.currency}
@@ -1217,7 +1218,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                         disabled={isEditing}
                                     />
                                 </div>
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0">
                                     <FloatingInput
                                         label="Perfil Financeiro (Valor)"
                                         value={formData.studentProfile.financial.amount}
@@ -1299,15 +1300,16 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
                 {!initialData && <ClientHistory phone={formData.phone} externalHistory={purchaseHistory} />}
             </div >
-            <div className="flex justify-end gap-3">
+            {/* No celular os botões ocupam a largura toda, com Salvar em cima (column-reverse) */}
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
 
                 {!initialData && (
-                    <Button type="button" variant="secondary" onClick={handleClear} className="flex items-center gap-2" disabled={isSaving}>
+                    <Button type="button" variant="secondary" onClick={handleClear} className="flex items-center gap-2 w-full sm:w-auto h-11 sm:h-9" disabled={isSaving}>
                         <Eraser size={18} />
                         Limpar
                     </Button>
                 )}
-                <Button type="submit" className="flex items-center gap-2" disabled={isSaving}>
+                <Button type="submit" className="flex items-center gap-2 w-full sm:w-auto h-11 sm:h-9" disabled={isSaving}>
                     {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                     {isSaving ? 'Salvando...' : 'Salvar'}
                 </Button>

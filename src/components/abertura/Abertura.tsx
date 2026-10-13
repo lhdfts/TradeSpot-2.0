@@ -184,7 +184,7 @@ export default function Abertura({ som = null, aoTerminar }: AberturaProps) {
       animar(
         el,
         [
-          { opacity: 1, transform: 'translateY(0) scale(1)', filter: 'blur(0px)' },
+          { opacity: 1, transform: 'translateY(0) scale(1)', filter: 'none' },
           { offset: 0.7, opacity: 0 },
           { opacity: 0, transform: 'translateY(-14px) scale(0.45)', filter: 'blur(4px)' },
         ],
@@ -197,7 +197,9 @@ export default function Abertura({ som = null, aoTerminar }: AberturaProps) {
         [
           { opacity: 0, transform: 'translateY(30px) scale(2.2)', filter: 'blur(10px)' },
           { offset: 0.75, opacity: 1, transform: 'translateY(0) scale(0.96)', filter: 'blur(0px)' },
-          { opacity: 1, transform: 'translateY(0) scale(1)', filter: 'blur(0px)' },
+          // 'none', e não blur(0px): com qualquer filtro aplicado o Chrome desenha a
+          // letra como imagem rasterizada, sem a suavização das bordas (serrilhado).
+          { opacity: 1, transform: 'translateY(0) scale(1)', filter: 'none' },
         ],
         { duration: 560, delay: troca + 240 + i * 60, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'forwards' },
       );
@@ -335,6 +337,7 @@ export default function Abertura({ som = null, aoTerminar }: AberturaProps) {
       <svg
         viewBox={`0 0 ${LARGURA} ${ALTURA}`}
         fill="currentColor"
+        shapeRendering="geometricPrecision"
         aria-hidden="true"
         className="w-[min(80vw,760px)] overflow-visible"
       >

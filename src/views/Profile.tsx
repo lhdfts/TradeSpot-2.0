@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { staggerStyle } from '../lib/motion';
 import { useAuth } from '../context/AuthContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useFormData } from '../hooks/useFormData';
@@ -157,17 +158,17 @@ export const Profile: React.FC = () => {
     return (
         <div className="space-y-8">
             {/* User Info Card */}
-            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 min-w-0">
                         <div className="w-16 h-16 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center text-primary shrink-0">
                             <User size={32} />
                         </div>
-                        <div>
-                            <h2 className="text-2xl font-bold text-foreground">{displayName}</h2>
+                        <div className="min-w-0">
+                            <h2 className="text-xl sm:text-2xl font-bold text-foreground break-words">{displayName}</h2>
                             <div className="flex items-center gap-2 text-secondary text-sm mt-1">
-                                <Mail size={16} className="text-muted-foreground" />
-                                <span>{displayEmail}</span>
+                                <Mail size={16} className="text-muted-foreground shrink-0" />
+                                <span className="min-w-0 break-all">{displayEmail}</span>
                             </div>
                         </div>
                     </div>
@@ -187,7 +188,7 @@ export const Profile: React.FC = () => {
             {/* Escala e Pausas */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Escala de Trabalho */}
-                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex flex-col">
+                <div style={staggerStyle(1, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm flex flex-col">
                     <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
                         <Clock size={20} className="text-primary" />
                         <h3 className="text-lg font-bold text-foreground">Escala de Trabalho</h3>
@@ -199,7 +200,7 @@ export const Profile: React.FC = () => {
                             const hasSchedule = sched && sched.start && sched.end;
 
                             return (
-                                <div key={day.key} className="flex items-center justify-between p-3 rounded-lg bg-background border border-border/60">
+                                <div key={day.key} className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-background border border-border/60">
                                     <span className="text-sm font-medium text-foreground">{day.label}</span>
                                     {hasSchedule ? (
                                         <span className="text-sm font-semibold text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-md border border-emerald-500/20">
@@ -217,7 +218,7 @@ export const Profile: React.FC = () => {
                 </div>
 
                 {/* Pausas Registradas */}
-                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex flex-col">
+                <div style={staggerStyle(2, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm flex flex-col">
                     <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
                         <Coffee size={20} className="text-orange-500" />
                         <h3 className="text-lg font-bold text-foreground">Pausas Registradas</h3>
@@ -252,10 +253,10 @@ export const Profile: React.FC = () => {
             </div>
 
             {/* Agendamentos por Dia Chart */}
-            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm">
+            <div style={staggerStyle(3, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-border">
-                    <div className="flex items-center gap-2">
-                        <BarChart3 size={22} className="text-primary" />
+                    <div className="flex items-center gap-2 min-w-0">
+                        <BarChart3 size={22} className="text-primary shrink-0" />
                         <h3 className="text-lg font-bold text-foreground">
                             Agendamentos por Dia (Meus Agendamentos)
                         </h3>
@@ -278,14 +279,14 @@ export const Profile: React.FC = () => {
                             className="w-28"
                         />
 
-                        <div className="bg-background px-4 py-2 rounded-lg border border-border text-center ml-2">
+                        <div className="bg-background px-4 py-2 rounded-lg border border-border text-center sm:ml-2">
                             <span className="text-xs text-muted-foreground block uppercase font-semibold">Total do Mês</span>
                             <span className="text-lg font-bold text-foreground">{chartTotal}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="h-80 w-full mt-4">
+                <div className="h-64 sm:h-80 w-full mt-4">
                     <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
                             <XAxis
@@ -350,7 +351,7 @@ export const Profile: React.FC = () => {
                 </div>
 
                 {/* Status Toggle Buttons */}
-                <div className="flex flex-wrap gap-3 justify-center mt-6">
+                <div className="flex flex-wrap gap-2 sm:gap-3 justify-center mt-6">
                     {['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'].map((status) => (
                         <button
                             key={status}
@@ -379,8 +380,8 @@ export const Profile: React.FC = () => {
             </div>
 
             {/* Vinheta de abertura: preferência deste navegador */}
-            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex items-center justify-between gap-4">
-                <div>
+            <div style={staggerStyle(4, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm flex items-center justify-between gap-4">
+                <div className="min-w-0">
                     <h3 className="text-lg font-bold text-foreground">Vinheta de abertura</h3>
                     <p className="text-sm text-secondary mt-1">
                         Animação de alguns segundos ao entrar no sistema. Vale para este navegador.{' '}
