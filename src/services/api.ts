@@ -2,13 +2,23 @@ import type { Appointment, Attendant, Event, UnnichatConnection } from '../types
 
 // Mock data removed as we are now using Supabase
 
+export type ReminderAppointment = Pick<Appointment, 'id' | 'lead' | 'date' | 'time' | 'type' | 'meetLink'>;
+
 export interface ApiService {
     appointments: {
         list: (params?: { startDate?: string; endDate?: string }) => Promise<Appointment[]>;
+        listWithMeta: (params?: { startDate?: string; endDate?: string }) => Promise<{ appointments: Appointment[]; truncated: boolean; total: number }>;
+        // Agendamentos Pendentes do usuário (atendente) num horário: só para o lembrete do navegador.
+        reminderSlot: (params: { date: string; time: string }) => Promise<ReminderAppointment[]>;
         create: (data: Omit<Appointment, 'id'>) => Promise<Appointment>;
         update: (id: string | number, data: Partial<Appointment>) => Promise<Appointment>;
         getAvailableTimes: (params: { date: string; type: string; eventId?: string; attendantId?: string }) => Promise<string[]>;
         resolveAttendant: (params: { date: string; time: string; type: string; eventId?: string }) => Promise<{ attendantId: string | null; attendantName?: string; motivo?: string }>;
+        changeOwner: (id: string, ownerId: string) => Promise<{ ownerId: string; ownerName: string; ownerChangedAt: string | null }>;
+    };
+    settings: {
+        getOwnerChangeSectors: () => Promise<{ sectors: string[]; availableSectors: string[] }>;
+        updateOwnerChangeSectors: (sectors: string[]) => Promise<{ sectors: string[] }>;
     };
     attendants: {
         list: () => Promise<Attendant[]>;

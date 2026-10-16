@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../utils/supabaseClient.js';
+import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors.js';
 
 const router = Router();
 
@@ -126,7 +127,7 @@ router.get('/partners-report', async (req: Request, res: Response) => {
         );
 
         // Agrupa pelo setor do atendente designado. Agendamentos cujo atendente
-        // não é de Closer nem de Perpétuos entram em "Outros" para que a soma
+        // não é de Closer nem de Pré-vendas entram em "Outros" para que a soma
         // dos times sempre feche com o total.
         //
         // Agendamentos CRIADOS por alguém do setor TEI são descartados antes da
@@ -134,7 +135,7 @@ router.get('/partners-report', async (req: Request, res: Response) => {
         const agrupar = (linhas: { type: string; status: string; attendant_id: string | null; created_by: string | null }[]) => {
             const times: Record<string, Bucket> = {
                 'Closer': emptyBucket(),
-                'Perpétuos': emptyBucket(),
+                [SECTOR_PRE_VENDAS]: emptyBucket(),
                 'Outros': emptyBucket()
             };
 
@@ -149,7 +150,7 @@ router.get('/partners-report', async (req: Request, res: Response) => {
                 }
 
                 const setor = linha.attendant_id ? setorPorUsuario.get(linha.attendant_id) : undefined;
-                const chave = setor === 'Closer' || setor === 'Perpétuos' ? setor : 'Outros';
+                const chave = setor === 'Closer' ? 'Closer' : isPreVendas(setor) ? SECTOR_PRE_VENDAS : 'Outros';
                 addToBucket(times[chave], linha.type || '(sem tipo)', linha.status || '(sem status)');
                 total += 1;
             }
@@ -170,3 +171,62 @@ router.get('/partners-report', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+/**
+ * GET /api/integrations/prior-appointment?phone=1234567
+ *
+ * Diz se já existe algum agendamento (qualquer status) para um telefone,
+ * recebendo só os 7 últimos dígitos dele. Resposta: `{ "agendamentoPrevio": true | false }`
+ * (objeto e não booleano solto: o nó HTTP Request do n8n só gera campos a partir de objeto).
+ *
+ * 7 dígitos não identificam uma pessoa de forma única: a resposta é `true` se
+ * QUALQUER cliente com esse final tiver agendamento. Por isso o endpoint nunca
+ * devolve dado da pessoa, só o booleano.
+ *
+ * Depende da coluna clients.phone_last7 (supabase/add_clients_phone_last7.sql).
+ */
+export const priorAppointmentRouter = Router();
+
+priorAppointmentRouter.get('/', async (req: Request, res: Response) => {
+    try {
+        const raw = typeof req.query.phone === 'string' ? req.query.phone : '';
+        const last7 = raw.replace(/\D/g, '');
+
+        if (last7.length !== 7) {
+            return res.status(400).json({ error: 'phone deve conter exatamente os 7 últimos dígitos do telefone.' });
+        }
+
+        const { data: clientes, error: clientesErr } = await supabase
+            .from('clients')
+            .select('id')
+            .eq('phone_last7', last7);
+
+        if (clientesErr) {
+            if (clientesErr.code === '42703') {
+                console.error('[PRIOR APPOINTMENT] Coluna clients.phone_last7 ausente — rode supabase/add_clients_phone_last7.sql.');
+                return res.status(503).json({ error: 'Consulta indisponível: migração do banco pendente.' });
+            }
+            console.error('[PRIOR APPOINTMENT] Erro ao buscar clientes:', clientesErr.message);
+            return res.status(500).json({ error: 'Erro ao consultar agendamentos.' });
+        }
+
+        if (!clientes || clientes.length === 0) {
+            return res.json({ agendamentoPrevio: false });
+        }
+
+        const { count, error: apptErr } = await supabase
+            .from('appointments')
+            .select('id', { count: 'exact', head: true })
+            .in('client_id', clientes.map(c => c.id));
+
+        if (apptErr) {
+            console.error('[PRIOR APPOINTMENT] Erro ao contar agendamentos:', apptErr.message);
+            return res.status(500).json({ error: 'Erro ao consultar agendamentos.' });
+        }
+
+        return res.json({ agendamentoPrevio: (count ?? 0) > 0 });
+    } catch (err: any) {
+        console.error('[PRIOR APPOINTMENT] Erro inesperado:', err?.message);
+        return res.status(500).json({ error: 'Erro ao consultar agendamentos.' });
+    }
+});

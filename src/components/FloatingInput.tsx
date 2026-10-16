@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useId } from 'react';
 import { cn } from '../lib/utils';
 
 
@@ -20,6 +20,9 @@ export const FloatingInput: React.FC<FloatingInputProps> = ({
     ...props
 }) => {
     const [isFocused, setIsFocused] = useState(false);
+    // Liga o rótulo ao campo: leitores de tela anunciam o nome do campo
+    const autoId = useId();
+    const inputId = props.id ?? autoId;
     const inputRef = useRef<HTMLInputElement>(null);
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -38,12 +41,15 @@ export const FloatingInput: React.FC<FloatingInputProps> = ({
         <div className={cn("relative", className)}>
             <input
                 ref={inputRef}
+                id={inputId}
                 value={value}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
                 placeholder=" "
+                aria-invalid={error ? true : undefined}
                 className={cn(
-                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-surface text-foreground",
+                    // text-base no celular: com menos de 16px o Safari do iPhone dá zoom ao focar o campo
+                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-base sm:text-sm bg-surface text-foreground",
                     startIcon ? "pl-10" : "",
                     error
                         ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"
@@ -56,6 +62,7 @@ export const FloatingInput: React.FC<FloatingInputProps> = ({
             />
 
             <label
+                htmlFor={inputId}
                 className={cn(
                     "absolute left-2 bg-surface px-1 transition-all duration-200 pointer-events-none z-10",
                     startIcon ? "left-9" : "left-2",

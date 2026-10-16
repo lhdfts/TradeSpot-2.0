@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { LoadingState } from '../components/ui/loading-state';
+import { staggerStyle } from '../lib/motion';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import type { Attendant } from '../types';
@@ -65,7 +67,7 @@ export const Attendants: React.FC = () => {
         navigate(`/all-appointments?attendant=${encodeURIComponent(attendantName)}`);
     };
 
-    if (loading) return <div>Carregando...</div>;
+    if (loading) return <LoadingState />;
 
     const displayAttendants = (sectorFilter === 'all' 
         ? attendants 
@@ -86,9 +88,9 @@ export const Attendants: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="w-64">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="w-full sm:w-64">
                         <FloatingInput
                             label="Pesquisar por nome ou email"
                             value={searchTerm}
@@ -104,7 +106,7 @@ export const Attendants: React.FC = () => {
                                 { value: 'all', label: 'Todos os Setores' },
                                 ...getAllowedSectors(user).map(sector => ({ value: sector, label: sector }))
                             ]}
-                            className="w-44"
+                            className="w-full sm:w-44"
                         />
                     )}
                 </div>
@@ -119,8 +121,10 @@ export const Attendants: React.FC = () => {
                 )}
             </div>
 
-            <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
-                <table className="w-full text-left">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
+                {/* Rolagem horizontal em telas pequenas para não cortar colunas */}
+                <div className="overflow-x-auto">
+                <table className="w-full text-left min-w-[720px]">
                     <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                         <tr>
                             <th className="px-6 py-4">Nome</th>
@@ -131,8 +135,8 @@ export const Attendants: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {displayAttendants.map(attendant => (
-                            <tr key={attendant.id} className="hover:bg-background/50 transition-colors">
+                        {displayAttendants.map((attendant, i) => (
+                            <tr style={staggerStyle(i, 30)} key={attendant.id} className="animate-fade-up hover:bg-background/50 transition-colors">
                                 <td className="px-6 py-4 text-foreground font-medium">
                                     <span
                                         onClick={() => navigateToAppointments(attendant.name)}
@@ -153,10 +157,10 @@ export const Attendants: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 text-foreground">{attendant.role}</td>
                                 <td className="px-6 py-4">
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center justify-center gap-1">
                                     <button
                                         onClick={() => handleEdit(attendant)}
-                                        className="p-1 text-secondary hover:text-foreground transition-colors"
+                                        className="p-2 text-secondary hover:text-foreground transition-colors"
                                         title="Editar Atendente"
                                     >
                                         <Edit size={18} />
@@ -164,7 +168,7 @@ export const Attendants: React.FC = () => {
                                     {['Admin', 'Dev'].includes(user?.role || '') && (
                                         <button
                                             onClick={() => handleDelete(attendant.id)}
-                                            className="p-1 text-secondary hover:text-destructive transition-colors"
+                                            className="p-2 text-secondary hover:text-destructive transition-colors"
                                             title="Excluir Atendente"
                                         >
                                             <Trash2 size={18} />
@@ -176,6 +180,7 @@ export const Attendants: React.FC = () => {
                         ))}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <AttendantModal

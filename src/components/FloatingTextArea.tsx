@@ -39,7 +39,8 @@ export const FloatingTextArea: React.FC<FloatingTextAreaProps> = ({
                 onBlur={handleBlur}
                 placeholder=" "
                 className={cn(
-                    "w-full px-3 py-2 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-surface text-foreground resize-none",
+                    // text-base no celular: com menos de 16px o Safari do iPhone dá zoom ao focar o campo
+                    "w-full px-3 py-2 border rounded-md shadow-sm transition-colors duration-200 outline-none text-base sm:text-sm bg-surface text-foreground resize-none",
                     "min-h-[80px]", // Default height
                     error
                         ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"

@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
-import { createPortal } from 'react-dom';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
-import { Search, Calendar as CalendarIcon, List, Copy, Check } from 'lucide-react';
+import { getDisplayStatus } from '../lib/appointmentStatus';
+import { useNow } from '../hooks/useNow';
 import type { Appointment } from '../types';
-import { Button } from '../components/ui/button';
-import { Pagination } from '../components/ui/pagination';
-import { FloatingInput } from '../components/FloatingInput';
 import { FloatingSelect } from '../components/FloatingSelect';
-import { DateRangePicker } from '../components/DateRangePicker';
-import { CalendarView } from '../components/CalendarView';
-import { toastManager } from '../components/ui/toast';
+import { FloatingDateInput } from '../components/FloatingDateInput';
+import { AppointmentsListView, type ExtraColumn } from '../components/appointments/AppointmentsListView';
+import { STATUS_FILTER_OPTIONS, FILTER_WIDTH } from '../constants/appointmentStatus';
 import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
 
 interface AllAppointmentsProps {
@@ -30,7 +27,7 @@ const getBrazilTodayISO = () => {
 };
 
 export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
-    const { appointments, refresh } = useAppointments();
+    const { appointments, refresh, truncated, loading: loadingAppointments, loaded } = useAppointments();
     const { attendants, events } = useFormData();
     const [searchParams] = useSearchParams();
     const { user } = useAuth();
@@ -42,19 +39,19 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         }
     }, [user, navigate]);
 
-    const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    // Status "Iniciando"/"Ao Vivo" dependem da hora; atualiza nas viradas de 5 min.
+    const now = useNow();
     // Initialize attendant filter from URL param if present
     const [attendantFilter, setAttendantFilter] = useState('all');
     const [creatorFilter, setCreatorFilter] = useState('all');
+    const [ownerFilter, setOwnerFilter] = useState('all');
     const [eventFilter, setEventFilter] = useState('all');
     const [sectorFilter, setSectorFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: getBrazilTodayISO(), end: '' });
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
-
-    const [copiedId, setCopiedId] = useState<string | null>(null);
 
     // Solução 1 (Recomendada - Filtro de Data no Backend):
     // Busca do Supabase exatamente os agendamentos do período selecionado, antes dos limites de linhas
@@ -98,7 +95,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     // Reset pagination when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, statusFilter, attendantFilter, creatorFilter, eventFilter, sectorFilter, dateRange]);
+    }, [search, statusFilter, attendantFilter, creatorFilter, ownerFilter, eventFilter, sectorFilter, dateRange]);
 
     // Events that had at least 1 appointment within the selected period (Data Inicial/Data Final),
     // used to restrict the options shown in the "Evento" filter.
@@ -132,7 +129,8 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                     (linkedEvent && linkedEvent.sector && allowedSectors.includes(linkedEvent.sector)) ||
                     (creatorUser && creatorUser.sector && allowedSectors.includes(creatorUser.sector)) ||
                     (a.attendantId === user?.id) ||
-                    (a.createdBy === user?.id);
+                    (a.createdBy === user?.id) ||
+                    (a.ownerId === user?.id);
             })
             .map(a => a.eventId)
     );
@@ -150,11 +148,13 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             a.id.includes(search) ||
             a.email?.toLowerCase().includes(search.toLowerCase());
 
-        const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
+        const matchesStatus = statusFilter === 'all' || getDisplayStatus(a, now) === statusFilter;
 
         const matchesAttendant = attendantFilter === 'all' || a.attendantId === attendantFilter;
 
         const matchesCreator = creatorFilter === 'all' || (a.createdBy && a.createdBy === creatorFilter);
+
+        const matchesOwner = ownerFilter === 'all' || (a.ownerId ?? a.createdBy) === ownerFilter;
 
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
 
@@ -197,53 +197,35 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             (linkedEvent && linkedEvent.sector && allowedSectors.includes(linkedEvent.sector)) ||
             (creatorUser && creatorUser.sector && allowedSectors.includes(creatorUser.sector)) ||
             (a.attendantId === user?.id) ||
-            (a.createdBy === user?.id);
+            (a.createdBy === user?.id) ||
+            (a.ownerId === user?.id);
 
-        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesEvent && matchesSectorFilter && matchesDate && matchesSector;
+        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesOwner && matchesEvent && matchesSectorFilter && matchesDate && matchesSector;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
         return dateA.getTime() - dateB.getTime(); // Ascending for closest appointments first
     });
 
-    // Pagination Logic
-    const totalPages = Math.ceil(filtered.length / itemsPerPage);
-    const paginated = filtered.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
+    const hasActiveFilters =
+        search !== '' || statusFilter !== 'all' || attendantFilter !== 'all' || creatorFilter !== 'all' ||
+        ownerFilter !== 'all' || eventFilter !== 'all' || sectorFilter !== 'all' ||
+        dateRange.start !== getBrazilTodayISO() || dateRange.end !== '';
 
-    const copyPhone = async (phone: number | string, id: string) => {
-        const phoneStr = phone.toString();
-        const digitsOnly = phoneStr.replace(/\D/g, '');
-        try {
-            await navigator.clipboard.writeText(digitsOnly);
-            setCopiedId(id);
-            toastManager.add({
-                title: "Sucesso",
-                description: "Telefone copiado com sucesso!",
-                type: 'success',
-            });
-            setTimeout(() => setCopiedId(null), 2000);
-        } catch (err) {
-            toastManager.add({
-                title: "Erro",
-                description: "Falha ao copiar telefone. Tente manualmente.",
-                type: 'error',
-            });
-        }
-    };
+    const advancedActiveCount = [
+        creatorFilter !== 'all', ownerFilter !== 'all', sectorFilter !== 'all',
+        attendantFilter !== 'all', eventFilter !== 'all', dateRange.end !== '',
+    ].filter(Boolean).length;
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'Realizado': return 'bg-[#00E676]/10 text-[#00E676] border-[#00E676]/20';
-            case 'Pendente': return 'bg-[#B2B2B2]/10 text-[#B2B2B2] border-[#B2B2B2]/20';
-            case 'Cancelado': return 'bg-[#FF1744]/10 text-[#FF1744] border-[#FF1744]/20';
-            case 'Reagendado': return 'bg-[#2979FF]/10 text-[#2979FF] border-[#2979FF]/20';
-            case 'Esquecimento': return 'bg-[#D500F9]/10 text-[#D500F9] border-[#D500F9]/20';
-            case 'No-show': return 'bg-[#FF9100]/10 text-[#FF9100] border-[#FF9100]/20';
-            default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
-        }
+    const clearFilters = () => {
+        setSearch('');
+        setStatusFilter('all');
+        setAttendantFilter('all');
+        setCreatorFilter('all');
+        setOwnerFilter('all');
+        setEventFilter('all');
+        setSectorFilter('all');
+        setDateRange({ start: getBrazilTodayISO(), end: '' });
     };
 
     // Helper to get Creator Name
@@ -253,219 +235,111 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         return creator ? creator.name : 'Unknown';
     };
 
+    const extraColumns: ExtraColumn[] = [
+        { header: 'Criado Por', width: 'w-[12%]', render: appt => getCreatorName(appt.createdBy), onlyWithAdvanced: true },
+        { header: 'Responsável', width: 'w-[12%]', render: appt => appt.ownerName || getCreatorName(appt.ownerId ?? appt.createdBy) },
+    ];
+
     if (user?.role === 'Colaborador' && user?.sector === 'Closer') {
         return <Navigate to="/" replace />;
     }
 
+    const attendantOptions = [
+        { value: 'all', label: 'Todos' },
+        ...filteredAttendants.map(att => ({ value: att.id, label: att.name }))
+    ];
+
     return (
-        <div className="space-y-6">
-            {createPortal(
-                <div className="flex flex-col text-right mr-4">
-                    <span className="text-[10px] tracking-wider text-secondary font-bold uppercase">Quantidade</span>
-                    <span className="text-xl font-bold text-foreground leading-none">
-                        {filtered.length}
-                    </span>
-                </div>,
-                document.getElementById('header-actions') || document.body
+        <AppointmentsListView
+            appointments={filtered}
+            loading={loadingAppointments}
+            loaded={loaded}
+            truncated={truncated}
+            search={search}
+            onSearchChange={value => setSearch(sanitizeInput.search(value))}
+            hasActiveFilters={hasActiveFilters}
+            onClearFilters={clearFilters}
+            page={currentPage}
+            onPageChange={setCurrentPage}
+            pageSize={itemsPerPage}
+            extraColumns={extraColumns}
+            actionLabel="Editar"
+            onOpen={onEdit}
+            onCreate={() => navigate('/create-appointment')}
+            emptyDescription="Quando houver agendamentos no seu setor, eles aparecem aqui."
+            primaryFilters={viewMode => viewMode === 'table' && (
+                <>
+                    <FloatingSelect
+                        label="Status"
+                        className={FILTER_WIDTH}
+                        value={statusFilter}
+                        onChange={e => setStatusFilter(e.target.value)}
+                        options={STATUS_FILTER_OPTIONS}
+                    />
+                    <FloatingDateInput
+                        label="Data Inicial"
+                        className={FILTER_WIDTH}
+                        value={dateRange.start}
+                        onChange={e => setDateRange({ ...dateRange, start: e.target.value })}
+                    />
+                </>
             )}
-
-            {/* Controls Bar */}
-            <div className="flex flex-col xl:flex-row gap-4 bg-surface p-4 rounded-lg border border-border shadow-sm">
-                {/* Search */}
-                <div className="flex-1 min-w-[250px]">
-                    <div className="relative">
-                        <FloatingInput
-                            label="Pesquisa"
-                            startIcon={<Search size={18} />}
-                            value={search}
-                            onChange={e => setSearch(sanitizeInput.search(e.target.value))}
-                            placeholder=""
-                            className="bg-background"
-                        />
-                    </div>
-                </div>
-
-                {/* Filters */}
-                <div className="flex flex-wrap gap-2 items-end">
-                    {viewMode === 'table' && (
-                        <FloatingSelect
-                            label="Status"
-                            value={statusFilter}
-                            onChange={(e: any) => setStatusFilter(e.target.value)}
-                            options={[
-                                { value: 'all', label: 'Todos' },
-                                { value: 'Cancelado', label: 'Cancelado' },
-                                { value: 'Esquecimento', label: 'Esquecimento' },
-                                { value: 'No-show', label: 'No-show' },
-                                { value: 'Pendente', label: 'Pendente' },
-                                { value: 'Realizado', label: 'Realizado' },
-                                { value: 'Reagendado', label: 'Reagendado' }
-                            ]}
-                        />
-                    )}
-
+            advancedActiveCount={advancedActiveCount}
+            advancedFilters={viewMode => (
+                <>
                     <FloatingSelect
                         label="Criador"
+                        className={FILTER_WIDTH}
                         value={creatorFilter}
-                        onChange={(e: any) => setCreatorFilter(e.target.value)}
-                        options={[
-                            { value: 'all', label: 'Todos' },
-                            ...filteredAttendants.map(att => ({ value: att.id, label: att.name }))
-                        ]}
+                        onChange={e => setCreatorFilter(e.target.value)}
+                        options={attendantOptions}
                     />
-
+                    <FloatingSelect
+                        label="Responsável"
+                        className={FILTER_WIDTH}
+                        value={ownerFilter}
+                        onChange={e => setOwnerFilter(e.target.value)}
+                        options={attendantOptions}
+                    />
                     {(canViewAllSectors(user) || isMedinaUser(user) || isDualLeader(user)) && (
                         <FloatingSelect
                             label="Setor"
+                            className={FILTER_WIDTH}
                             value={sectorFilter}
-                            onChange={(e: any) => setSectorFilter(e.target.value)}
+                            onChange={e => setSectorFilter(e.target.value)}
                             options={[
                                 { value: 'all', label: 'Todos' },
                                 ...getAllowedSectors(user).map(s => ({ value: s, label: s }))
                             ]}
                         />
                     )}
-
                     <FloatingSelect
                         label="Atendente"
+                        className={FILTER_WIDTH}
                         value={attendantFilter}
-                        onChange={(e: any) => setAttendantFilter(e.target.value)}
-                        options={[
-                            { value: 'all', label: 'Todos' },
-                            ...filteredAttendants.map(att => ({ value: att.id, label: att.name }))
-                        ]}
+                        onChange={e => setAttendantFilter(e.target.value)}
+                        options={attendantOptions}
                     />
-
                     <FloatingSelect
                         label="Evento"
+                        className={FILTER_WIDTH}
                         value={eventFilter}
-                        onChange={(e: any) => setEventFilter(e.target.value)}
+                        onChange={e => setEventFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos' },
                             ...eventOptions.map(ev => ({ value: ev.id, label: ev.event_name }))
                         ]}
                     />
-
                     {viewMode === 'table' && (
-                        <DateRangePicker
-                            startDate={dateRange.start}
-                            endDate={dateRange.end}
-                            onStartDateChange={(date) => setDateRange({ ...dateRange, start: date })}
-                            onEndDateChange={(date) => setDateRange({ ...dateRange, end: date })}
+                        <FloatingDateInput
+                            label="Data Final"
+                            className={FILTER_WIDTH}
+                            value={dateRange.end}
+                            onChange={e => setDateRange({ ...dateRange, end: e.target.value })}
                         />
                     )}
-                </div>
-
-                {/* View Toggle & Actions */}
-                <div className="flex items-center gap-2 border-l border-border pl-4 ml-auto">
-
-                    <div>
-                        <div className="flex bg-background rounded-lg p-1 border border-border h-11 items-center">
-                            <button
-                                onClick={() => setViewMode('table')}
-                                className={`h-full aspect-square rounded flex items-center justify-center transition-colors ${viewMode === 'table' ? 'bg-gray-200 dark:bg-surface shadow text-black dark:text-white' : 'text-secondary hover:text-primary'}`}
-                                title="Lista"
-                            >
-                                <List size={18} />
-                            </button>
-                            <button
-                                onClick={() => setViewMode('calendar')}
-                                className={`h-full aspect-square rounded flex items-center justify-center transition-colors ${viewMode === 'calendar' ? 'bg-gray-200 dark:bg-surface shadow text-black dark:text-white' : 'text-secondary hover:text-primary'}`}
-                                title="Calendário"
-                            >
-                                <CalendarIcon size={18} />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Content */}
-            {viewMode === 'table' ? (
-                <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left min-w-[800px]">
-                            <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
-                                <tr>
-
-                                    <th className="px-6 py-4">Data/Hora</th>
-                                    <th className="px-6 py-4">Aluno(a)</th>
-                                    <th className="px-6 py-4">Tipo</th>
-                                    <th className="px-6 py-4">Status</th>
-                                    <th className="px-6 py-4">Criado Por</th>
-                                    <th className="px-6 py-4">Atendente</th>
-                                    <th className="px-6 py-4 text-center">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {paginated.map(appt => (
-                                    <tr key={appt.id} className="hover:bg-background/50 transition-colors group">
-
-                                        <td className="px-6 py-4">
-                                            <div className="text-foreground font-medium">{new Date(appt.date + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
-                                            <div className="text-sm text-secondary">{appt.time}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-foreground font-medium" title={appt.lead}>
-                                                {appt.lead.length > 25 ? `${appt.lead.substring(0, 25)}...` : appt.lead}
-                                            </div>
-                                            <div className="flex items-center gap-2 text-sm text-secondary">
-                                                {appt.phone}
-                                                <button
-                                                    onClick={() => copyPhone(appt.phone, appt.id)}
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-foreground hover:text-foreground"
-                                                    title="Copiar telefone"
-                                                >
-                                                    {copiedId === appt.id ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                                                </button>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-foreground">{appt.type}</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(appt.status)}`}>
-                                                {appt.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-foreground">
-                                            {getCreatorName(appt.createdBy)}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-foreground">
-                                            {appt.attendantName || appt.attendantId}
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() => onEdit(appt)}
-                                            >
-                                                Editar
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    {filtered.length > 0 && totalPages > 1 && (
-                        <div className="p-4 border-t border-border">
-                            <Pagination
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                onPageChange={setCurrentPage}
-                            />
-                        </div>
-                    )}
-                </div>
-            ) : (
-                <CalendarView appointments={filtered} onEditAppointment={onEdit} isSearching={!!search} />
+                </>
             )}
-
-            {filtered.length === 0 && (
-                <div className="text-center py-12 text-secondary bg-surface rounded-lg border border-border">
-                    <CalendarIcon size={48} className="mx-auto mb-4 opacity-20" />
-                    <p>Nenhum agendamento encontrado.</p>
-                </div>
-            )}
-        </div>
+        />
     );
 };

@@ -6,7 +6,7 @@ import crypto from 'crypto';
  *
  * Duas barreiras, ambas obrigatórias:
  *   1. X-API-Key          -> segredo compartilhado (INTEGRATION_API_KEY)
- *   2. X-N8N-Workflow-Id  -> id do workflow autorizado (N8N_PARTNERS_WORKFLOW_ID)
+ *   2. X-N8N-Workflow-Id  -> id do workflow autorizado para aquele endpoint
  *
  * O id do workflow sozinho não é segredo — ele amarra a chamada à automação
  * específica, mas quem protege de fato é o token.
@@ -34,14 +34,18 @@ const firstHeader = (value: string | string[] | undefined): string => {
 const fingerprint = (value: string): string =>
     crypto.createHash('sha256').update(value).digest('hex').slice(0, 8);
 
-export const integrationAuth = (req: Request, res: Response, next: NextFunction) => {
+/**
+ * Cria o middleware de uma integração, amarrado ao workflow cujo id está na
+ * variável de ambiente `workflowEnvVar`. Cada endpoint aceita só o seu workflow.
+ */
+const requireIntegration = (workflowEnvVar: string) => (req: Request, res: Response, next: NextFunction) => {
     // .trim() protege contra espaço/quebra de linha colados junto do valor no
     // painel de variáveis de ambiente — causa comum de 401 inexplicável.
     const expectedKey = (process.env.INTEGRATION_API_KEY || '').trim();
-    const expectedWorkflow = (process.env.N8N_PARTNERS_WORKFLOW_ID || '').trim();
+    const expectedWorkflow = (process.env[workflowEnvVar] || '').trim();
 
     if (!expectedKey || !expectedWorkflow) {
-        console.error('[INTEGRATION AUTH] INTEGRATION_API_KEY e/ou N8N_PARTNERS_WORKFLOW_ID não configurados — endpoint recusando todas as requisições.');
+        console.error(`[INTEGRATION AUTH] INTEGRATION_API_KEY e/ou ${workflowEnvVar} não configurados — endpoint recusando todas as requisições.`);
         return res.status(503).json({ error: 'Integração não configurada neste ambiente.' });
     }
 
@@ -62,9 +66,16 @@ export const integrationAuth = (req: Request, res: Response, next: NextFunction)
             ? 'ok'
             : `divergente (recebido="${providedWorkflow}" | esperado="${expectedWorkflow}")`;
 
-        console.warn(`[INTEGRATION AUTH] Acesso negado em ${req.originalUrl} (ip=${req.ip}) | X-API-Key: ${detalheChave} | X-N8N-Workflow-Id: ${detalheWorkflow}`);
+        // Só o caminho, sem a query string: ela pode trazer dígitos de telefone.
+        console.warn(`[INTEGRATION AUTH] Acesso negado em ${req.baseUrl}${req.path} (ip=${req.ip}) | X-API-Key: ${detalheChave} | X-N8N-Workflow-Id: ${detalheWorkflow}`);
         return res.status(401).json({ error: 'Não autorizado.' });
     }
 
     next();
 };
+
+/** Relatório Partners (/api/integrations/partners-report). */
+export const integrationAuth = requireIntegration('N8N_PARTNERS_WORKFLOW_ID');
+
+/** Consulta de agendamento prévio (/api/integrations/prior-appointment). */
+export const priorAppointmentAuth = requireIntegration('N8N_PRIOR_APPOINTMENT_WORKFLOW_ID');

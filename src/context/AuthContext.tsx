@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, type ReactNode }
 import type { User } from '../types';
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
+import { normalizeSector } from '../constants/sectors';
 
 interface AuthContextType {
     user: User | null;
@@ -41,7 +42,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         name: userData.name,
                         email: userData.email,
                         role: userData.role,
-                        sector: userData.sector
+                        sector: normalizeSector(userData.sector)
                     });
                     // VULN-007: Store server-signed integrity hash
                     if (userData._integrity) {
@@ -118,7 +119,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 name: userData.name,
                 email: userData.email,
                 role: userData.role,
-                sector: userData.sector
+                sector: normalizeSector(userData.sector)
             });
             // VULN-007: Store server-signed integrity hash
             if (userData._integrity) {

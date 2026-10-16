@@ -10,13 +10,17 @@ export function UpdateNotification() {
         <div
             style={{
                 position: 'fixed',
-                bottom: '24px',
+                // safe-area: no iPhone o aviso não fica atrás da barra de gestos
+                bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 zIndex: 9999,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
+                // Em telas estreitas o texto quebra em vez de o aviso vazar da tela
+                maxWidth: 'calc(100vw - 32px)',
+                width: 'max-content',
                 backgroundColor: '#1a1a2e',
                 border: '1px solid rgba(255,255,255,0.12)',
                 borderRadius: '12px',
@@ -26,7 +30,6 @@ export function UpdateNotification() {
                 fontSize: '14px',
                 fontFamily: 'Montserrat, sans-serif',
                 animation: 'slideUp 0.3s ease-out',
-                whiteSpace: 'nowrap',
             }}
         >
             <style>{`
@@ -36,7 +39,7 @@ export function UpdateNotification() {
                 }
             `}</style>
 
-            <span style={{ color: '#a0a0b8' }}>
+            <span style={{ color: '#a0a0b8', minWidth: 0 }}>
                 🚀 Nova versão disponível
             </span>
 
@@ -50,7 +53,9 @@ export function UpdateNotification() {
                     color: '#fff',
                     border: 'none',
                     borderRadius: '8px',
-                    padding: '6px 14px',
+                    padding: '8px 14px',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
                     fontSize: '13px',
                     fontWeight: 600,
                     cursor: 'pointer',

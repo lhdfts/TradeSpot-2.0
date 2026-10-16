@@ -13,7 +13,7 @@ interface TimePickerInputProps {
     minTime?: string; // Format HH:MM - Should be the earliest allowed time slot
     hideUnavailable?: boolean;
     pickerGridClass?: string;
-    isPerpetuosEvent?: boolean; // If true, only show :00 and :30 time slots
+    isPreVendasEvent?: boolean; // If true, only show :00 and :30 time slots
 }
 
 export const TimePickerInput: React.FC<TimePickerInputProps> = ({
@@ -26,10 +26,10 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     minTime,
     hideUnavailable = false,
     pickerGridClass,
-    isPerpetuosEvent = false,
+    isPreVendasEvent = false,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
+    const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, above: false, maxHeight: 384 });
     const containerRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -56,8 +56,8 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
 
     const allTimes = generateAllTimes();
     // If availableTimes is provided, use it (even if empty). If not (undefined), show all times.
-    // For Perpétuos events, filter to only :00 and :30 slots
-    const filteredAllTimes = isPerpetuosEvent
+    // For Pré-vendas events, filter to only :00 and :30 slots
+    const filteredAllTimes = isPreVendasEvent
         ? allTimes.filter(time => {
             const minutes = time.split(':')[1];
             return minutes === '00' || minutes === '30';
@@ -68,10 +68,21 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     const updatePosition = () => {
         if (buttonRef.current) {
             const rect = buttonRef.current.getBoundingClientRect();
+            // Sem espaço abaixo (ex.: campo no fim da tela em 1280x720), abre para
+            // cima; a altura fica limitada ao espaço visível do lado escolhido.
+            const MARGIN = 12;
+            const spaceBelow = window.innerHeight - rect.bottom - MARGIN;
+            const spaceAbove = rect.top - MARGIN;
+            const above = spaceBelow < 260 && spaceAbove > spaceBelow;
+            // Mantém a lista (w-96 = 384px) dentro da largura da tela
+            const popupWidth = Math.min(384, window.innerWidth * 0.85);
+            const left = Math.max(8, Math.min(rect.left, window.innerWidth - popupWidth - 8));
             setCoords({
-                top: rect.bottom + window.scrollY + 4,
-                left: rect.left + window.scrollX,
-                width: rect.width
+                top: (above ? rect.top - 4 : rect.bottom + 4) + window.scrollY,
+                left: left + window.scrollX,
+                width: rect.width,
+                above,
+                maxHeight: Math.max(160, Math.min(384, above ? spaceAbove : spaceBelow))
             });
         }
     };
@@ -86,11 +97,12 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                     setIsOpen(false);
                 }
             };
+            const handleResize = () => setIsOpen(false);
             window.addEventListener('scroll', handleScroll, { capture: true });
-            window.addEventListener('resize', () => setIsOpen(false));
+            window.addEventListener('resize', handleResize);
             return () => {
                 window.removeEventListener('scroll', handleScroll, { capture: true });
-                window.removeEventListener('resize', () => setIsOpen(false));
+                window.removeEventListener('resize', handleResize);
             };
         }
     }, [isOpen, isMobile]);
@@ -129,18 +141,20 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                 "bg-surface border border-border rounded-lg shadow-lg p-4",
                 isMobile
                     ? "w-full mt-2 relative z-0 max-h-60 overflow-y-auto"
-                    : "timepicker-portal absolute z-[9999] w-[85vw] sm:w-96 max-h-96 overflow-y-auto"
+                    : "timepicker-portal absolute z-[9999] w-[85vw] sm:w-96 overflow-y-auto"
             )}
             style={!isMobile ? {
                 top: coords.top,
                 left: coords.left,
+                maxHeight: coords.maxHeight,
+                transform: coords.above ? 'translateY(-100%)' : undefined
             } : undefined}
             onClick={(e) => e.stopPropagation()}
         >
             <div className={cn("grid gap-2", pickerGridClass || "grid-cols-4")}>
                 {filteredAllTimes.map(time => {
-                    // For Perpétuos events, hide :15 and :45 time slots
-                    if (isPerpetuosEvent) {
+                    // For Pré-vendas events, hide :15 and :45 time slots
+                    if (isPreVendasEvent) {
                         const minutes = time.split(':')[1];
                         if (minutes === '15' || minutes === '45') {
                             return null;
@@ -157,7 +171,8 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                             onClick={() => handleSelectTime(time)}
                             disabled={!available}
                             className={cn(
-                                'px-2 py-2 text-sm rounded transition-colors font-medium',
+                                // py-2.5 no celular: alvo de toque maior
+                                'px-2 py-2.5 sm:py-2 text-sm rounded transition-colors font-medium',
                                 value === time && available
                                     ? 'bg-[#070707] text-white'
                                     : available

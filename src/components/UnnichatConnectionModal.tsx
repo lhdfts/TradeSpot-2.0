@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import type { UnnichatConnection } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { SECTOR_PRE_VENDAS } from '../constants/sectors';
 
 const Input: React.FC<any> = ({ label, ...props }) => (
     <div className="space-y-1">
@@ -19,12 +20,11 @@ const Select = CustomSelect;
 const SECTOR_OPTIONS = [
     { value: 'Aldeia', label: 'Aldeia' },
     { value: 'Closer', label: 'Closer' },
-    { value: 'Perpétuos', label: 'Perpétuos' },
+    { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
     { value: 'CEO', label: 'CEO' },
     { value: 'SDR', label: 'SDR' },
     { value: 'Tribo', label: 'Tribo' },
-    { value: 'Social Seller', label: 'Social Seller' },
-    { value: 'Presencial', label: 'Presencial' }
+    { value: 'Social Seller', label: 'Social Seller' }
 ];
 
 interface UnnichatConnectionModalProps {
@@ -130,11 +130,12 @@ export const UnnichatConnectionModal: React.FC<UnnichatConnectionModalProps> = (
                     disabled={!isSuperUser}
                 />
 
-                <div className="flex justify-end gap-2 pt-4 border-t border-border">
-                    <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
+                {/* No celular: botões na largura toda, Salvar em cima */}
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4 border-t border-border">
+                    <Button type="button" variant="ghost" onClick={onClose} disabled={saving} className="w-full sm:w-auto h-11 sm:h-9">
                         Cancelar
                     </Button>
-                    <Button type="submit" variant="default" disabled={saving}>
+                    <Button type="submit" variant="default" disabled={saving} className="w-full sm:w-auto h-11 sm:h-9">
                         {saving ? 'Salvando...' : 'Salvar'}
                     </Button>
                 </div>

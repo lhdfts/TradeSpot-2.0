@@ -3,19 +3,28 @@ import { Logo } from '../components/Logo';
 import { auth } from '../lib/firebase';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, SAMLAuthProvider } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
+import { marcarAberturaPendente, limparAberturaPendente } from '../components/abertura/controleAbertura';
 
 export const Login: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const { authError, clearAuthError } = useAuth();
 
+    // Login recusado pelo sistema (ex.: e-mail sem cadastro): sem vinheta.
+    React.useEffect(() => {
+        if (authError) limparAberturaPendente();
+    }, [authError]);
+
     React.useEffect(() => {
         getRedirectResult(auth).catch((error) => {
+            limparAberturaPendente();
             console.error('Error from redirect login:', error);
             alert(`Erro no login por redirecionamento: ${error.message}`);
         });
     }, []);
 
     const handleGoogleLogin = async (method: 'popup' | 'redirect') => {
+        // Antes do primeiro await: o som da vinheta só pode ser criado dentro do clique.
+        marcarAberturaPendente();
         setLoading(true);
         clearAuthError();
         const provider = new SAMLAuthProvider(
@@ -42,11 +51,13 @@ export const Login: React.FC = () => {
                     await signInWithRedirect(auth, provider);
                 } catch (redirectError: any) {
                     console.error('Error starting redirect login:', redirectError);
+                    limparAberturaPendente();
                     alert(`Erro ao iniciar login: ${redirectError.message}`);
                     setLoading(false);
                 }
             } else {
                 console.error('Error logging in with Google:', error);
+                limparAberturaPendente();
                 alert(`Erro ao fazer login com Google: ${error.message}`);
                 setLoading(false);
             }

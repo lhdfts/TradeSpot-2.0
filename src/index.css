@@ -94,3 +94,87 @@
     font-family: 'Montserrat', sans-serif;
   }
 }
+/* ------------------------------------------------------------
+   Movimento — entradas suaves usadas em páginas, cards e listas.
+   O atraso vem de --delay (ver lib/motion.ts) para montar cascatas.
+   ------------------------------------------------------------ */
+@layer utilities {
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes blur-fade {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); filter: blur(6px); }
+    to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  }
+  @keyframes slide-in-left {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--delay, 0ms);
+  }
+  .animate-blur-fade {
+    animation: blur-fade 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--delay, 0ms);
+  }
+  .animate-slide-in-left {
+    animation: slide-in-left 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--delay, 0ms);
+  }
+
+  /* Filhos diretos entram em cascata (até 12 itens). */
+  .stagger-children > * {
+    animation: slide-in-left 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stagger-children > *:nth-child(1)  { animation-delay: 60ms; }
+  .stagger-children > *:nth-child(2)  { animation-delay: 110ms; }
+  .stagger-children > *:nth-child(3)  { animation-delay: 160ms; }
+  .stagger-children > *:nth-child(4)  { animation-delay: 210ms; }
+  .stagger-children > *:nth-child(5)  { animation-delay: 260ms; }
+  .stagger-children > *:nth-child(6)  { animation-delay: 310ms; }
+  .stagger-children > *:nth-child(7)  { animation-delay: 360ms; }
+  .stagger-children > *:nth-child(8)  { animation-delay: 410ms; }
+  .stagger-children > *:nth-child(9)  { animation-delay: 460ms; }
+  .stagger-children > *:nth-child(10) { animation-delay: 510ms; }
+  .stagger-children > *:nth-child(11) { animation-delay: 560ms; }
+  .stagger-children > *:nth-child(12) { animation-delay: 610ms; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-up,
+    .animate-blur-fade,
+    .animate-slide-in-left,
+    .stagger-children > * {
+      animation: none;
+    }
+  }
+}
+
+@layer utilities {
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+  /* Brilho que corre sobre blocos de carregamento. */
+  .animate-shimmer {
+    background-image: linear-gradient(90deg, transparent 25%, rgb(255 255 255 / 0.08) 50%, transparent 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-shimmer { animation: none; }
+  }
+}
+
+@layer base {
+  /* Barra de rolagem fina, na cor da borda do tema. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+}

@@ -7,6 +7,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { Attendant } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { SECTOR_PRE_VENDAS } from '../constants/sectors';
 
 const Input: React.FC<any> = ({ label, ...props }) => (
     <div className="space-y-1">
@@ -196,7 +197,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
                     required
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Select
                         label="Função"
                         value={formData.role}
@@ -210,12 +211,11 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                         options={[
                             { value: 'SDR', label: 'SDR' },
                             { value: 'Closer', label: 'Closer' },
-                            { value: 'Perpétuos', label: 'Perpétuos' },
+                            { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
                             { value: 'Tribo', label: 'Tribo' },
                             { value: 'Aldeia', label: 'Aldeia' },
                             { value: 'Social Seller', label: 'Social Seller' },
-                            { value: 'CEO', label: 'CEO' },
-                            { value: 'Presencial', label: 'Presencial' }
+                            { value: 'CEO', label: 'CEO' }
                         ]}
                     />
                 </div>
@@ -224,20 +224,23 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                     <h4 className="text-sm font-medium text-foreground">Horários e Pausas</h4>
                     {['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map(day => (
                         <div key={day} className="border border-border rounded-lg p-3 space-y-3">
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground uppercase w-12">{day}</span>
-                                <div className="flex gap-2 items-center flex-1">
-                                    <span className="text-xs text-secondary">Trabalho:</span>
+                            {/* No celular: dia e botão de pausa na 1ª linha, horários na linha de baixo
+                                (order-last + basis-full); a partir de sm volta a ser uma linha só.
+                                text-base no celular evita o zoom automático do iOS ao focar o campo. */}
+                            <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-2">
+                                <span className="text-sm font-medium text-foreground uppercase w-12 shrink-0">{day}</span>
+                                <div className="flex gap-2 items-center flex-1 min-w-0 basis-full sm:basis-auto order-last sm:order-none">
+                                    <span className="text-xs text-secondary shrink-0">Trabalho:</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-1 text-sm text-secondary w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={formData.schedule?.[day]?.start || ''}
                                         onChange={e => updateSchedule(day, 'start', e.target.value)}
                                     />
                                     <span className="text-secondary">-</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-1 text-sm text-secondary w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={formData.schedule?.[day]?.end || ''}
                                         onChange={e => updateSchedule(day, 'end', e.target.value)}
                                     />
@@ -246,6 +249,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                                     type="button"
                                     variant="ghost"
                                     size="sm"
+                                    className="shrink-0 h-10 w-10 p-0 sm:h-8 sm:w-auto sm:px-3"
                                     onClick={() => addPause(day)}
                                     disabled={(formData.pauses?.[day]?.length || 0) >= 2}
                                     title={(formData.pauses?.[day]?.length || 0) >= 2 ? "Máximo de 2 pausas atingido" : "Adicionar pausa"}
@@ -256,25 +260,26 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
 
                             {/* Pauses List */}
                             {formData.pauses?.[day]?.map((pause, index) => (
-                                <div key={index} className="flex gap-2 items-center pl-16">
-                                    <span className="text-xs text-secondary w-[52px]">Pausa {index + 1}:</span>
+                                <div key={index} className="flex flex-wrap sm:flex-nowrap gap-2 items-center sm:pl-16">
+                                    <span className="text-xs text-secondary w-full sm:w-[52px] sm:shrink-0">Pausa {index + 1}:</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-1 text-xs text-secondary w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={pause.start}
                                         onChange={e => updatePause(day, index, 'start', e.target.value)}
                                     />
                                     <span className="text-xs text-secondary">-</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-1 text-xs text-secondary w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={pause.end}
                                         onChange={e => updatePause(day, index, 'end', e.target.value)}
                                     />
                                     <button
                                         type="button"
                                         onClick={() => removePause(day, index)}
-                                        className="text-destructive hover:text-destructive/80 p-1"
+                                        className="text-destructive hover:text-destructive/80 p-2 sm:p-1 shrink-0"
+                                        aria-label={`Remover pausa ${index + 1}`}
                                     >
                                         <Trash2 size={14} />
                                     </button>
@@ -284,9 +289,10 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                     ))}
                 </div>
 
-                <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
-                    <Button type="submit" disabled={isSubmitting}>
+                {/* No celular: botões na largura toda, Salvar em cima */}
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4">
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting} className="w-full sm:w-auto h-11 sm:h-9">Cancelar</Button>
+                    <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto h-11 sm:h-9">
                         {isSubmitting ? 'Salvando...' : 'Salvar'}
                     </Button>
                 </div>

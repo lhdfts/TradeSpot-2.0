@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { staggerStyle } from '../lib/motion';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { getAuthHeaders } from '../lib/firebase';
@@ -43,7 +44,11 @@ export interface ExecutionLog {
     } | null;
 }
 
-const EXECUTION_TYPES = ['Distribuição Automática', 'Alteração de Status', 'Alteração de Atendente'];
+const EXECUTION_TYPES = ['Distribuição Automática', 'Atribuição Manual', 'Alteração de Status', 'Alteração de Atendente', 'Alteração de Owner'];
+
+// Nome exibido; o valor gravado no banco continua 'Alteração de Owner'.
+const EXECUTION_TYPE_LABELS: Record<string, string> = { 'Alteração de Owner': 'Alteração de Responsável' };
+const executionTypeLabel = (type: string) => EXECUTION_TYPE_LABELS[type] || type;
 
 export const Logs: React.FC = () => {
     const { user } = useAuth();
@@ -186,8 +191,10 @@ export const Logs: React.FC = () => {
     const getExecutionTypeBadge = (type: string) => {
         const styles: Record<string, string> = {
             'Distribuição Automática': 'bg-primary/10 text-primary border-primary/20',
+            'Atribuição Manual': 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
             'Alteração de Status': 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-            'Alteração de Atendente': 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20'
+            'Alteração de Atendente': 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+            'Alteração de Owner': 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
         };
         return styles[type] || 'bg-muted text-muted-foreground border-border/50';
     };
@@ -197,6 +204,7 @@ export const Logs: React.FC = () => {
             case 'Alteração de Status':
                 return `${log.old_value || 'Não informado'} → ${log.new_value || 'Não informado'}`;
             case 'Alteração de Atendente':
+            case 'Alteração de Owner':
                 return `${log.old_value || 'Não informado'} → ${log.new_value || 'Não informado'}`;
             default:
                 return `Atribuído para ${log.selected_attendant_name || 'Não informado'}`;
@@ -248,16 +256,17 @@ export const Logs: React.FC = () => {
     return (
         <div className="space-y-6">
             {portalContainer && createPortal(
-                <Button onClick={fetchLogs} variant="outline" size="sm" disabled={loading} className="mr-2">
-                    <RefreshCw size={16} className={cn("mr-2", loading && "animate-spin")} />
-                    Atualizar Logs
+                // No celular só o ícone, para caber ao lado do título
+                <Button onClick={fetchLogs} variant="outline" size="sm" disabled={loading} className="mr-2 h-9 px-2.5 sm:h-8 sm:px-3" aria-label="Atualizar Logs" title="Atualizar Logs">
+                    <RefreshCw size={16} className={cn("sm:mr-2", loading && "animate-spin")} />
+                    <span className="hidden sm:inline">Atualizar Logs</span>
                 </Button>,
                 portalContainer
             )}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-4">
-                    <div className="w-72">
+                <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+                    <div className="w-full sm:w-72">
                         <FloatingInput
                             label="Pesquisar"
                             value={searchTerm}
@@ -270,11 +279,11 @@ export const Logs: React.FC = () => {
                         onChange={(e: any) => setExecutionTypeFilter(e.target.value)}
                         options={[
                             { value: 'all', label: 'Todos os Tipos' },
-                            ...EXECUTION_TYPES.map(type => ({ value: type, label: type }))
+                            ...EXECUTION_TYPES.map(type => ({ value: type, label: executionTypeLabel(type) }))
                         ]}
-                        className="w-56"
+                        className="flex-1 min-w-[10rem] sm:flex-none sm:w-56"
                     />
-                    <div className="w-48">
+                    <div className="flex-1 min-w-[10rem] sm:flex-none sm:w-48">
                         <FloatingInput
                             label="Filtrar por data"
                             type="date"
@@ -285,7 +294,7 @@ export const Logs: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
+            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left min-w-[900px]">
                         <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
@@ -347,7 +356,7 @@ export const Logs: React.FC = () => {
                                                     isExpanded && "bg-background/80 font-medium"
                                                 )}
                                             >
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="text-foreground font-medium">{formatDatePart(log.created_at)}</div>
                                                     <div className="text-sm text-secondary">{formatTimePart(log.created_at)}</div>
                                                 </td>
@@ -359,7 +368,7 @@ export const Logs: React.FC = () => {
 
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={cn("px-2.5 py-1 rounded-md text-xs font-semibold border", getExecutionTypeBadge(log.execution_type))}>
-                                                        {log.execution_type}
+                                                        {executionTypeLabel(log.execution_type)}
                                                     </span>
                                                 </td>
 
@@ -401,8 +410,8 @@ export const Logs: React.FC = () => {
                                             <tr className="bg-background/30 border-b border-border">
                                                 <td colSpan={6} className="px-6 py-4 animate-in slide-in-from-top-2 duration-200">
                                                     <div className="bg-surface rounded-lg p-4 sm:p-5 border border-border shadow-inner space-y-3">
-                                                        <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
-                                                            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+                                                            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex flex-wrap items-center gap-1.5">
                                                                 <span>Verificações Feitas no Algoritmo para Esta Distribuição</span>
                                                                 <span className="px-2 py-0.5 rounded-full bg-background text-foreground font-normal border border-border/60">
                                                                     {safeChecksLog.length} atendentes analisados
@@ -425,13 +434,13 @@ export const Logs: React.FC = () => {
                                                                         <div
                                                                             key={index}
                                                                             className={cn(
-                                                                                "flex items-center justify-between p-3 rounded-lg border text-sm transition-all",
+                                                                                "flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border text-sm transition-all",
                                                                                 isSelected
                                                                                     ? "bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-500/5"
                                                                                     : "bg-background/50 border-border/80 hover:bg-background"
                                                                             )}
                                                                         >
-                                                                            <span className="font-semibold text-foreground flex items-center gap-2">
+                                                                            <span className="font-semibold text-foreground flex items-center gap-2 min-w-0 break-words">
                                                                                 {isSelected && (
                                                                                     <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                                                                                 )}

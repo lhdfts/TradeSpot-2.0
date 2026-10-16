@@ -8,9 +8,12 @@ interface RankingModalProps {
     title: string;
     data: any[];
     type: string;
+    // Visão "Para outros setores": a coluna mostra o total de agendamentos marcados
+    // como responsável, já que "Total Recebido" (como atendente) é sempre 0 ali.
+    showTotal?: boolean;
 }
 
-export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, title, data, type }) => {
+export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, title, data, type, showTotal }) => {
     const isSdrRanking = type === 'SDR' || type === 'Leads' || type === 'sdr';
 
     return (
@@ -20,7 +23,8 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
             title={title}
             maxWidthClass={isSdrRanking ? "max-w-7xl" : "max-w-5xl"}
         >
-            <div className="mt-4 overflow-x-auto">
+            {/* Tabela larga: no celular rola na horizontal (cabeçalho e linhas juntos) */}
+            <div className="mt-4 overflow-x-auto overscroll-x-contain">
                 <div className={cn(
                     "grid grid-cols-12 gap-2 text-[10px] font-semibold text-secondary mb-3 px-4 uppercase tracking-wider",
                     isSdrRanking ? "min-w-[1000px]" : "min-w-[800px]"
@@ -41,7 +45,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                     ) : (
                         <>
                             <div className="col-span-3">Nome</div>
-                            <div className="col-span-2 text-center">Total Recebido</div>
+                            <div className="col-span-2 text-center">{showTotal ? 'Agendamentos' : 'Total Recebido'}</div>
                             <div className="col-span-1 text-center text-emerald-500">Realizado</div>
                             <div className="col-span-1 text-center text-red-500">Cancelado</div>
                             <div className="col-span-2 text-center text-violet-500">Esquecimento</div>
@@ -52,7 +56,8 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                 </div>
 
                 <div className={cn(
-                    "space-y-1 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar",
+                    // dvh desconta as barras do navegador no celular; sem suporte, fica o 60vh
+                    "space-y-1 max-h-[60vh] supports-[height:100dvh]:max-h-[60dvh] overflow-y-auto pr-2 custom-scrollbar",
                     isSdrRanking ? "min-w-[1000px]" : "min-w-[800px]"
                 )}>
                     {data.map((item, idx) => {
@@ -107,7 +112,7 @@ export const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, tit
                                             {item.name}
                                         </div>
                                         <div className="col-span-2 text-center font-bold text-foreground text-xs">
-                                            {item.totalRecebido}
+                                            {showTotal ? item.total : item.totalRecebido}
                                         </div>
                                         <div className="col-span-1 text-center font-bold text-emerald-500 text-xs">
                                             {item.Realizado}
