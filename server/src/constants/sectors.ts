@@ -19,3 +19,17 @@ export const sectorAliases = (sector?: string | null): string[] => {
     if (!sector) return [];
     return isPreVendas(sector) ? PRE_VENDAS_ALIASES : [sector];
 };
+
+// Setor fictício dos colaboradores arquivados. Não existe como setor real: só
+// tira o usuário da distribuição e das listas por setor.
+export const SECTOR_DESATIVADO = 'Desativado';
+
+// Sufixo do e-mail do colaborador arquivado (libera o e-mail original e impede o login).
+export const ARCHIVED_EMAIL_SUFFIX = '.desativado';
+
+/**
+ * Setores que preenchem o perfil do lead (profissão, dor e produto de interesse)
+ * ao criar agendamentos. Para eles esses campos são obrigatórios.
+ */
+export const requiresLeadProfile = (sector?: string | null): boolean =>
+    isPreVendas(sector) || sector === 'Closer';

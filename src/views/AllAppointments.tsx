@@ -8,7 +8,11 @@ import { useNow } from '../hooks/useNow';
 import type { Appointment } from '../types';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
-import { AppointmentsListView, type ExtraColumn } from '../components/appointments/AppointmentsListView';
+import { AppointmentsListView } from '../components/appointments/AppointmentsListView';
+import { canChooseColumns, useColumnLookups, type AppointmentColumnId } from '../components/appointments/appointmentColumns';
+
+// Colunas opcionais visíveis enquanto a pessoa não escolher outras (as de sempre desta tela).
+const ALL_APPOINTMENTS_DEFAULT_COLUMNS: AppointmentColumnId[] = ['type', 'owner', 'attendant'];
 import { STATUS_FILTER_OPTIONS, FILTER_WIDTH } from '../constants/appointmentStatus';
 import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
 
@@ -29,6 +33,7 @@ const getBrazilTodayISO = () => {
 export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const { appointments, refresh, truncated, loading: loadingAppointments, loaded } = useAppointments();
     const { attendants, events } = useFormData();
+    const columnLookups = useColumnLookups(attendants, events);
     const [searchParams] = useSearchParams();
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -228,18 +233,6 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         setDateRange({ start: getBrazilTodayISO(), end: '' });
     };
 
-    // Helper to get Creator Name
-    const getCreatorName = (id?: string) => {
-        if (!id) return '-';
-        const creator = attendants.find(a => a.id === id);
-        return creator ? creator.name : 'Unknown';
-    };
-
-    const extraColumns: ExtraColumn[] = [
-        { header: 'Criado Por', width: 'w-[12%]', render: appt => getCreatorName(appt.createdBy), onlyWithAdvanced: true },
-        { header: 'Responsável', width: 'w-[12%]', render: appt => appt.ownerName || getCreatorName(appt.ownerId ?? appt.createdBy) },
-    ];
-
     if (user?.role === 'Colaborador' && user?.sector === 'Closer') {
         return <Navigate to="/" replace />;
     }
@@ -262,7 +255,10 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             page={currentPage}
             onPageChange={setCurrentPage}
             pageSize={itemsPerPage}
-            extraColumns={extraColumns}
+            defaultColumns={ALL_APPOINTMENTS_DEFAULT_COLUMNS}
+            columnsStorageKey={`todos-agendamentos:${user?.id ?? ''}`}
+            canChooseColumns={canChooseColumns(user?.role)}
+            columnLookups={columnLookups}
             actionLabel="Editar"
             onOpen={onEdit}
             onCreate={() => navigate('/create-appointment')}

@@ -8,6 +8,13 @@ const VALID_TYPES = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Alde
 const VALID_CURRENCIES = ['BRL', 'USD', 'EUR', 'JPY', 'AOA'] as const;
 const VALID_INTEREST_LEVELS = ['Alto', 'Mediano', 'Desconhecido'] as const;
 const VALID_KNOWLEDGE_LEVELS = ['Iniciante', 'Intermediário', 'Avançado'] as const;
+export const VALID_INTEREST_PRODUCTS = ['Aldeia', 'Tribo'] as const;
+
+// Profissão vem da tabela professions (ex.: "Ator/Atriz", "Médico(a)") ou do texto
+// livre de "Outra". Vazio é aceito: a obrigatoriedade depende do setor (ver rota).
+const professionRegex = /^[a-zA-Z\u00C0-\u00FF0-9\s()\/.,'"-]*$/;
+// Dor segue as regras do campo de nome (letras, acentos e espaços).
+const painRegex = /^[a-zA-Z\u00C0-\u00FF\s]*$/;
 
 export const createAppointmentSchema = z.object({
     // Strict number validation (Backend removes mask, but we validate strictly numbers)
@@ -54,6 +61,19 @@ export const createAppointmentSchema = z.object({
         knowledge: z.enum(VALID_KNOWLEDGE_LEVELS, {
             message: 'Nível de conhecimento inválido'
         }).optional()
+    }).optional(),
+
+    // Perfil do lead (Pré-vendas/Closer)
+    profession: z.string().trim()
+        .max(80, "Profissão: máximo de 80 caracteres")
+        .regex(professionRegex, "Profissão contém caracteres inválidos")
+        .optional(),
+    pain: z.string().trim()
+        .max(50, "Dor: máximo de 50 caracteres")
+        .regex(painRegex, "Dor contém caracteres inválidos")
+        .optional(),
+    interestProduct: z.union([z.enum(VALID_INTEREST_PRODUCTS), z.literal('')], {
+        message: 'Produto de interesse inválido'
     }).optional(),
 
     type: z.enum(VALID_TYPES, {

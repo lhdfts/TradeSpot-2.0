@@ -139,7 +139,10 @@ export class SupabaseApiService implements ApiService {
                         currency: createdAppointment.financial_currency,
                         amount: createdAppointment.financial_amount != null ? String(createdAppointment.financial_amount) : undefined
                     }
-                }
+                },
+                profession: createdAppointment.profession,
+                pain: createdAppointment.pain,
+                interestProduct: createdAppointment.interest_product
             } as Appointment;
         },
         update: async (id: string | number, data: Partial<Appointment>): Promise<Appointment> => {
@@ -188,7 +191,10 @@ export class SupabaseApiService implements ApiService {
                         currency: updatedAppointment.financial_currency,
                         amount: updatedAppointment.financial_amount != null ? String(updatedAppointment.financial_amount) : undefined
                     }
-                }
+                },
+                profession: updatedAppointment.profession,
+                pain: updatedAppointment.pain,
+                interestProduct: updatedAppointment.interest_product
             } as Appointment;
         }
     };
@@ -279,6 +285,32 @@ export class SupabaseApiService implements ApiService {
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.error || 'Failed to delete attendant');
+            }
+        },
+        pendingCount: async (id: string): Promise<number> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/appointments/attendants/${id}/pending-count`, {
+                headers: authHeaders
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Falha ao verificar atendimentos pendentes');
+            }
+
+            const data = await response.json();
+            return data.pendingCount ?? 0;
+        },
+        archive: async (id: string): Promise<void> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`/api/appointments/attendants/${id}/archive`, {
+                method: 'POST',
+                headers: authHeaders
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Falha ao arquivar colaborador');
             }
         }
     };
@@ -410,6 +442,22 @@ export class SupabaseApiService implements ApiService {
                 headers: authHeaders
             });
             if (!response.ok) throw new Error('Failed to delete unnichat connection');
+        }
+    };
+
+    professions = {
+        list: async (): Promise<string[]> => {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch('/api/professions', {
+                headers: authHeaders
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Falha ao carregar profissões');
+            }
+
+            return await response.json();
         }
     };
 

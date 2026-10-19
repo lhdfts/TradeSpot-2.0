@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { supabase } from '../utils/supabaseClient.js';
+import { ARCHIVED_EMAIL_SUFFIX } from '../constants/sectors.js';
 
 /**
  * Safely extracts client IP address, handling string, string[], or undefined.
@@ -121,6 +122,31 @@ export const verifyFirebaseToken = async (
             .single();
 
         if (error || !userData) {
+            // Colaborador arquivado: o e-mail ganhou o sufixo ".desativado" e não deve
+            // ser recadastrado automaticamente com o e-mail original.
+            const { data: archivedUser } = await supabase
+                .from('user')
+                .select('id')
+                .eq('email', `${email}${ARCHIVED_EMAIL_SUFFIX}`)
+                .maybeSingle();
+
+            if (archivedUser) {
+                logActivity({
+                    timestamp: new Date().toISOString(),
+                    userId: archivedUser.id,
+                    userName: email,
+                    userRole: 'none',
+                    userSector: 'none',
+                    action: req.method,
+                    resource: req.originalUrl,
+                    ipAddress,
+                    userAgent,
+                    success: false,
+                    errorMessage: 'Archived user'
+                });
+                return res.status(403).json({ error: 'Usuário desativado' });
+            }
+
             // New logic: Auto-register user if they pass Firebase auth
             const defaultName = decodedToken.name || email.split('@')[0];
 

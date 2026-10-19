@@ -124,6 +124,9 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
+    // Agendamento criado por Pré-vendas/Closer: mostra profissão, dor e produto de
+    // interesse no lugar de Moeda, Perfil Financeiro e Perfil de Interesse.
+    const hasLeadProfile = !!(initialData?.profession || initialData?.pain || initialData?.interestProduct);
     // Eventos da Aldeia em que ela marca com um Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias).
     const isAction14Dias = isAldeiaToCloserEvent(formData.eventId);
     const isAldeiaCloserPick = isAldeiaToCloser(formData.eventId, formData.type);
@@ -1186,6 +1189,16 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                             disabled={isEditing}
                         />
 
+                        {hasLeadProfile ? (
+                            <>
+                                {/* Perfil do lead (Pré-vendas/Closer): só leitura, visível para
+                                    qualquer atendente, inclusive de outro setor. */}
+                                <FloatingInput label="Dor" value={initialData?.pain || ''} disabled />
+                                <FloatingInput label="Profissão" value={initialData?.profession || ''} disabled />
+                                <FloatingInput label="Produto de Interesse" value={initialData?.interestProduct || ''} disabled />
+                            </>
+                        ) : (
+                        <>
                         <FloatingSelect
                             label="Perfil de Interesse"
                             value={formData.studentProfile.interest}
@@ -1249,6 +1262,8 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                 </div>
                             </div>
                         </div>
+                        </>
+                        )}
                         <FloatingSelect
                             label="Perfil de Conhecimento"
                             value={formData.studentProfile.knowledge}

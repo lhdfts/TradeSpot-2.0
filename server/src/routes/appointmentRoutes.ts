@@ -6,7 +6,8 @@ import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAtte
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
-import { PRE_VENDAS_ALIASES, sectorAliases } from '../constants/sectors.js';
+import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
+import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
 import { isAldeiaToCloser } from '../constants/events.js';
@@ -157,6 +158,9 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
                     amount: app.financial_amount != null ? String(app.financial_amount) : undefined
                 }
             },
+            profession: app.profession,
+            pain: app.pain,
+            interestProduct: app.interest_product,
             oldStatus: app.oldStatus,
             updatedBy: app.updatedBy,
             updater: app.updater
@@ -571,6 +575,103 @@ router.delete('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (r
     }
 });
 
+// Arquivamento de atendentes.
+// Admin/Dev arquivam qualquer um; o Líder só arquiva colaboradores do próprio setor.
+// Ninguém arquiva a si mesmo, e o Líder não arquiva Admin/Dev.
+type ArchivableAttendant =
+    | { target: { id: string; name: string; email: string; role: string; sector: string } }
+    | { status: number; error: string };
+
+const loadArchivableAttendant = async (req: AuthenticatedRequest, id: string): Promise<ArchivableAttendant> => {
+    const { data: target, error } = await supabase
+        .from('user')
+        .select('id, name, email, role, sector')
+        .eq('id', id)
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!target) return { status: 404, error: 'Atendente não encontrado.' };
+
+    const requester = req.user!;
+    if (target.id === requester.id) {
+        return { status: 400, error: 'Você não pode arquivar o próprio usuário.' };
+    }
+    if (target.sector === SECTOR_DESATIVADO) {
+        return { status: 400, error: 'Este colaborador já está arquivado.' };
+    }
+    const isGlobal = ['Admin', 'Dev'].includes(requester.role);
+    if (!isGlobal) {
+        const sameSector = sectorAliases(requester.sector).includes(target.sector);
+        if (!sameSector || ['Admin', 'Dev'].includes(target.role)) {
+            return { status: 403, error: 'Você só pode arquivar colaboradores do seu setor.' };
+        }
+    }
+    return { target };
+};
+
+const countPendingAppointments = async (attendantId: string): Promise<number> => {
+    const { count, error } = await supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .eq('attendant_id', attendantId)
+        .eq('status', 'Pendente');
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+};
+
+// GET /api/appointments/attendants/:id/pending-count - Atendimentos pendentes (pré-checagem do arquivamento)
+router.get('/attendants/:id/pending-count', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const result = await loadArchivableAttendant(req, req.params.id);
+        if ('error' in result) return res.status(result.status).json({ error: result.error });
+
+        res.json({ pendingCount: await countPendingAppointments(result.target.id) });
+    } catch (err: any) {
+        console.error('Pending Count Error:', err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// POST /api/appointments/attendants/:id/archive - Arquiva (desativa) o colaborador.
+// Bloqueado enquanto houver atendimentos Pendentes. O setor vira "Desativado", o que o
+// tira da distribuição, e o e-mail ganha o sufixo ".desativado", o que impede o login.
+router.post('/attendants/:id/archive', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const result = await loadArchivableAttendant(req, req.params.id);
+        if ('error' in result) return res.status(result.status).json({ error: result.error });
+        const { target } = result;
+
+        const pendingCount = await countPendingAppointments(target.id);
+        if (pendingCount > 0) {
+            return res.status(409).json({
+                error: `O colaborador ainda possui ${pendingCount} atendimento(s) pendente(s). Resolva-os antes de arquivar.`,
+                pendingCount
+            });
+        }
+
+        const { error: updateError } = await supabase
+            .from('user')
+            .update({ sector: SECTOR_DESATIVADO, email: `${target.email}${ARCHIVED_EMAIL_SUFFIX}` })
+            .eq('id', target.id);
+        if (updateError) throw new Error(updateError.message);
+
+        // Derruba as sessões abertas. Sem conta no Firebase (ou com falha aqui) o
+        // arquivamento continua válido: o login já é barrado pelo e-mail alterado.
+        try {
+            const auth = getFirebaseAuth();
+            const firebaseUser = await auth.getUserByEmail(target.email);
+            await auth.revokeRefreshTokens(firebaseUser.uid);
+        } catch (revokeErr: any) {
+            console.warn('[ARCHIVE] Não foi possível revogar sessões do Firebase:', revokeErr?.message);
+        }
+
+        logSuccessfulAction(req, 'ARCHIVE', 'attendant', target.id);
+        res.json({ id: target.id, sector: SECTOR_DESATIVADO });
+    } catch (err: any) {
+        console.error('Archive Attendant Error:', err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
 // GET /api/events - List all events
 router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -903,6 +1004,22 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
         const additionalInfo = data.additional_info || data.additionalInfo;
 
+        // Perfil do lead: obrigatório para quem cria pelos setores Pré-vendas e Closer.
+        // Os demais setores não enviam esses campos e seguem como antes.
+        const profession = data.profession || null;
+        const pain = data.pain || null;
+        const interestProduct = data.interestProduct || null;
+        if (requiresLeadProfile(req.user?.sector)) {
+            const missing = [
+                !profession && 'Profissão',
+                !pain && 'Dor',
+                !interestProduct && 'Produto de interesse'
+            ].filter(Boolean);
+            if (missing.length > 0) {
+                return res.status(400).json({ error: `Campos obrigatórios: ${missing.join(', ')}.` });
+            }
+        }
+
         // 1.5 Fetch Event to check sector for Aldeia/Tribo specific rules (Internal Link)
         let eventSector = '';
         let durationMinutes = 60;
@@ -1182,6 +1299,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             knowledge_level: data.studentProfile?.knowledge ?? null,
             financial_currency: data.studentProfile?.financial?.currency ?? null,
             financial_amount: financialAmount,
+            profession,
+            pain,
+            interest_product: interestProduct,
             created_at: new Date().toISOString(),
             // created_by logic
             created_by: data.createdBy,

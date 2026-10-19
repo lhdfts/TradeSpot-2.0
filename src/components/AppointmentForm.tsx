@@ -17,7 +17,8 @@ import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
-import { SECTOR_PRE_VENDAS, isPreVendas } from '../constants/sectors';
+import { SECTOR_PRE_VENDAS, isPreVendas, requiresLeadProfile, INTEREST_PRODUCTS, type InterestProduct } from '../constants/sectors';
+import { ProfessionSelect } from './ProfessionSelect';
 import { isAldeiaToCloser, isAldeiaToCloserEvent } from '../constants/events';
 
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
@@ -79,6 +80,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         meetLink: '',
         notes: '',
         additionalInfo: '',
+        profession: '',
+        pain: '',
+        interestProduct: '' as InterestProduct | '',
         studentProfile: {
             interest: '' as ProfileLevel,
             knowledge: '' as KnowledgeLevel,
@@ -117,6 +121,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
+    // Pré-vendas e Closer: profissão, dor e produto de interesse (obrigatórios) no
+    // lugar de Moeda, Perfil Financeiro e Perfil de Interesse.
+    const usesLeadProfile = requiresLeadProfile(user?.sector);
     // Eventos da Aldeia em que ela marca com um Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias).
     const isAction14Dias = isAldeiaToCloserEvent(formData.eventId);
     const isAldeiaCloserPick = isAldeiaToCloser(formData.eventId, formData.type);
@@ -351,6 +358,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 meetLink: initialData.meetLink || '',
                 notes: initialData.notes || '',
                 additionalInfo: initialData.additionalInfo || '',
+                profession: initialData.profession || '',
+                pain: initialData.pain || '',
+                interestProduct: initialData.interestProduct || '',
                 studentProfile: {
                     interest: (incomingProfile?.interest || '') as ProfileLevel,
                     knowledge: (incomingProfile?.knowledge || '') as KnowledgeLevel,
@@ -574,6 +584,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             meetLink: '',
             notes: '',
             additionalInfo: '',
+            profession: '',
+            pain: '',
+            interestProduct: '',
             studentProfile: {
                 interest: '' as ProfileLevel,
                 knowledge: '' as KnowledgeLevel,
@@ -593,6 +606,18 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (!formData.lead) { toastManager.add({ title: "Erro", description: "Nome é obrigatório", type: 'error' }); return; }
         if (!formData.phone) { toastManager.add({ title: "Erro", description: "Telefone é obrigatório", type: 'error' }); return; }
         if (!formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
+
+        if (usesLeadProfile) {
+            const leadProfileErrors: Record<string, string> = {};
+            if (!formData.profession.trim()) leadProfileErrors.profession = 'Profissão é obrigatória';
+            if (!formData.pain.trim()) leadProfileErrors.pain = 'Dor é obrigatória';
+            if (!formData.interestProduct) leadProfileErrors.interestProduct = 'Produto de interesse é obrigatório';
+            if (Object.keys(leadProfileErrors).length > 0) {
+                setErrors(prev => ({ ...prev, ...leadProfileErrors }));
+                toastManager.add({ title: "Erro", description: Object.values(leadProfileErrors)[0], type: 'error' });
+                return;
+            }
+        }
 
         // Final Validation Gatekeeper
         if (formData.type === 'Reagendamento Closer') {
@@ -760,9 +785,15 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             // Map creatorId
             const creatorId = user?.id;
 
+            // Só Pré-vendas e Closer enviam o perfil do lead.
+            const leadProfilePayload = usesLeadProfile
+                ? { profession: formData.profession.trim(), pain: formData.pain.trim(), interestProduct: formData.interestProduct }
+                : { profession: undefined, pain: undefined, interestProduct: undefined };
+
             if (initialData) {
                 await updateAppointment(initialData.id, {
                     ...formData,
+                    ...leadProfilePayload,
                     studentProfile: studentProfilePayload,
                     phone: Number(formData.phone.replace(/\D/g, '')),
                     attendantId: finalAttendantId,
@@ -771,6 +802,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             } else {
                 await createAppointment({
                     ...formData,
+                    ...leadProfilePayload,
                     studentProfile: studentProfilePayload,
                     phone: Number(formData.phone.replace(/\D/g, '')),
                     attendantId: finalAttendantId,
@@ -1194,6 +1226,49 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             disabled={isEditing}
                         />
 
+                        {usesLeadProfile ? (
+                            <>
+                                <FloatingInput
+                                    label="Dor"
+                                    value={formData.pain}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        setFormData({ ...formData, pain: sanitizeInput.name(e.target.value) });
+                                        if (errors.pain) setErrors(prev => ({ ...prev, pain: '' }));
+                                    }}
+                                    onBlur={() => {
+                                        setFormData(prev => ({ ...prev, pain: prev.pain.trim() }));
+                                        if (!formData.pain.trim()) {
+                                            setErrors(prev => ({ ...prev, pain: 'Dor é obrigatória' }));
+                                        }
+                                    }}
+                                    required
+                                    error={errors.pain}
+                                    disabled={isEditing}
+                                    maxLength={50}
+                                />
+                                <ProfessionSelect
+                                    value={formData.profession}
+                                    onChange={(value) => {
+                                        setFormData(prev => ({ ...prev, profession: value }));
+                                        if (errors.profession) setErrors(prev => ({ ...prev, profession: '' }));
+                                    }}
+                                    error={errors.profession}
+                                    disabled={isEditing}
+                                />
+                                <FloatingSelect
+                                    label="Produto de Interesse"
+                                    value={formData.interestProduct}
+                                    onChange={(e: { target: { value: string } }) => {
+                                        setFormData(prev => ({ ...prev, interestProduct: e.target.value as InterestProduct }));
+                                        if (errors.interestProduct) setErrors(prev => ({ ...prev, interestProduct: '' }));
+                                    }}
+                                    options={INTEREST_PRODUCTS.map(p => ({ value: p, label: p }))}
+                                    error={errors.interestProduct}
+                                    disabled={isEditing}
+                                />
+                            </>
+                        ) : (
+                        <>
                         <FloatingSelect
                             label="Perfil de Interesse"
                             value={formData.studentProfile.interest}
@@ -1257,6 +1332,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                 </div>
                             </div>
                         </div>
+                        </>
+                        )}
                         <FloatingSelect
                             label="Perfil de Conhecimento"
                             value={formData.studentProfile.knowledge}

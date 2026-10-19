@@ -1,13 +1,13 @@
 import { Router, Response } from 'express';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
-import { isPreVendas, SECTOR_PRE_VENDAS } from '../constants/sectors.js';
+import { isPreVendas, SECTOR_DESATIVADO, SECTOR_PRE_VENDAS } from '../constants/sectors.js';
 import { getOwnerChangeSectors, setOwnerChangeSectors } from '../utils/systemSettings.js';
 
 const router = Router();
 
 // Setores que não fazem sentido como opção de configuração.
-const IGNORED_SECTORS = ['Desativado'];
+const IGNORED_SECTORS = [SECTOR_DESATIVADO];
 
 /**
  * GET /api/settings/owner-change-sectors

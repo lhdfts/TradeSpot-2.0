@@ -12,3 +12,16 @@ export const normalizeSector = <T extends string | null | undefined>(sector: T):
 
 export const isPreVendas = (sector?: string | null): boolean =>
     normalizeSector(sector) === SECTOR_PRE_VENDAS;
+
+// Setor fictício dos colaboradores arquivados (ver server/src/constants/sectors.ts).
+export const SECTOR_DESATIVADO = 'Desativado';
+
+/**
+ * Setores que preenchem o perfil do lead (profissão, dor e produto de interesse)
+ * ao criar agendamentos (regra repetida em server/src/constants/sectors.ts).
+ */
+export const requiresLeadProfile = (sector?: string | null): boolean =>
+    isPreVendas(sector) || sector === 'Closer';
+
+export const INTEREST_PRODUCTS = ['Aldeia', 'Tribo'] as const;
+export type InterestProduct = typeof INTEREST_PRODUCTS[number];
