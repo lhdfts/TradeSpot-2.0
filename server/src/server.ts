@@ -18,6 +18,7 @@ import unnichatRoutes from './routes/unnichatRoutes.js';
 import executionLogRoutes from './routes/executionLogRoutes.js';
 import integrationRoutes, { priorAppointmentRouter } from './routes/integrationRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
+import professionRoutes from './routes/professionRoutes.js';
 
 // Middleware
 import { verifyFirebaseToken, requireRole, AuthenticatedRequest } from './middleware/firebaseAuth.js';
@@ -138,6 +139,7 @@ app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, requireRole('Admi
 app.use('/api/unnichat-connections', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), unnichatRoutes);
 app.use('/api/execution-logs', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder'), executionLogRoutes);
 app.use('/api/settings', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), settingsRoutes);
+app.use('/api/professions', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), professionRoutes);
 // Integrações máquina-a-máquina (n8n): autenticadas por token + id de workflow, não por Firebase.
 // Montada antes do bloco abaixo para ser validada contra o SEU workflow, não o do Partners.
 app.use('/api/integrations/prior-appointment', apiRateLimiter, priorAppointmentAuth, priorAppointmentRouter);

@@ -6,11 +6,15 @@ import type { Appointment } from '../types';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
 import { AppointmentsListView } from '../components/appointments/AppointmentsListView';
+import { canChooseColumns, useColumnLookups, type AppointmentColumnId } from '../components/appointments/appointmentColumns';
 import { STATUS_FILTER_OPTIONS, FILTER_WIDTH } from '../constants/appointmentStatus';
 import { brazilTodayISO } from '../lib/dates';
 import { useFormData } from '../hooks/useFormData';
 import { getDisplayStatus } from '../lib/appointmentStatus';
 import { useNow } from '../hooks/useNow';
+
+// Colunas opcionais visíveis enquanto a pessoa não escolher outras (as de sempre desta tela).
+const MY_APPOINTMENTS_DEFAULT_COLUMNS: AppointmentColumnId[] = ['type', 'attendant'];
 
 interface MyAppointmentsProps {
     onEdit: (appt: Appointment) => void;
@@ -19,7 +23,8 @@ interface MyAppointmentsProps {
 export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const { appointments, refresh, truncated, loading, loaded } = useAppointments();
     const { user } = useAuth();
-    const { events } = useFormData();
+    const { attendants, events } = useFormData();
+    const columnLookups = useColumnLookups(attendants, events);
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -149,6 +154,10 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
             page={currentPage}
             onPageChange={setCurrentPage}
             pageSize={itemsPerPage}
+            defaultColumns={MY_APPOINTMENTS_DEFAULT_COLUMNS}
+            columnsStorageKey={`meus-agendamentos:${user?.id ?? ''}`}
+            canChooseColumns={canChooseColumns(user?.role)}
+            columnLookups={columnLookups}
             actionLabel="Detalhes"
             onOpen={onEdit}
             onCreate={() => navigate('/create-appointment')}

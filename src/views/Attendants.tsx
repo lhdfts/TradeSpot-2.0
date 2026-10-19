@@ -4,13 +4,15 @@ import { staggerStyle } from '../lib/motion';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import type { Attendant } from '../types';
-import { Edit, Trash2 } from 'lucide-react';
+import { Archive, Edit, Trash2 } from 'lucide-react';
 import { AttendantModal } from '../components/AttendantModal';
+import { ArchiveAttendantModal } from '../components/ArchiveAttendantModal';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingInput } from '../components/FloatingInput';
 
 import { useAuth } from '../context/AuthContext';
 import { canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
+import { normalizeSector } from '../constants/sectors';
 
 export const Attendants: React.FC = () => {
     const { user } = useAuth();
@@ -18,6 +20,7 @@ export const Attendants: React.FC = () => {
     const [attendants, setAttendants] = useState<Attendant[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAttendant, setSelectedAttendant] = useState<Attendant | null>(null);
+    const [attendantToArchive, setAttendantToArchive] = useState<Attendant | null>(null);
     const [loading, setLoading] = useState(true);
     const [sectorFilter, setSectorFilter] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState<string>('');
@@ -61,6 +64,15 @@ export const Attendants: React.FC = () => {
                 alert(error?.message || 'Erro ao excluir atendente');
             }
         }
+    };
+
+    // Admin/Dev arquivam qualquer um; o Líder, só colaboradores do próprio setor (regra repetida no backend).
+    const canArchive = (attendant: Attendant) => {
+        if (!user || attendant.id === user.id) return false;
+        if (['Admin', 'Dev'].includes(user.role)) return true;
+        return user.role === 'Líder' &&
+            !['Admin', 'Dev'].includes(attendant.role) &&
+            normalizeSector(attendant.sector) === normalizeSector(user.sector);
     };
 
     const navigateToAppointments = (attendantName: string) => {
@@ -165,6 +177,15 @@ export const Attendants: React.FC = () => {
                                     >
                                         <Edit size={18} />
                                     </button>
+                                    {canArchive(attendant) && (
+                                        <button
+                                            onClick={() => setAttendantToArchive(attendant)}
+                                            className="p-2 text-secondary hover:text-yellow-400 transition-colors"
+                                            title="Arquivar Colaborador"
+                                        >
+                                            <Archive size={18} />
+                                        </button>
+                                    )}
                                     {['Admin', 'Dev'].includes(user?.role || '') && (
                                         <button
                                             onClick={() => handleDelete(attendant.id)}
@@ -188,6 +209,13 @@ export const Attendants: React.FC = () => {
                 onClose={() => setIsModalOpen(false)}
                 onSuccess={fetchAttendants}
                 attendant={selectedAttendant}
+            />
+
+            <ArchiveAttendantModal
+                attendant={attendantToArchive}
+                onClose={() => setAttendantToArchive(null)}
+                onSuccess={fetchAttendants}
+                onViewAppointments={navigateToAppointments}
             />
         </div>
     );

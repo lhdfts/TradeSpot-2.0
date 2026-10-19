@@ -1,8 +1,12 @@
 // Estrutura única das listas de agendamentos (Meus e Todos). Cada página só
-// fornece os dados já filtrados, os filtros dela e as colunas extras.
+// fornece os dados já filtrados, os filtros dela e as colunas padrão.
+//
+// Colunas: Data/Hora, Aluno(a) e Status são fixas; as demais (appointmentColumns.ts)
+// quem está acima de Colaborador escolhe no botão "Colunas", e a escolha fica no
+// navegador, por tela e por usuário.
 //
 // Pensado para não deslocar o layout:
-//  - colunas com largura fixa (table-fixed), iguais em toda página e filtro;
+//  - colunas com largura fixa (table-fixed), que não mudam com filtro ou página;
 //  - enquanto a primeira busca não termina, linhas-esqueleto da mesma altura
 //    das reais, em vez do aviso de lista vazia;
 //  - numa nova busca, a lista atual continua no lugar (esmaecida);
@@ -28,17 +32,16 @@ import { FloatingInput } from '../FloatingInput';
 import { CalendarView } from '../CalendarView';
 import { StatusBadge } from './StatusBadge';
 import { AppointmentDate, CopyPhoneButton, LeadCell } from './AppointmentCells';
+import { ColumnPicker } from './ColumnPicker';
+import { OPTIONAL_COLUMNS, useColumnPreferences, type AppointmentColumnId, type ColumnLookups } from './appointmentColumns';
 
 export type ViewMode = 'table' | 'calendar';
 
-export interface ExtraColumn {
-    header: string;
-    /** Classe de largura da coluna, ex.: "w-[12%]" (colunas de texto cortam com reticências). */
-    width: string;
-    render: (appt: Appointment) => React.ReactNode;
-    /** Só aparece com o painel "Filtros avançados" aberto. */
-    onlyWithAdvanced?: boolean;
-}
+// Larguras das colunas fixas (px). Aluno(a) fica com o espaço que sobrar, com este mínimo.
+const DATE_COL_WIDTH = 150;
+const LEAD_COL_MIN_WIDTH = 220;
+const STATUS_COL_WIDTH = 150;
+const ACTION_COL_WIDTH = 120;
 
 interface AppointmentsListViewProps {
     /** Já filtrados e ordenados pela página. */
@@ -60,7 +63,13 @@ interface AppointmentsListViewProps {
     page: number;
     onPageChange: (page: number) => void;
     pageSize: number;
-    extraColumns?: ExtraColumn[];
+    /** Colunas opcionais que a tela mostra enquanto a pessoa não escolher outras. */
+    defaultColumns: AppointmentColumnId[];
+    /** Chave da escolha de colunas no navegador (inclua a tela e o usuário). */
+    columnsStorageKey: string;
+    /** Mostra o botão "Colunas" (acima de Colaborador). */
+    canChooseColumns: boolean;
+    columnLookups: ColumnLookups;
     actionLabel: string;
     onOpen: (appt: Appointment) => void;
     onCreate: () => void;
@@ -94,7 +103,10 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
     page,
     onPageChange,
     pageSize,
-    extraColumns: allExtraColumns = [],
+    defaultColumns,
+    columnsStorageKey,
+    canChooseColumns,
+    columnLookups,
     actionLabel,
     onOpen,
     onCreate,
@@ -104,7 +116,22 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const advancedPanelId = useId();
     const now = useNow();
-    const extraColumns = allExtraColumns.filter(col => !col.onlyWithAdvanced || advancedOpen);
+
+    const columnPrefs = useColumnPreferences(columnsStorageKey, defaultColumns, canChooseColumns);
+    const shownColumns = OPTIONAL_COLUMNS.filter(col => columnPrefs.visible.includes(col.id));
+    const columnsBeforeStatus = shownColumns.filter(col => col.beforeStatus);
+    const columnsAfterStatus = shownColumns.filter(col => !col.beforeStatus);
+    const tableMinWidth = DATE_COL_WIDTH + LEAD_COL_MIN_WIDTH + STATUS_COL_WIDTH + ACTION_COL_WIDTH +
+        shownColumns.reduce((sum, col) => sum + col.width, 0);
+
+    const optionalCell = (col: typeof OPTIONAL_COLUMNS[number], appt: Appointment) => {
+        const value = col.value(appt, columnLookups) || '-';
+        return (
+            <td key={col.id} className="px-4 py-4 text-sm text-foreground truncate" title={value !== '-' ? value : undefined}>
+                {value}
+            </td>
+        );
+    };
 
     // Esqueleto só quando não há nada para mostrar ainda; com dados antigos na
     // tela, eles ficam (esmaecidos) até a busca nova chegar.
@@ -222,6 +249,17 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                     {/* Seletor de visualização: sempre na barra, encostado à direita.
                         "Limpar filtros" vem antes dele só quando há filtro ativo. */}
                     <div className="ml-auto flex items-center gap-2">
+                        {canChooseColumns && viewMode === 'table' && (
+                            // Só na tabela (desktop); no celular a lista é em cartões.
+                            <div className="hidden md:block">
+                                <ColumnPicker
+                                    visible={columnPrefs.visible}
+                                    onToggle={columnPrefs.toggle}
+                                    onReset={columnPrefs.reset}
+                                    isDefault={columnPrefs.isDefault}
+                                />
+                            </div>
+                        )}
                         {hasActiveFilters && (
                             <Button
                                 variant="ghost"
@@ -291,25 +329,24 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         {/* Barra de progresso sobreposta: não ocupa espaço */}
                         {loading && <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary/40 animate-shimmer" />}
                         <div className="overflow-x-auto">
-                            {/* Colunas de conteúdo previsível em px; as de nomes em %; Aluno(a) fica com o resto. */}
-                            <table className={cn('w-full table-fixed text-left', ['min-w-[860px]', 'min-w-[960px]', 'min-w-[1040px]'][Math.min(extraColumns.length, 2)])}>
+                            {/* Todas as colunas em px, menos Aluno(a), que fica com o resto. Com muitas
+                                colunas a largura mínima passa da tela e a tabela rola na horizontal. */}
+                            <table className="w-full table-fixed text-left" style={{ minWidth: tableMinWidth }}>
                                 <colgroup>
-                                    <col className="w-[150px]" />
+                                    <col style={{ width: DATE_COL_WIDTH }} />
                                     <col />
-                                    <col className={extraColumns.length ? 'w-[10%]' : 'w-[14%]'} />
-                                    <col className="w-[150px]" />
-                                    {extraColumns.map(col => <col key={col.header} className={col.width} />)}
-                                    <col className={extraColumns.length ? 'w-[12%]' : 'w-[16%]'} />
-                                    <col className="w-[120px]" />
+                                    {columnsBeforeStatus.map(col => <col key={col.id} style={{ width: col.width }} />)}
+                                    <col style={{ width: STATUS_COL_WIDTH }} />
+                                    {columnsAfterStatus.map(col => <col key={col.id} style={{ width: col.width }} />)}
+                                    <col style={{ width: ACTION_COL_WIDTH }} />
                                 </colgroup>
                                 <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                                     <tr>
                                         <th className="px-4 py-4">Data/Hora</th>
                                         <th className="px-4 py-4">Aluno(a)</th>
-                                        <th className="px-4 py-4">Tipo</th>
+                                        {columnsBeforeStatus.map(col => <th key={col.id} className="px-4 py-4 truncate" title={col.header}>{col.header}</th>)}
                                         <th className="px-4 py-4">Status</th>
-                                        {extraColumns.map(col => <th key={col.header} className="px-4 py-4">{col.header}</th>)}
-                                        <th className="px-4 py-4">Atendente</th>
+                                        {columnsAfterStatus.map(col => <th key={col.id} className="px-4 py-4 truncate" title={col.header}>{col.header}</th>)}
                                         <th className="px-4 py-4 text-center">Ações</th>
                                     </tr>
                                 </thead>
@@ -319,10 +356,9 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                             <tr key={i} aria-hidden>
                                                 <SkeletonCell first="w-20" second="w-14" />
                                                 <SkeletonCell first="w-40" second="w-28" />
+                                                {columnsBeforeStatus.map(col => <SkeletonCell key={col.id} first="w-20" />)}
                                                 <SkeletonCell first="w-20" />
-                                                <SkeletonCell first="w-20" />
-                                                {extraColumns.map(col => <SkeletonCell key={col.header} first="w-24" />)}
-                                                <SkeletonCell first="w-24" />
+                                                {columnsAfterStatus.map(col => <SkeletonCell key={col.id} first="w-24" />)}
                                                 <SkeletonCell first="w-16 mx-auto" />
                                             </tr>
                                         ))
@@ -339,18 +375,11 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                                 <td className="px-4 py-4">
                                                     <LeadCell lead={appt.lead} phone={appt.phone} />
                                                 </td>
-                                                <td className="px-4 py-4 text-sm text-foreground truncate" title={appt.type}>{appt.type}</td>
+                                                {columnsBeforeStatus.map(col => optionalCell(col, appt))}
                                                 <td className="px-4 py-4">
                                                     <StatusBadge status={getDisplayStatus(appt, now)} />
                                                 </td>
-                                                {extraColumns.map(col => (
-                                                    <td key={col.header} className="px-4 py-4 text-sm text-foreground truncate">
-                                                        {col.render(appt)}
-                                                    </td>
-                                                ))}
-                                                <td className="px-4 py-4 text-sm text-foreground truncate">
-                                                    {appt.attendantName || appt.attendantId}
-                                                </td>
+                                                {columnsAfterStatus.map(col => optionalCell(col, appt))}
                                                 <td className="px-4 py-4 text-center">
                                                     {actionButton(appt)}
                                                 </td>
