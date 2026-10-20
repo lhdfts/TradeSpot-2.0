@@ -1004,8 +1004,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
         const additionalInfo = data.additional_info || data.additionalInfo;
 
-        // Perfil do lead: obrigatório para quem cria pelos setores Pré-vendas e Closer.
-        // Os demais setores não enviam esses campos e seguem como antes.
+        // Perfil do lead: obrigatório para quem cria pelo setor Pré-vendas. O Closer
+        // envia esses campos de forma opcional; os demais setores não os enviam.
         const profession = data.profession || null;
         const pain = data.pain || null;
         const interestProduct = data.interestProduct || null;

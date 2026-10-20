@@ -28,8 +28,9 @@ export const SECTOR_DESATIVADO = 'Desativado';
 export const ARCHIVED_EMAIL_SUFFIX = '.desativado';
 
 /**
- * Setores que preenchem o perfil do lead (profissão, dor e produto de interesse)
- * ao criar agendamentos. Para eles esses campos são obrigatórios.
+ * Setores em que o perfil do lead (profissão, dor e produto de interesse) é
+ * obrigatório ao criar agendamentos. O Closer também preenche esses campos,
+ * mas neles são opcionais.
  */
 export const requiresLeadProfile = (sector?: string | null): boolean =>
-    isPreVendas(sector) || sector === 'Closer';
+    isPreVendas(sector);

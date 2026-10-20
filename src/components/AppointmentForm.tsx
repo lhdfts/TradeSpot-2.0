@@ -17,7 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
-import { SECTOR_PRE_VENDAS, isPreVendas, requiresLeadProfile, INTEREST_PRODUCTS, type InterestProduct } from '../constants/sectors';
+import { SECTOR_PRE_VENDAS, isPreVendas, usesLeadProfile, requiresLeadProfile, INTEREST_PRODUCTS, type InterestProduct } from '../constants/sectors';
 import { ProfessionSelect } from './ProfessionSelect';
 import { isAldeiaToCloser, isAldeiaToCloserEvent } from '../constants/events';
 
@@ -121,9 +121,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
-    // Pré-vendas e Closer: profissão, dor e produto de interesse (obrigatórios) no
-    // lugar de Moeda, Perfil Financeiro e Perfil de Interesse.
-    const usesLeadProfile = requiresLeadProfile(user?.sector);
+    // Pré-vendas e Closer: profissão, dor e produto de interesse no lugar de Moeda,
+    // Perfil Financeiro e Perfil de Interesse. Obrigatórios só para Pré-vendas.
+    const showLeadProfile = usesLeadProfile(user?.sector);
+    const leadProfileRequired = requiresLeadProfile(user?.sector);
     // Eventos da Aldeia em que ela marca com um Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias).
     const isAction14Dias = isAldeiaToCloserEvent(formData.eventId);
     const isAldeiaCloserPick = isAldeiaToCloser(formData.eventId, formData.type);
@@ -607,7 +608,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (!formData.phone) { toastManager.add({ title: "Erro", description: "Telefone é obrigatório", type: 'error' }); return; }
         if (!formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
 
-        if (usesLeadProfile) {
+        if (leadProfileRequired) {
             const leadProfileErrors: Record<string, string> = {};
             if (!formData.profession.trim()) leadProfileErrors.profession = 'Profissão é obrigatória';
             if (!formData.pain.trim()) leadProfileErrors.pain = 'Dor é obrigatória';
@@ -786,7 +787,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const creatorId = user?.id;
 
             // Só Pré-vendas e Closer enviam o perfil do lead.
-            const leadProfilePayload = usesLeadProfile
+            const leadProfilePayload = showLeadProfile
                 ? { profession: formData.profession.trim(), pain: formData.pain.trim(), interestProduct: formData.interestProduct }
                 : { profession: undefined, pain: undefined, interestProduct: undefined };
 
@@ -1226,7 +1227,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             disabled={isEditing}
                         />
 
-                        {usesLeadProfile ? (
+                        {showLeadProfile ? (
                             <>
                                 <FloatingInput
                                     label="Dor"
@@ -1237,11 +1238,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                     }}
                                     onBlur={() => {
                                         setFormData(prev => ({ ...prev, pain: prev.pain.trim() }));
-                                        if (!formData.pain.trim()) {
+                                        if (leadProfileRequired && !formData.pain.trim()) {
                                             setErrors(prev => ({ ...prev, pain: 'Dor é obrigatória' }));
                                         }
                                     }}
-                                    required
+                                    required={leadProfileRequired}
                                     error={errors.pain}
                                     disabled={isEditing}
                                     maxLength={50}
