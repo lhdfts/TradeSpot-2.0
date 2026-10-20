@@ -17,11 +17,18 @@ export const isPreVendas = (sector?: string | null): boolean =>
 export const SECTOR_DESATIVADO = 'Desativado';
 
 /**
- * Setores que preenchem o perfil do lead (profissão, dor e produto de interesse)
- * ao criar agendamentos (regra repetida em server/src/constants/sectors.ts).
+ * Setores que veem o perfil do lead (profissão, dor e produto de interesse) ao
+ * criar agendamentos, no lugar de Moeda, Perfil Financeiro e Perfil de Interesse.
+ */
+export const usesLeadProfile = (sector?: string | null): boolean =>
+    isPreVendas(sector) || sector === 'Closer';
+
+/**
+ * Setores em que o perfil do lead é obrigatório. No Closer os campos aparecem,
+ * mas são opcionais. Regra repetida em server/src/constants/sectors.ts.
  */
 export const requiresLeadProfile = (sector?: string | null): boolean =>
-    isPreVendas(sector) || sector === 'Closer';
+    isPreVendas(sector);
 
 export const INTEREST_PRODUCTS = ['Aldeia', 'Tribo'] as const;
 export type InterestProduct = typeof INTEREST_PRODUCTS[number];

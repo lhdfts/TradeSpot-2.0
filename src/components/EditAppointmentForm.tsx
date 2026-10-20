@@ -124,9 +124,17 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
 
     // When editing, only allow editing Status, Descrição, and Atendente
     const isEditing = !!initialData;
-    // Agendamento criado por Pré-vendas/Closer: mostra profissão, dor e produto de
-    // interesse no lugar de Moeda, Perfil Financeiro e Perfil de Interesse.
+    // Perfil do lead (profissão, dor e produto de interesse): aparece quando foi
+    // preenchido ou, mesmo vazio, quando quem criou o agendamento é do Closer (lá
+    // os campos são opcionais).
+    const creatorSector = attendants.find(a => a.id === initialData?.createdBy)?.sector;
     const hasLeadProfile = !!(initialData?.profession || initialData?.pain || initialData?.interestProduct);
+    const showLeadProfile = hasLeadProfile || creatorSector === 'Closer';
+    // Moeda, Perfil Financeiro e Perfil de Interesse: substituídos pelo perfil do lead,
+    // mas continuam visíveis se tiverem valor (agendamentos anteriores à troca).
+    const financialAmount = initialData?.studentProfile?.financial?.amount;
+    const hasLegacyProfile = !!(initialData?.studentProfile?.interest || (financialAmount && financialAmount !== '0'));
+    const showLegacyProfile = !showLeadProfile || hasLegacyProfile;
     // Eventos da Aldeia em que ela marca com um Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias).
     const isAction14Dias = isAldeiaToCloserEvent(formData.eventId);
     const isAldeiaCloserPick = isAldeiaToCloser(formData.eventId, formData.type);
@@ -1189,7 +1197,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                             disabled={isEditing}
                         />
 
-                        {hasLeadProfile ? (
+                        {showLeadProfile && (
                             <>
                                 {/* Perfil do lead (Pré-vendas/Closer): só leitura, visível para
                                     qualquer atendente, inclusive de outro setor. */}
@@ -1197,7 +1205,8 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                 <FloatingInput label="Profissão" value={initialData?.profession || ''} disabled />
                                 <FloatingInput label="Produto de Interesse" value={initialData?.interestProduct || ''} disabled />
                             </>
-                        ) : (
+                        )}
+                        {showLegacyProfile && (
                         <>
                         <FloatingSelect
                             label="Perfil de Interesse"
