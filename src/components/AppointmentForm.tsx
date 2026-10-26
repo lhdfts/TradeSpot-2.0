@@ -15,9 +15,9 @@ import { api } from '../services/api';
 import { ClientHistory } from './ClientHistory';
 import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
-import { sanitizeInput } from '../utils/security';
+import { sanitizeInput, canViewAllSectors } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
-import { SECTOR_PRE_VENDAS, isPreVendas, usesLeadProfile, requiresLeadProfile, INTEREST_PRODUCTS, type InterestProduct } from '../constants/sectors';
+import { SECTOR_PRE_VENDAS, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess, isPreVendas, usesLeadProfile, requiresLeadProfile, INTEREST_PRODUCTS, PRODUCTS, type InterestProduct, type Product } from '../constants/sectors';
 import { ProfessionSelect } from './ProfessionSelect';
 import { isAldeiaToCloser, isAldeiaToCloserEvent } from '../constants/events';
 
@@ -83,6 +83,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         profession: '',
         pain: '',
         interestProduct: '' as InterestProduct | '',
+        acquiredProduct: '' as Product | '',
         studentProfile: {
             interest: '' as ProfileLevel,
             knowledge: '' as KnowledgeLevel,
@@ -125,6 +126,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
     // Perfil Financeiro e Perfil de Interesse. Obrigatórios só para Pré-vendas.
     const showLeadProfile = usesLeadProfile(user?.sector);
     const leadProfileRequired = requiresLeadProfile(user?.sector);
+    // Customer Success informa o Produto Adquirido do aluno (obrigatório). Vai no webhook
+    // como acquired_product e o n8n usa para escolher a conexão do Unnichat.
+    const showAcquiredProduct = isCustomerSuccess(user?.sector);
     // Eventos da Aldeia em que ela marca com um Closer escolhido (Ação 14 Dias, Aldeia Temporário 7 Dias).
     const isAction14Dias = isAldeiaToCloserEvent(formData.eventId);
     const isAldeiaCloserPick = isAldeiaToCloser(formData.eventId, formData.type);
@@ -155,11 +159,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             allTypes.push({ value: 'Direcionar Closer', label: 'Direcionar Closer' });
         }
 
-        if (user?.sector === 'Closer') {
-            allTypes.push({ value: 'Ligação Equipe Aldeia', label: 'Ligação Equipe Aldeia' });
-        }
+        // "Ligação Equipe Aldeia" fica oculto (sem uso desde jul/26); o tipo segue válido nos agendamentos antigos.
 
-        if (user && (user.sector === 'Aldeia' || user.sector === 'Tribo' || user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin')) {
+        if (user && (isCustomerSuccess(user.sector) || user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin')) {
             allTypes.push(
                 { value: 'Onboarding', label: 'Onboarding' }
             );
@@ -174,10 +176,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (user.sector === 'Closer') {
             return allTypes.filter(t => ['Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
         }
-        if (user.sector === 'Tribo') {
-            return allTypes.filter(t => ['Agendamento Pessoal', 'Onboarding'].includes(t.value));
-        }
-        if (user.sector === 'Aldeia') {
+        // Customer Success herda as permissões da Aldeia e da Tribo (as da Aldeia já incluem as da Tribo).
+        if (isCustomerSuccess(user.sector)) {
             const allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer'];
             if (formData.eventId === ON_THE_ROAD_EVENT_ID || isAction14Dias) {
                 allowed.push('Ligação Closer');
@@ -199,9 +199,9 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (isEditing) {
             const typeToSectors: Record<string, string[]> = {
                 'Ligação Closer': ['Closer', 'Co-líder'],
-                'Ligação Equipe Aldeia': ['Aldeia'],
+                'Ligação Equipe Aldeia': [SECTOR_CUSTOMER_SUCCESS],
                 'Gold Call': ['Closer', 'Co-líder', SECTOR_PRE_VENDAS],
-                'Reagendamento Closer': ['Closer', 'Co-líder', 'Aldeia'],
+                'Reagendamento Closer': ['Closer', 'Co-líder', SECTOR_CUSTOMER_SUCCESS],
                 'Upgrade': ['Closer', 'Co-líder'],
                 'Ligação SDR': ['SDR'],
                 'Fechamento': ['Closer', 'Co-líder']
@@ -221,11 +221,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 )
                 : filteredAttendants;
 
-            const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
-            
-            if (user?.sector === 'Suporte') {
-                filteredAttendantsForBlock = filteredAttendantsForBlock.filter(a => a.sector !== 'Closer');
-            }
+            const isGlobalViewer = canViewAllSectors(user);
 
             if (!isGlobalViewer && user?.sector && !isAldeiaCloserPick) {
                 filteredAttendantsForBlock = filteredAttendantsForBlock.filter(
@@ -253,11 +249,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
                     if (a.sector === 'Desativado') return false;
 
-                    const isGlobalViewer = ['Suporte', 'TEI'].includes(user?.sector || '') || ['Admin', 'Dev'].includes(user?.role || '');
-                    
-                    if (user?.sector === 'Suporte' && a.sector === 'Closer') {
-                        return false;
-                    }
+                    const isGlobalViewer = canViewAllSectors(user);
 
                     // 'Direcionar Closer' is cross-sector by design (Pré-vendas hands the lead to a
                     // Closer), so it has to be resolved before the own-sector restriction below.
@@ -287,8 +279,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
                     if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fechamento') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
-                    if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder', 'Aldeia'].includes(a.sector) || a.role === 'Co-líder';
-                    if (formData.type === 'Ligação Equipe Aldeia') return a.sector === 'Aldeia' || (a.sector === 'Aldeia' && a.role === 'Co-líder');
+                    if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder', SECTOR_CUSTOMER_SUCCESS].includes(a.sector) || a.role === 'Co-líder';
+                    if (formData.type === 'Ligação Equipe Aldeia') return isCustomerSuccess(a.sector);
 
                     if (isAdministrative) {
                         return eventSector ? (a.sector === eventSector || (eventSector === 'Closer' && (a.role === 'Co-líder' || a.sector === 'Co-líder'))) : true;
@@ -300,8 +292,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 .map(a => ({ value: a.id, label: a.name }))
         ];
 
-        // Se o usuário for Aldeia e o tipo for Ligação Closer/Gold Call/Fora da agenda, mostrar apenas Distribuição Automática
-        if (user?.sector === 'Aldeia' && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda')) {
+        // Se o usuário for do Customer Success e o tipo for Ligação Closer/Gold Call/Fora da agenda, mostrar apenas Distribuição Automática
+        if (isCustomerSuccess(user?.sector) && (formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fora da agenda')) {
             if (isAldeiaCloserPick) {
                 return options;
             }
@@ -362,6 +354,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 profession: initialData.profession || '',
                 pain: initialData.pain || '',
                 interestProduct: initialData.interestProduct || '',
+                acquiredProduct: initialData.acquiredProduct || '',
                 studentProfile: {
                     interest: (incomingProfile?.interest || '') as ProfileLevel,
                     knowledge: (incomingProfile?.knowledge || '') as KnowledgeLevel,
@@ -423,8 +416,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 });
             }
 
-            // Special case for Tribo, Aldeia and Pré-vendas: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
-            if ((user.sector === 'Tribo' || user.sector === 'Aldeia' || isPreVendas(user.sector)) && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
+            // Special case for Customer Success and Pré-vendas: Force attendant to self if type matches "Agendamento Pessoal" or "Onboarding"
+            if ((isCustomerSuccess(user.sector) || isPreVendas(user.sector)) && (formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding')) {
                 setFormData(prev => ({ ...prev, attendantId: user.id }));
             }
             // 4. Reagendamento Closer
@@ -588,6 +581,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             profession: '',
             pain: '',
             interestProduct: '',
+            acquiredProduct: '',
             studentProfile: {
                 interest: '' as ProfileLevel,
                 knowledge: '' as KnowledgeLevel,
@@ -607,6 +601,12 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         if (!formData.lead) { toastManager.add({ title: "Erro", description: "Nome é obrigatório", type: 'error' }); return; }
         if (!formData.phone) { toastManager.add({ title: "Erro", description: "Telefone é obrigatório", type: 'error' }); return; }
         if (!formData.email) { toastManager.add({ title: "Erro", description: "Email é obrigatório", type: 'error' }); return; }
+
+        if (showAcquiredProduct && !formData.acquiredProduct) {
+            setErrors(prev => ({ ...prev, acquiredProduct: 'Produto Adquirido é obrigatório' }));
+            toastManager.add({ title: "Erro", description: "Produto Adquirido é obrigatório", type: 'error' });
+            return;
+        }
 
         if (leadProfileRequired) {
             const leadProfileErrors: Record<string, string> = {};
@@ -654,10 +654,10 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
 
             const selectedEvent = events.find(e => e.id === formData.eventId);
             const eventDurationMinutes = selectedEvent?.duration_minutes || 60;
-            const isAldeiaOrTribo = selectedEvent?.sector === 'Aldeia' || selectedEvent?.sector === 'Tribo';
+            const isCsEvent = isCustomerSuccess(selectedEvent?.sector);
 
             // 1. Check Schedule (Work hours + Pauses)
-            if (!isAldeiaOrTribo && !isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time, formData.type, eventDurationMinutes)) {
+            if (!isCsEvent && !isAttendantWithinSchedule(selectedAttendant, formData.date, formData.time, formData.type, eventDurationMinutes)) {
                 toastManager.add({
                     title: "Indisponibilidade",
                     description: `${selectedAttendant.name} não está disponível neste horário (Fora de expediente ou Pausa).`,
@@ -701,7 +701,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             }
 
             // 4. Sector Check
-            if (isAldeiaOrTribo && formData.type !== 'Agendamento Pessoal') {
+            if (isCsEvent && formData.type !== 'Agendamento Pessoal') {
                 if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, formData.time, formData.type, appointments, attendants, initialData?.id)) {
                     toastManager.add({
                         title: "Limite de Agendamentos",
@@ -787,9 +787,13 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             const creatorId = user?.id;
 
             // Só Pré-vendas e Closer enviam o perfil do lead.
-            const leadProfilePayload = showLeadProfile
-                ? { profession: formData.profession.trim(), pain: formData.pain.trim(), interestProduct: formData.interestProduct }
-                : { profession: undefined, pain: undefined, interestProduct: undefined };
+            const leadProfilePayload = {
+                ...(showLeadProfile
+                    ? { profession: formData.profession.trim(), pain: formData.pain.trim(), interestProduct: formData.interestProduct }
+                    : { profession: undefined, pain: undefined, interestProduct: undefined }),
+                // Só o Customer Success envia o Produto Adquirido.
+                acquiredProduct: showAcquiredProduct ? formData.acquiredProduct : undefined
+            };
 
             if (initialData) {
                 await updateAppointment(initialData.id, {
@@ -1071,7 +1075,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                         {/* Row 3: Atendente and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={!initialData ? "md:col-span-2" : "min-w-0"}>
-                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (user?.sector === 'Tribo' || user?.sector === 'Aldeia' || isPreVendas(user?.sector)) && !initialData && user ? (
+                                {(formData.type === 'Agendamento Pessoal' || formData.type === 'Onboarding') && (isCustomerSuccess(user?.sector) || isPreVendas(user?.sector)) && !initialData && user ? (
                                     <FloatingInput
                                         label="Atendente"
                                         value={user.name}
@@ -1226,6 +1230,20 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                             error={errors.email}
                             disabled={isEditing}
                         />
+
+                        {showAcquiredProduct && (
+                            <FloatingSelect
+                                label="Produto Adquirido"
+                                value={formData.acquiredProduct}
+                                onChange={(e: { target: { value: string } }) => {
+                                    setFormData(prev => ({ ...prev, acquiredProduct: e.target.value as Product }));
+                                    if (errors.acquiredProduct) setErrors(prev => ({ ...prev, acquiredProduct: '' }));
+                                }}
+                                options={PRODUCTS.map(p => ({ value: p, label: p }))}
+                                error={errors.acquiredProduct}
+                                disabled={isEditing}
+                            />
+                        )}
 
                         {showLeadProfile ? (
                             <>

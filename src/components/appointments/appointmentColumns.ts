@@ -6,7 +6,7 @@ import type { Appointment, Attendant, Event } from '../../types';
 
 export type AppointmentColumnId =
     | 'type' | 'owner' | 'creator' | 'attendant' | 'sector' | 'event' | 'email'
-    | 'profession' | 'pain' | 'interestProduct' | 'knowledge' | 'interest' | 'additionalInfo';
+    | 'profession' | 'pain' | 'interestProduct' | 'acquiredProduct' | 'knowledge' | 'interest' | 'additionalInfo';
 
 /** Nomes que a lista sozinha não tem (vêm de atendentes e eventos já carregados pela página). */
 export interface ColumnLookups {
@@ -52,6 +52,7 @@ export const OPTIONAL_COLUMNS: OptionalColumn[] = [
     { id: 'profession', header: 'Profissão', width: 170, value: a => a.profession },
     { id: 'pain', header: 'Dor', width: 190, value: a => a.pain },
     { id: 'interestProduct', header: 'Produto de Interesse', width: 150, value: a => a.interestProduct },
+    { id: 'acquiredProduct', header: 'Produto Adquirido', width: 150, value: a => a.acquiredProduct },
     { id: 'knowledge', header: 'Perfil de Conhecimento', width: 160, value: a => a.studentProfile?.knowledge },
     { id: 'interest', header: 'Perfil de Interesse', width: 140, value: a => a.studentProfile?.interest },
     { id: 'additionalInfo', header: 'Informações Adicionais', width: 260, value: a => a.additionalInfo },

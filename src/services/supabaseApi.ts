@@ -142,7 +142,8 @@ export class SupabaseApiService implements ApiService {
                 },
                 profession: createdAppointment.profession,
                 pain: createdAppointment.pain,
-                interestProduct: createdAppointment.interest_product
+                interestProduct: createdAppointment.interest_product,
+                acquiredProduct: createdAppointment.acquired_product
             } as Appointment;
         },
         update: async (id: string | number, data: Partial<Appointment>): Promise<Appointment> => {
@@ -194,7 +195,8 @@ export class SupabaseApiService implements ApiService {
                 },
                 profession: updatedAppointment.profession,
                 pain: updatedAppointment.pain,
-                interestProduct: updatedAppointment.interest_product
+                interestProduct: updatedAppointment.interest_product,
+                acquiredProduct: updatedAppointment.acquired_product
             } as Appointment;
         }
     };

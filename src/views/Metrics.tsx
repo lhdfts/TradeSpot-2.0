@@ -25,7 +25,7 @@ import { RankingModal } from '../components/RankingModal';
 import { computeMetrics, computeOwnerStats, filterAppointments, filterForExport, responsibleOf, RESPONSIBLE_SECTORS, type DirectionFilter, type RankingScope } from '../utils/metricsCalc';
 import { FloatingMultiSelect } from '../components/FloatingMultiSelect';
 import { api } from '../services/api';
-import { isPreVendas, normalizeSector } from '../constants/sectors';
+import { isCustomerSuccess, isPreVendas, normalizeSector } from '../constants/sectors';
 import {
     Tooltip,
     TooltipTrigger,
@@ -213,7 +213,8 @@ export const Metrics: React.FC = () => {
     // Get allowed types for current sector
     const getAllowedTypesForSector = () => {
         const displaySector = sectorFilter === 'all' && user?.sector ? user.sector : sectorFilter;
-        const allTypes = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento', 'Direcionar Closer'];
+        // "Ligação Equipe Aldeia" está oculto (sem uso desde jul/26); se aparecer nos dados do período, entra pela lista abaixo.
+        const allTypes = ['Ligação SDR', 'Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento', 'Direcionar Closer'];
         
         if (displaySector === 'all' || !displaySector) {
             return allTypes.map(t => ({ value: t, label: t }));
@@ -224,10 +225,8 @@ export const Metrics: React.FC = () => {
         if (displaySector === 'SDR' || displaySector === 'Leads') {
             allowed = ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Fechamento'];
         } else if (displaySector === 'Closer') {
-            allowed = ['Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'];
-        } else if (displaySector === 'Tribo') {
-            allowed = ['Agendamento Pessoal', 'Onboarding'];
-        } else if (displaySector === 'Aldeia') {
+            allowed = ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'];
+        } else if (isCustomerSuccess(displaySector)) {
             allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer', 'Ligação Closer'];
         } else if (displaySector === 'Social Seller') {
             allowed = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];

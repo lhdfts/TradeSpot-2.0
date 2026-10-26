@@ -44,9 +44,7 @@ export const Events: React.FC = () => {
 
             const filteredData = isSuperUser || isMedinaUser(user)
                 ? data.filter(event => allowedSectors.includes(event.sector || ''))
-                : user?.sector === 'Suporte'
-                    ? data.filter(event => ['Tribo', 'Aldeia', 'SDR', 'Closer'].includes(event.sector || ''))
-                    : data.filter(event => event.sector === user?.sector);
+                : data.filter(event => event.sector === user?.sector);
 
             setEvents(filteredData);
 

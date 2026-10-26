@@ -5,7 +5,7 @@ import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAtte
 import { getAppointmentWebhooks, getGlobalAppointmentWebhook } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 import { supabase } from '../utils/supabaseClient.js';
-import { PRE_VENDAS_ALIASES, isPreVendas, sectorAliases } from '../constants/sectors.js';
+import { PRE_VENDAS_ALIASES, CUSTOMER_SUCCESS_ALIASES, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess, isPreVendas, sectorAliases } from '../constants/sectors.js';
 
 const router = Router();
 
@@ -158,8 +158,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
                 }
 
                 // 2. Sector-specific overrides for Availability
-                if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
-                    sectors = [eventData.sector];
+                if (isCustomerSuccess(eventData.sector)) {
+                    sectors = [...CUSTOMER_SUCCESS_ALIASES];
                     APPOINTMENT_TYPE = 'Onboarding';
                 } else if (eventData.sector === 'CEO') {
                     sectors = ['CEO'];
@@ -187,8 +187,9 @@ router.get('/available-times', async (req: Request, res: Response) => {
         
         // Always fetch by sectors, ignoring any attendantId from public links to enforce automatic distribution
         attendantsQuery = attendantsQuery.in('sector', sectors);
-        // SDR events: Colaborador and Co-líder roles
-        if (sectors.includes('SDR')) {
+        // SDR e Customer Success: só Colaborador e Co-líder (no CS ficam de fora o
+        // Admin e as Qualidades que vieram do Suporte).
+        if (sectors.includes('SDR') || sectors.some(s => isCustomerSuccess(s))) {
             attendantsQuery = attendantsQuery.in('role', ['Colaborador', 'Co-líder']);
         }
         
@@ -247,16 +248,16 @@ router.get('/available-times', async (req: Request, res: Response) => {
         } else {
         // Standard Closer Logic
         const allTimes: string[] = [];
-        const isAldeiaOrTribo = sectors.includes('Aldeia') || sectors.includes('Tribo');
+        const isCsEvent = sectors.some(s => isCustomerSuccess(s));
         const isSDR = sectors.includes('SDR');
-        const allowedMinutes = isAldeiaOrTribo ? [0, 30] : [0, 15, 30, 45];
+        const allowedMinutes = isCsEvent ? [0, 30] : [0, 15, 30, 45];
 
         for (let hour = 0; hour < 24; hour++) {
             for (const minute of allowedMinutes) {
                 const timeSlot = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
-                // Adjustment 1: 12h lead time for Aldeia/Tribo (External Link)
-                if (isAldeiaOrTribo) {
+                // Adjustment 1: 12h lead time for Customer Success (External Link)
+                if (isCsEvent) {
                     // Time window between 09:00 and 21:00 (last slot at 21:00)
                     if (hour < 9 || hour > 21 || (hour === 21 && minute > 0)) {
                         continue;
@@ -287,8 +288,8 @@ router.get('/available-times', async (req: Request, res: Response) => {
         }
 
         for (const timeSlot of allTimes) {
-                if (isAldeiaOrTribo) {
-                    const sectorLimitCheck = sectors.includes('Aldeia') ? 'Aldeia' : 'Tribo';
+                if (isCsEvent) {
+                    const sectorLimitCheck = SECTOR_CUSTOMER_SUCCESS;
                     if (hasSectorTimeLimit(sectorLimitCheck, date, timeSlot, APPOINTMENT_TYPE, existingAppointments, attendants, undefined, durationMinutes)) {
                         continue;
                     }
@@ -408,7 +409,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
             APPOINTMENT_TYPE = 'Gold Call';
         } else if (eventData.sector === 'CEO') {
             APPOINTMENT_TYPE = 'Agendamento Pessoal';
-        } else if (eventData.sector === 'Aldeia' || eventData.sector === 'Tribo') {
+        } else if (isCustomerSuccess(eventData.sector)) {
             APPOINTMENT_TYPE = 'Onboarding';
         } else if (eventData.sector === 'SDR') {
             APPOINTMENT_TYPE = 'Ligação SDR';
@@ -419,19 +420,19 @@ router.post('/appointments', async (req: Request, res: Response) => {
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`);
         const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
 
-        const isAldeiaOrTribo = eventData.sector === 'Aldeia' || eventData.sector === 'Tribo';
+        const isCsEvent = isCustomerSuccess(eventData.sector);
         const isSDR = eventData.sector === 'SDR';
-        const minLeadMinutes = isAldeiaOrTribo ? 12 * 60 : isSDR ? 60 : 30;
+        const minLeadMinutes = isCsEvent ? 12 * 60 : isSDR ? 60 : 30;
 
         if (diffMinutes < minLeadMinutes) {
             let errorMsg = 'O agendamento deve ter pelo menos 30 minutos de antecedência.';
-            if (isAldeiaOrTribo) errorMsg = 'O agendamento para este setor deve ter pelo menos 12 horas de antecedência.';
+            if (isCsEvent) errorMsg = 'O agendamento para este setor deve ter pelo menos 12 horas de antecedência.';
             else if (isSDR) errorMsg = 'O agendamento deve ter pelo menos 1 hora de antecedência.';
             return res.status(400).json({ error: errorMsg });
         }
 
-        // 2.5 Time Slot Restriction (only :00 and :30 for Aldeia/Tribo)
-        if (isAldeiaOrTribo) {
+        // 2.5 Time Slot Restriction (only :00 and :30 for Customer Success)
+        if (isCsEvent) {
             const minutes = parseInt(data.time.split(':')[1]);
             if (minutes !== 0 && minutes !== 30) {
                 return res.status(400).json({ error: 'Para este setor, os agendamentos são permitidos apenas nos horários cheios (:00) ou meias horas (:30).' });

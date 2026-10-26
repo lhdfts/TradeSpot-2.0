@@ -1,6 +1,6 @@
 
 import { supabase } from './supabaseClient.js';
-import { PRE_VENDAS_ALIASES, isPreVendas } from '../constants/sectors.js';
+import { PRE_VENDAS_ALIASES, isPreVendas, CUSTOMER_SUCCESS_ALIASES, CUSTOMER_SUCCESS_CONCURRENT_LIMIT, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess } from '../constants/sectors.js';
 
 // Types (simplified for backend)
 interface Attendant {
@@ -59,6 +59,14 @@ export const timeToMinutes = (time: string): number => {
     const m = parseInt(match[2], 10);
     return h * 60 + m;
 };
+
+/**
+ * Pausa só vale com início e fim. Uma linha vazia ({ start: '', end: '' }), que o
+ * cadastro do atendente salvava quando a pausa era adicionada e não preenchida,
+ * virava 00:00–24:00 (fim "00:00" = meia-noite) e bloqueava o dia inteiro.
+ */
+export const isCompletePause = (pause?: { start?: string; end?: string } | null): boolean =>
+    !!pause?.start && !!pause?.end;
 
 export const getDuration = (_type?: string, durationMinutes: number = 60): number => {
     return durationMinutes;
@@ -141,6 +149,7 @@ export const isAttendantWithinSchedule = (
 
     if (attendant.pauses && attendant.pauses[dayKey]) {
         for (const pause of attendant.pauses[dayKey]) {
+            if (!isCompletePause(pause)) continue;
             const pauseStart = timeToMinutes(pause.start);
             let pauseEnd = timeToMinutes(pause.end);
 
@@ -207,10 +216,12 @@ export const hasSectorTimeLimit = (
     excludeAppointmentId?: string,
     durationMinutes: number = 60
 ): boolean => {
-    if (sector !== 'Aldeia' && sector !== 'Tribo') return false;
+    // Só o Customer Success tem limite, contado sobre o time todo (Aldeia e Tribo
+    // somados, enquanto o banco não for migrado).
+    if (!isCustomerSuccess(sector)) return false;
     if (newAppointmentType === 'Agendamento Pessoal' || newAppointmentType === 'Personal Appointment') return false;
 
-    const sectorAttendants = new Set(attendants.filter(a => a.sector === sector).map(a => a.id));
+    const sectorAttendants = new Set(attendants.filter(a => isCustomerSuccess(a.sector)).map(a => a.id));
     
     const newStart = timeToMinutes(timeStr);
     const newEnd = newStart + getDuration(newAppointmentType, durationMinutes);
@@ -242,7 +253,7 @@ export const hasSectorTimeLimit = (
         }
     }
 
-    return concurrentCount >= 2;
+    return concurrentCount >= CUSTOMER_SUCCESS_CONCURRENT_LIMIT;
 };
 
 export interface CheckLogItem {
@@ -271,14 +282,18 @@ export const findBestAttendantWithLogs = async (
 
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
     
-    if (type === 'Reagendamento Closer') {
-        sectors.push('Aldeia');
+    // Reagendamento Closer também pode ir para o Customer Success (herdado da Aldeia).
+    // Só Colaborador e Co-líder do CS entram: Admin e Qualidade vindos do Suporte não.
+    const csReceivesCloserReschedule = type === 'Reagendamento Closer';
+    if (csReceivesCloserReschedule) {
+        sectors.push(...CUSTOMER_SUCCESS_ALIASES);
     }
 
+    // Tipo oculto desde jul/26; mantido para agendamentos antigos.
     if (type === 'Ligação Equipe Aldeia') {
-        sectors = ['Aldeia'];
+        sectors = [...CUSTOMER_SUCCESS_ALIASES];
         roleFilters = ['Colaborador', 'Co-líder'];
-        sectorLimitCheck = 'Aldeia';
+        sectorLimitCheck = SECTOR_CUSTOMER_SUCCESS;
     }
 
     // Eventos da Aldeia com Closer: o pool é o Closer, não o setor do evento (Aldeia).
@@ -295,14 +310,11 @@ export const findBestAttendantWithLogs = async (
                 sectors = [...PRE_VENDAS_ALIASES];
             } else if (eventData.sector === 'CEO') {
                 sectors = ['CEO'];
-            } else if (eventData.sector === 'Tribo') {
-                sectors = ['Tribo'];
+            } else if (isCustomerSuccess(eventData.sector)) {
+                // Distribui pelo time todo (antigos Aldeia e Tribo juntos).
+                sectors = [...CUSTOMER_SUCCESS_ALIASES];
                 roleFilters = ['Colaborador', 'Co-líder'];
-                sectorLimitCheck = 'Tribo';
-            } else if (eventData.sector === 'Aldeia') {
-                sectors = ['Aldeia'];
-                roleFilters = ['Colaborador', 'Co-líder'];
-                sectorLimitCheck = 'Aldeia';
+                sectorLimitCheck = SECTOR_CUSTOMER_SUCCESS;
             } else if (eventData.sector === 'SDR') {
                 sectors = ['SDR'];
                 roleFilters = ['Colaborador', 'Co-líder'];
@@ -319,12 +331,16 @@ export const findBestAttendantWithLogs = async (
     if (roleFilters) {
         attendantsQuery = attendantsQuery.in('role', roleFilters);
     }
-    const { data: attendants, error: attError } = await attendantsQuery;
+    const { data: fetchedAttendants, error: attError } = await attendantsQuery;
 
-    if (attError || !attendants) {
+    if (attError || !fetchedAttendants) {
         console.error("Error fetching attendants:", attError);
         return { attendantId: null, checksLog: [] };
     }
+
+    const attendants = csReceivesCloserReschedule
+        ? fetchedAttendants.filter(a => !isCustomerSuccess(a.sector) || ['Colaborador', 'Co-líder'].includes(a.role))
+        : fetchedAttendants;
 
     // 2. Fetch Appointments for this day to check load/conflicts
     const { data: appointments, error: appError } = await supabase
@@ -375,6 +391,7 @@ export const findBestAttendantWithLogs = async (
                 let isPause = false;
                 if (a.pauses && a.pauses[dayKey]) {
                     for (const pause of a.pauses[dayKey]) {
+                        if (!isCompletePause(pause)) continue;
                         const pauseStart = timeToMinutes(pause.start);
                         let pauseEnd = timeToMinutes(pause.end);
                         if (pauseEnd <= pauseStart && pauseEnd !== 0) pauseEnd += 1440;

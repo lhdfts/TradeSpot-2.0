@@ -7,7 +7,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { Attendant } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { SECTOR_PRE_VENDAS } from '../constants/sectors';
+import { SECTOR_CUSTOMER_SUCCESS, SECTOR_PRE_VENDAS } from '../constants/sectors';
 
 const Input: React.FC<any> = ({ label, ...props }) => (
     <div className="space-y-1">
@@ -80,10 +80,19 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
         e.preventDefault();
         setIsSubmitting(true);
         try {
+            // Pausa adicionada e não preenchida não vai para o banco: vazia, ela era
+            // lida como 00:00–24:00 e deixava o atendente indisponível o dia todo.
+            const pauses = Object.fromEntries(
+                Object.entries(formData.pauses || {}).map(([day, list]) => [
+                    day,
+                    (list || []).filter(pause => pause.start && pause.end)
+                ])
+            );
+            const payload = { ...formData, pauses };
             if (attendant) {
-                await api.attendants.update(attendant.id, formData);
+                await api.attendants.update(attendant.id, payload);
             } else {
-                await api.attendants.create(formData as Omit<Attendant, 'id'>);
+                await api.attendants.create(payload as Omit<Attendant, 'id'>);
             }
             onSuccess();
             onClose();
@@ -212,8 +221,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                             { value: 'SDR', label: 'SDR' },
                             { value: 'Closer', label: 'Closer' },
                             { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
-                            { value: 'Tribo', label: 'Tribo' },
-                            { value: 'Aldeia', label: 'Aldeia' },
+                            { value: SECTOR_CUSTOMER_SUCCESS, label: SECTOR_CUSTOMER_SUCCESS },
                             { value: 'Social Seller', label: 'Social Seller' },
                             { value: 'CEO', label: 'CEO' }
                         ]}
