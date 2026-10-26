@@ -201,7 +201,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 'Ligação Closer': ['Closer', 'Co-líder'],
                 'Ligação Equipe Aldeia': [SECTOR_CUSTOMER_SUCCESS],
                 'Gold Call': ['Closer', 'Co-líder', SECTOR_PRE_VENDAS],
-                'Reagendamento Closer': ['Closer', 'Co-líder', SECTOR_CUSTOMER_SUCCESS],
+                'Reagendamento Closer': ['Closer', 'Co-líder'],
                 'Upgrade': ['Closer', 'Co-líder'],
                 'Ligação SDR': ['SDR'],
                 'Fechamento': ['Closer', 'Co-líder']
@@ -279,7 +279,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const isAdministrative = user && ['Dev', 'Admin', 'Líder', 'Co-líder', 'Qualidade'].includes(user.role);
 
                     if (formData.type === 'Upgrade' || formData.type === 'Ligação Closer' || formData.type === 'Gold Call' || formData.type === 'Fechamento') return ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder';
-                    if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder', SECTOR_CUSTOMER_SUCCESS].includes(a.sector) || a.role === 'Co-líder';
+                    // Só o Closer recebe Reagendamento Closer (sem Co-líder de outro setor, que o servidor recusa).
+                    if (formData.type === 'Reagendamento Closer') return ['Closer', 'Co-líder'].includes(a.sector);
                     if (formData.type === 'Ligação Equipe Aldeia') return isCustomerSuccess(a.sector);
 
                     if (isAdministrative) {
@@ -424,16 +425,21 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             else if (formData.type === 'Reagendamento Closer' && formData.phone) {
                 const targetPhone = formData.phone.replace(/\D/g, '');
 
-                // Search for relevant past appointments
-                const relevantAppointments = appointments.filter(app => {
-                    const appPhone = String(app.phone);
-                    return appPhone === targetPhone &&
-                        (app.type === 'Ligação Closer' ||
-                            app.type === 'Gold Call' ||
-                            app.type === 'Reagendamento Closer' ||
-                            app.type === 'Agendamento Pessoal' ||
-                            app.type === 'Upgrade');
-                });
+                // Quem pode receber Reagendamento Closer (mesma regra do servidor).
+                const canReceiveReschedule = (attendantId?: string) => {
+                    const att = attendants.find(a => a.id === attendantId);
+                    return !!att && att.role !== 'Líder' && ['Closer', 'Co-líder'].includes(att.sector);
+                };
+
+                // Último agendamento de Closer do aluno, para sugerir o mesmo Closer. O
+                // Agendamento Pessoal não entra: ele é de quem marcou (ex.: Pré-vendas) e,
+                // no mesmo horário de uma Ligação Closer, fazia o formulário sugerir o
+                // Pré-vendas, que não aparece na lista e era recusado ao salvar.
+                const relevantAppointments = appointments.filter(app =>
+                    String(app.phone) === targetPhone &&
+                    ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(app.type) &&
+                    canReceiveReschedule(app.attendantId)
+                );
 
                 if (relevantAppointments.length > 0) {
                     // Sort by date/time descending to get most recent
@@ -446,8 +452,11 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                     const lastAttendantId = relevantAppointments[0].attendantId;
                     setFormData(prev => ({ ...prev, attendantId: lastAttendantId }));
                 } else {
-                    // No history logic needed here, validation handles permissions. 
-                    // Fallback to manual selection or distribution is fine.
+                    // Sem Closer no histórico: escolha manual ou distribuição. Não deixa um
+                    // atendente inválido herdado de outro tipo, que ficaria invisível no campo.
+                    setFormData(prev => (prev.attendantId && prev.attendantId !== 'distribuicao_automatica' && !canReceiveReschedule(prev.attendantId))
+                        ? { ...prev, attendantId: '' }
+                        : prev);
                 }
             }
             // 5. Upgrade
@@ -456,7 +465,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 // Ensure field is enabled in the UI
             }
         }
-    }, [formData.type, formData.lead, formData.phone, user, appointments, initialData]);
+    }, [formData.type, formData.lead, formData.phone, user, appointments, attendants, initialData]);
 
 
     const checkEligibility = (phone: string) => {
