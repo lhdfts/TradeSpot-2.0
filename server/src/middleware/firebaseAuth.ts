@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { supabase } from '../utils/supabaseClient.js';
-import { ARCHIVED_EMAIL_SUFFIX } from '../constants/sectors.js';
+import { ARCHIVED_EMAIL_SUFFIX, SECTOR_SEM_SETOR } from '../constants/sectors.js';
 
 /**
  * Safely extracts client IP address, handling string, string[], or undefined.
@@ -155,7 +155,7 @@ export const verifyFirebaseToken = async (
                 userId: decodedToken.uid,
                 userName: defaultName,
                 userRole: 'Colaborador',
-                userSector: 'Suporte',
+                userSector: SECTOR_SEM_SETOR,
                 action: 'REGISTER_NEW_USER',
                 resource: req.originalUrl,
                 ipAddress,
@@ -170,7 +170,7 @@ export const verifyFirebaseToken = async (
                     email: email,
                     name: defaultName,
                     role: 'Colaborador', // Default role
-                    sector: 'Suporte',       // Default sector
+                    sector: SECTOR_SEM_SETOR, // Sem acesso a setor nenhum até um líder ajustar o cadastro
                     status: true         // Make sure they are active
                 })
                 .select('id, name, role, sector')

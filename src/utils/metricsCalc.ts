@@ -1,5 +1,5 @@
 import { canViewAllSectors, getAllowedSectors } from './security';
-import { SECTOR_PRE_VENDAS, normalizeSector } from '../constants/sectors';
+import { SECTOR_CUSTOMER_SUCCESS, SECTOR_PRE_VENDAS, normalizeSector } from '../constants/sectors';
 import { APPOINTMENT_STATUSES, type Appointment, type AppointmentStatus, type Attendant } from '../types';
 
 /**
@@ -33,7 +33,7 @@ export interface MetricsUser {
  * pessoa conta no ranking como responsável (owner; nasce igual ao criador) dos
  * agendamentos de tipo Closer, além de contar como atendente.
  */
-export const RESPONSIBLE_SECTORS = ['SDR', 'Leads', SECTOR_PRE_VENDAS, 'Aldeia'];
+export const RESPONSIBLE_SECTORS = ['SDR', 'Leads', SECTOR_PRE_VENDAS, SECTOR_CUSTOMER_SUCCESS];
 
 /** Tipos atendidos por Closer, marcados por outra pessoa. */
 export const CLOSER_TYPES = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento', 'Direcionar Closer'];
@@ -161,7 +161,7 @@ export const computeMetrics = ({
 
     // 2. Generate Rankings for ALL sectors
     const rankingsMap = new Map<string, RankingItem[]>();
-    const sectors = ['SDR', 'Leads', 'Closer', 'Aldeia', 'Tribo', 'Social Seller', SECTOR_PRE_VENDAS, 'Suporte', 'TEI', 'Qualidade'];
+    const sectors = ['SDR', 'Leads', 'Closer', SECTOR_CUSTOMER_SUCCESS, 'Social Seller', SECTOR_PRE_VENDAS, 'TEI', 'Qualidade'];
 
     sectors.forEach(sector => {
         const map = new Map<string, RankingItem>();

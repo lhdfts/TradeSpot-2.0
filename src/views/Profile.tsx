@@ -226,7 +226,8 @@ export const Profile: React.FC = () => {
 
                     <div className="space-y-3 flex-1">
                         {DAYS_OF_WEEK.map(day => {
-                            const dayPauses = myAttendant?.pauses?.[day.key] || [];
+                            // Pausas sem horário (salvas em branco) não contam como pausa.
+                            const dayPauses = (myAttendant?.pauses?.[day.key] || []).filter(pause => pause.start && pause.end);
                             const hasPauses = dayPauses.length > 0;
 
                             return (

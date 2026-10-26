@@ -1,4 +1,4 @@
-import { SECTOR_PRE_VENDAS } from '../constants/sectors';
+import { SECTOR_CUSTOMER_SUCCESS, SECTOR_PRE_VENDAS } from '../constants/sectors';
 
 export const SECURITY_PATTERNS = {
     // Only digits
@@ -60,9 +60,8 @@ export const isDualLeader = (user: { id?: string } | null | undefined) => {
 
 export const getAllowedSectors = (user: { email?: string; sector?: string; id?: string; role?: string } | null | undefined) => {
     if (!user) return [];
-    if (user.sector === 'Suporte') return ['Aldeia', SECTOR_PRE_VENDAS, 'CEO', 'SDR', 'Tribo', 'Social Seller'];
-    if (canViewAllSectors(user)) return ['Aldeia', 'Closer', SECTOR_PRE_VENDAS, 'CEO', 'SDR', 'Tribo', 'Social Seller'];
-    if (isMedinaUser(user)) return ['SDR', 'Aldeia', 'Tribo'];
+    if (canViewAllSectors(user)) return [SECTOR_CUSTOMER_SUCCESS, 'Closer', SECTOR_PRE_VENDAS, 'CEO', 'SDR', 'Social Seller'];
+    if (isMedinaUser(user)) return ['SDR', SECTOR_CUSTOMER_SUCCESS];
     // Liderava Perpétuos + Presencial; os dois viraram Pré-vendas.
     if (isDualLeader(user)) return [SECTOR_PRE_VENDAS];
     return user.sector ? [user.sector] : [];

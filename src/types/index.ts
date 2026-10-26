@@ -81,6 +81,8 @@ export interface Appointment {
     profession?: string | null;
     pain?: string | null;
     interestProduct?: 'Aldeia' | 'Tribo' | null;
+    // Produto que o aluno tem (preenchido pelo Customer Success)
+    acquiredProduct?: 'Aldeia' | 'Tribo' | null;
     // Status tracking
     oldStatus?: AppointmentStatus;
     updatedBy?: string;

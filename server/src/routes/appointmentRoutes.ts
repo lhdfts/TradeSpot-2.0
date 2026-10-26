@@ -6,7 +6,7 @@ import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAtte
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
-import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
+import { ARCHIVED_EMAIL_SUFFIX, CUSTOMER_SUCCESS_ALIASES, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, hasGlobalView, isCustomerSuccess, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
@@ -46,8 +46,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
         // Escopo de visibilidade (filtro `or` do PostgREST); null = vê tudo.
         let scopeFilter: string | null = null;
-        if (userSector === 'TEI' || userSector === 'Suporte') {
-            // Regra 1: TEI e Suporte podem ver tudo de todos os setores
+        if (hasGlobalView(req.user)) {
+            // Regra 1: o setor TEI e os cargos globais (Admin, Dev, Qualidade, Suporte)
+            // veem tudo de todos os setores. Antes valia pelo SETOR Suporte, que foi
+            // incorporado ao Customer Success.
             scopeFilter = null;
         } else if (userSector === 'Closer' && userRole === 'Colaborador') {
             // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos.
@@ -161,6 +163,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             profession: app.profession,
             pain: app.pain,
             interestProduct: app.interest_product,
+            acquiredProduct: app.acquired_product,
             oldStatus: app.oldStatus,
             updatedBy: app.updatedBy,
             updater: app.updater
@@ -196,9 +199,10 @@ const loadDistributionContext = async (
         eventSector = ev?.sector || null;
     }
 
-    const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+    // Eventos do Customer Success (antigos Aldeia e Tribo): limite de simultâneos e sem checagem de escala.
+    const isCsEvent = isCustomerSuccess(eventSector);
     const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento', 'Direcionar Closer'].includes(type);
-    const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
+    const ignoreSchedule = isCsEvent && !isCloserAppt;
 
     const [{ data: existingAppts, error: apptError }, { data: allAttendants, error: attError }] = await Promise.all([
         supabase.from('appointments').select('id, attendant_id, date, time, end_time, type, status').eq('date', date).neq('status', 'Cancelado'),
@@ -224,7 +228,7 @@ const loadDistributionContext = async (
 
         const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento', 'Direcionar Closer'].includes(type);
         if (type === 'Ligação Equipe Aldeia') {
-            candidates = candidates.filter(a => a.sector === 'Aldeia');
+            candidates = candidates.filter(a => isCustomerSuccess(a.sector));
         } else if (isCloserType) {
             // Só o SETOR conta. Aceitar também o cargo 'Co-líder' colocava no pool
             // Co-líderes de Aldeia, Tribo, Cobrança e Financeiro — que o guard de
@@ -237,7 +241,7 @@ const loadDistributionContext = async (
     return {
         durationMinutes,
         eventSector,
-        isAldeiaOrTribo,
+        isCsEvent,
         ignoreSchedule,
         existingAppts: existingAppts || [],
         allAttendants,
@@ -318,10 +322,10 @@ router.get('/available-times', async (req: AuthenticatedRequest, res: Response) 
         if (!ctx) {
             return res.status(500).json({ error: 'Erro ao buscar horários disponíveis.' });
         }
-        const { durationMinutes, eventSector, isAldeiaOrTribo, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
+        const { durationMinutes, eventSector, isCsEvent, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
 
         const availableTimes = ALL_TIME_SLOTS.filter(time => {
-            if (isAldeiaOrTribo && type !== 'Agendamento Pessoal' &&
+            if (isCsEvent && type !== 'Agendamento Pessoal' &&
                 hasSectorTimeLimit(eventSector as string, date, time, type, existingAppts || [], allAttendants, undefined, durationMinutes)) {
                 return false;
             }
@@ -360,10 +364,10 @@ router.get('/resolve-attendant', async (req: AuthenticatedRequest, res: Response
         if (!ctx) {
             return res.status(500).json({ error: 'Erro ao resolver atendente.' });
         }
-        const { durationMinutes, eventSector, isAldeiaOrTribo, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
+        const { durationMinutes, eventSector, isCsEvent, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
 
-        // Limite de agendamentos simultâneos do setor (Aldeia/Tribo)
-        if (isAldeiaOrTribo && type !== 'Agendamento Pessoal' &&
+        // Limite de agendamentos simultâneos do Customer Success
+        if (isCsEvent && type !== 'Agendamento Pessoal' &&
             hasSectorTimeLimit(eventSector as string, date, time, type, existingAppts, allAttendants, undefined, durationMinutes)) {
             return res.json({ attendantId: null, motivo: 'Limite de agendamentos do setor atingido para este horário.' });
         }
@@ -418,8 +422,8 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
 
         // Management roles can see all attendants with full details
         const isManagement = ['Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade'].includes(userRole || '');
-        // TEI and Suporte sectors have cross-sector visibility
-        const hasCrossSectorAccess = userSector === 'TEI' || userSector === 'Suporte';
+        // Setor TEI e cargos globais enxergam todos os setores
+        const hasCrossSectorAccess = hasGlobalView(req.user);
 
         let query = supabase.from('user').select('id, name, email, role, sector, schedule, pauses, denied_events');
 
@@ -1020,7 +1024,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
         }
 
-        // 1.5 Fetch Event to check sector for Aldeia/Tribo specific rules (Internal Link)
+        // Produto Adquirido: obrigatório para quem cria pelo Customer Success. O n8n
+        // usa esse valor (acquired_product) para escolher a conexão do Unnichat.
+        const acquiredProduct = data.acquiredProduct || null;
+        if (isCustomerSuccess(req.user?.sector) && !acquiredProduct) {
+            return res.status(400).json({ error: 'Campo obrigatório: Produto Adquirido.' });
+        }
+
+        // 1.5 Fetch Event to check sector for Customer Success rules (Internal Link)
         let eventSector = '';
         let durationMinutes = 60;
         if (data.eventId) {
@@ -1030,7 +1041,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 if (ev.duration_minutes) durationMinutes = ev.duration_minutes;
             }
         }
-        const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+        const isCsEvent = isCustomerSuccess(eventSector);
 
         // 0.5. Event-specific Whitelist & Limit Check
         if (data.eventId === RESTRICTED_EVENT_ID) {
@@ -1087,7 +1098,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         let distributionChecksLog: CheckLogItem[] | null = null;
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
             const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Direcionar Closer'].includes(data.type);
-            const ignoreSched = isAldeiaOrTribo && !isCloserAppt;
+            const ignoreSched = isCsEvent && !isCloserAppt;
             const resDist = await findBestAttendantWithLogs(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
             if (!resDist.attendantId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
@@ -1136,7 +1147,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
             const allowedSectors = [...closerSectors];
             if (data.type === 'Reagendamento Closer') {
-                allowedSectors.push('Aldeia');
+                allowedSectors.push(...CUSTOMER_SUCCESS_ALIASES);
             }
 
             if (closerTypes.includes(data.type) && !allowedSectors.includes(attendant.sector)) {
@@ -1153,14 +1164,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
-            if (data.type === 'Ligação Equipe Aldeia' && attendant.sector !== 'Aldeia') {
+            if (data.type === 'Ligação Equipe Aldeia' && !isCustomerSuccess(attendant.sector)) {
                 console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to Ligação Equipe Aldeia.`);
                 return res.status(409).json({
-                    error: `O atendente ${attendant.name} não pertence ao setor Aldeia (setor atual: ${attendant.sector}). Atualize a página e tente novamente.`
+                    error: `O atendente ${attendant.name} não pertence ao Customer Success (setor atual: ${attendant.sector}). Atualize a página e tente novamente.`
                 });
             }
 
-            if (data.type !== 'Fora da agenda' && attendant.sector !== 'Aldeia' && attendant.sector !== 'Tribo') {
+            if (data.type !== 'Fora da agenda' && !isCustomerSuccess(attendant.sector)) {
                 const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type, durationMinutes);
                 if (!isWithinSchedule) {
                     return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
@@ -1302,6 +1313,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             profession,
             pain,
             interest_product: interestProduct,
+            acquired_product: acquiredProduct,
             created_at: new Date().toISOString(),
             // created_by logic
             created_by: data.createdBy,
@@ -1471,7 +1483,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
         const merged = { ...currentApp, ...updates };
 
-        // 1.5 Fetch Event sector for Aldeia/Tribo rules (Internal Link)
+        // 1.5 Fetch Event sector for Customer Success rules (Internal Link)
         let eventSector = '';
         let durationMinutes = 60;
         const eventIdToCheck = merged.event_id;
@@ -1482,7 +1494,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 if (ev.duration_minutes) durationMinutes = ev.duration_minutes;
             }
         }
-        const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+        const isCsEvent = isCustomerSuccess(eventSector);
 
         // Event-specific blocklist for assignment changes only
         const isAttendantChangeRequested = typeof (updates as any).attendantId === 'string' && (updates as any).attendantId.length > 0;
@@ -1531,7 +1543,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 console.log(`[DEBUG] Checking Schedule for ${attendant.name} (${attendant.id})`);
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
-                if (merged.type !== 'Fora da agenda' && attendant.sector !== 'Aldeia' && attendant.sector !== 'Tribo') {
+                if (merged.type !== 'Fora da agenda' && !isCustomerSuccess(attendant.sector)) {
                     const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type, durationMinutes);
                     console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
 

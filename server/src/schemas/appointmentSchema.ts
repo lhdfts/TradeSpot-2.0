@@ -75,6 +75,10 @@ export const createAppointmentSchema = z.object({
     interestProduct: z.union([z.enum(VALID_INTEREST_PRODUCTS), z.literal('')], {
         message: 'Produto de interesse inválido'
     }).optional(),
+    // Produto que o aluno tem (Customer Success). Vai no webhook como acquired_product.
+    acquiredProduct: z.union([z.enum(VALID_INTEREST_PRODUCTS), z.literal('')], {
+        message: 'Produto adquirido inválido'
+    }).optional(),
 
     type: z.enum(VALID_TYPES, {
         message: 'Tipo de agendamento inválido'

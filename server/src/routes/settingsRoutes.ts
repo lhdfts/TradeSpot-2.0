@@ -1,13 +1,13 @@
 import { Router, Response } from 'express';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
-import { isPreVendas, SECTOR_DESATIVADO, SECTOR_PRE_VENDAS } from '../constants/sectors.js';
+import { isCustomerSuccess, isPreVendas, SECTOR_CUSTOMER_SUCCESS, SECTOR_DESATIVADO, SECTOR_PRE_VENDAS, SECTOR_SEM_SETOR } from '../constants/sectors.js';
 import { getOwnerChangeSectors, setOwnerChangeSectors } from '../utils/systemSettings.js';
 
 const router = Router();
 
 // Setores que não fazem sentido como opção de configuração.
-const IGNORED_SECTORS = [SECTOR_DESATIVADO];
+const IGNORED_SECTORS = [SECTOR_DESATIVADO, SECTOR_SEM_SETOR];
 
 /**
  * GET /api/settings/owner-change-sectors
@@ -25,7 +25,7 @@ router.get('/owner-change-sectors', async (_req: AuthenticatedRequest, res: Resp
         const available = new Set<string>();
         for (const u of users || []) {
             if (!u.sector || IGNORED_SECTORS.includes(u.sector)) continue;
-            available.add(isPreVendas(u.sector) ? SECTOR_PRE_VENDAS : u.sector);
+            available.add(isPreVendas(u.sector) ? SECTOR_PRE_VENDAS : isCustomerSuccess(u.sector) ? SECTOR_CUSTOMER_SUCCESS : u.sector);
         }
         enabled.forEach(s => available.add(s));
 

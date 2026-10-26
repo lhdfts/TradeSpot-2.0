@@ -9,7 +9,7 @@ import type { Event, Attendant, UnnichatConnection } from '../types';
 import { api } from '../services/api';
 
 import { useAuth } from '../context/AuthContext';
-import { SECTOR_PRE_VENDAS } from '../constants/sectors';
+import { SECTOR_CUSTOMER_SUCCESS, SECTOR_PRE_VENDAS } from '../constants/sectors';
 
 const Input: React.FC<any> = ({ label, ...props }) => (
     <div className="space-y-1">
@@ -43,8 +43,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
     const [saving, setSaving] = useState(false);
 
     const isSuperUser = user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade' || user?.sector === 'TEI';
-    const isSuporte = user?.sector === 'Suporte';
-    const canEditSector = isSuperUser || isSuporte;
+    const canEditSector = isSuperUser;
 
     useEffect(() => {
         if (isOpen) {
@@ -74,7 +73,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                 fetchAttendants(initialSector);
             }
         }
-    }, [event, isOpen, user, isSuperUser, isSuporte, canEditSector]);
+    }, [event, isOpen, user, isSuperUser, canEditSector]);
 
     const fetchAttendants = async (targetSector?: string) => {
         setLoadingAttendants(true);
@@ -224,12 +223,11 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
                                 fetchAttendants(newSector);
                             }}
                             options={[
-                                { value: 'Aldeia', label: 'Aldeia' },
                                 { value: 'Closer', label: 'Closer' },
+                                { value: SECTOR_CUSTOMER_SUCCESS, label: SECTOR_CUSTOMER_SUCCESS },
                                 { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
                                 { value: 'CEO', label: 'CEO' },
                                 { value: 'SDR', label: 'SDR' },
-                                { value: 'Tribo', label: 'Tribo' },
                                 { value: 'Social Seller', label: 'Social Seller' }
                             ]}
                             disabled={!canEditSector}
