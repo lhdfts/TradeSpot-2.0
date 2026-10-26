@@ -5,6 +5,7 @@ import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAtte
 import { getAppointmentWebhooks, getGlobalAppointmentWebhook } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 import { supabase } from '../utils/supabaseClient.js';
+import { rescheduleLastNoShow } from '../utils/noShowReschedule.js';
 import { PRE_VENDAS_ALIASES, CUSTOMER_SUCCESS_ALIASES, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess, isPreVendas, sectorAliases } from '../constants/sectors.js';
 
 const router = Router();
@@ -669,6 +670,9 @@ router.post('/appointments', async (req: Request, res: Response) => {
             console.error("Supabase Write Error:", appError);
             return res.status(500).json({ error: 'Erro ao salvar agendamento' });
         }
+
+        // Último agendamento do aluno estava como No-show: vira Reagendado.
+        await rescheduleLastNoShow(clientId, createdAppointment.id, null);
 
         if (distributionChecksLog && finalAttendantId && createdAppointment && clientId) {
             const { data: selectedUser } = await supabase.from('user').select('name').eq('id', finalAttendantId).maybeSingle();

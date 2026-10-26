@@ -168,6 +168,17 @@ export const isAttendantWithinSchedule = (
 };
 
 // Check for overlapping appointments
+export const PERSONAL_APPOINTMENT_TYPES = ['Agendamento Pessoal', 'Personal Appointment'];
+
+/**
+ * Agendamento Pessoal ocupa a agenda de qualquer atendente, de qualquer setor.
+ * Tipos que hoje podem se sobrepor a outros agendamentos (Fora da agenda,
+ * Fechamento) continuam podendo, mas nunca por cima de um Agendamento Pessoal:
+ * para eles, o conflito é checado só contra os pessoais.
+ */
+export const conflictPoolFor = <T extends { type: string }>(appointments: T[], overlapsAllowed: boolean): T[] =>
+    overlapsAllowed ? appointments.filter(a => PERSONAL_APPOINTMENT_TYPES.includes(a.type)) : appointments;
+
 export const hasConflictingAppointment = (
     attendantId: string,
     dateStr: string,

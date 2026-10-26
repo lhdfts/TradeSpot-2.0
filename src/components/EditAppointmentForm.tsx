@@ -175,7 +175,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
         if (user.sector === 'TEI' || user.role === 'Dev' || user.role === 'Admin') return allTypes;
 
         if (user.sector === 'SDR') {
-            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Fechamento'].includes(t.value));
+            return allTypes.filter(t => ['Ligação SDR', 'Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Fechamento'].includes(t.value));
         }
         if (user.sector === 'Closer') {
             return allTypes.filter(t => ['Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'].includes(t.value));
@@ -189,7 +189,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
             return allTypes.filter(t => allowed.includes(t.value));
         }
         if (user.sector === 'Social Seller') {
-            return allTypes.filter(t => ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
+            return allTypes.filter(t => ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Gold Call'].includes(t.value));
         }
         if (isPreVendas(user.sector)) {
             return allTypes.filter(t => ['Gold Call', 'Fechamento', 'Agendamento Pessoal', 'Ligação Closer', 'Reagendamento Closer', 'Direcionar Closer', 'Fora da agenda'].includes(t.value));
