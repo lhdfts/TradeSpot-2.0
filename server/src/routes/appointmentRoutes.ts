@@ -7,7 +7,7 @@ import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } fr
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
 import { rescheduleLastNoShow } from '../utils/noShowReschedule.js';
-import { ARCHIVED_EMAIL_SUFFIX, CUSTOMER_SUCCESS_ALIASES, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, hasGlobalView, isCustomerSuccess, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
+import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, hasGlobalView, isCustomerSuccess, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
@@ -1147,10 +1147,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 closerSectors.push(...PRE_VENDAS_ALIASES);
             }
 
+            // Reagendamento Closer: só Closer recebe (o Customer Success cria, mas não recebe).
             const allowedSectors = [...closerSectors];
-            if (data.type === 'Reagendamento Closer') {
-                allowedSectors.push(...CUSTOMER_SUCCESS_ALIASES);
-            }
 
             if (closerTypes.includes(data.type) && !allowedSectors.includes(attendant.sector)) {
                 console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to ${data.type}. Expected sectors: ${allowedSectors.join(', ')}`);

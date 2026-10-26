@@ -293,12 +293,10 @@ export const findBestAttendantWithLogs = async (
 
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
     
-    // Reagendamento Closer também pode ir para o Customer Success (herdado da Aldeia).
-    // Só Colaborador e Co-líder do CS entram: Admin e Qualidade vindos do Suporte não.
-    const csReceivesCloserReschedule = type === 'Reagendamento Closer';
-    if (csReceivesCloserReschedule) {
-        sectors.push(...CUSTOMER_SUCCESS_ALIASES);
-    }
+    // Reagendamento Closer vai sempre para o Closer, qualquer que seja o setor do
+    // evento: o Customer Success (e os demais setores) só o criam, não recebem.
+    // Mesma regra da grade de horários (loadDistributionContext).
+    const closerOnlyPool = type === 'Reagendamento Closer';
 
     // Tipo oculto desde jul/26; mantido para agendamentos antigos.
     if (type === 'Ligação Equipe Aldeia') {
@@ -314,7 +312,7 @@ export const findBestAttendantWithLogs = async (
         roleFilters = ['Colaborador', 'Co-líder'];
     }
 
-    if (eventId && type !== 'Ligação Equipe Aldeia' && !aldeiaToCloser) {
+    if (eventId && type !== 'Ligação Equipe Aldeia' && !aldeiaToCloser && !closerOnlyPool) {
         const { data: eventData } = await supabase.from('events').select('sector').eq('id', eventId).single();
         if (eventData) {
             if (isPreVendas(eventData.sector)) {
@@ -342,16 +340,12 @@ export const findBestAttendantWithLogs = async (
     if (roleFilters) {
         attendantsQuery = attendantsQuery.in('role', roleFilters);
     }
-    const { data: fetchedAttendants, error: attError } = await attendantsQuery;
+    const { data: attendants, error: attError } = await attendantsQuery;
 
-    if (attError || !fetchedAttendants) {
+    if (attError || !attendants) {
         console.error("Error fetching attendants:", attError);
         return { attendantId: null, checksLog: [] };
     }
-
-    const attendants = csReceivesCloserReschedule
-        ? fetchedAttendants.filter(a => !isCustomerSuccess(a.sector) || ['Colaborador', 'Co-líder'].includes(a.role))
-        : fetchedAttendants;
 
     // 2. Fetch Appointments for this day to check load/conflicts
     const { data: appointments, error: appError } = await supabase
