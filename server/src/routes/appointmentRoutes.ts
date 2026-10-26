@@ -2,10 +2,11 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook, getGlobalAppointmentWebhook, getSyncEventsWebhook } from '../config/webhooks.js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
+import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, conflictPoolFor, hasSectorTimeLimit, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
+import { rescheduleLastNoShow } from '../utils/noShowReschedule.js';
 import { ARCHIVED_EMAIL_SUFFIX, CUSTOMER_SUCCESS_ALIASES, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, hasGlobalView, isCustomerSuccess, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
@@ -202,7 +203,8 @@ const loadDistributionContext = async (
     // Eventos do Customer Success (antigos Aldeia e Tribo): limite de simultâneos e sem checagem de escala.
     const isCsEvent = isCustomerSuccess(eventSector);
     const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento', 'Direcionar Closer'].includes(type);
-    const ignoreSchedule = isCsEvent && !isCloserAppt;
+    // Agendamento Pessoal não depende da escala (pode ser marcado fora do expediente), em qualquer setor.
+    const ignoreSchedule = (isCsEvent && !isCloserAppt) || type === 'Agendamento Pessoal';
 
     const [{ data: existingAppts, error: apptError }, { data: allAttendants, error: attError }] = await Promise.all([
         supabase.from('appointments').select('id, attendant_id, date, time, end_time, type, status').eq('date', date).neq('status', 'Cancelado'),
@@ -1098,7 +1100,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         let distributionChecksLog: CheckLogItem[] | null = null;
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
             const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Direcionar Closer'].includes(data.type);
-            const ignoreSched = isCsEvent && !isCloserAppt;
+            const ignoreSched = (isCsEvent && !isCloserAppt) || data.type === 'Agendamento Pessoal';
             const resDist = await findBestAttendantWithLogs(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
             if (!resDist.attendantId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
@@ -1171,7 +1173,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
-            if (data.type !== 'Fora da agenda' && !isCustomerSuccess(attendant.sector)) {
+            if (data.type !== 'Fora da agenda' && data.type !== 'Agendamento Pessoal' && !isCustomerSuccess(attendant.sector)) {
                 const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type, durationMinutes);
                 if (!isWithinSchedule) {
                     return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
@@ -1190,11 +1192,17 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             .eq('attendant_id', finalAttendantId)
             .neq('status', 'Cancelado');
 
-        if (data.type !== 'Fora da agenda' && data.type !== 'Fechamento' && existingAppts) {
+        if (existingAppts) {
+            // Fora da agenda e Fechamento podem se sobrepor a outros agendamentos, mas não a um Agendamento Pessoal.
+            const overlapsAllowed = data.type === 'Fora da agenda' || data.type === 'Fechamento';
             // @ts-ignore
-            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts, undefined, durationMinutes);
+            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, conflictPoolFor(existingAppts, overlapsAllowed), undefined, durationMinutes);
             if (hasConflict) {
-                return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
+                return res.status(409).json({
+                    error: overlapsAllowed
+                        ? 'Conflito: Este atendente tem um Agendamento Pessoal neste horário.'
+                        : 'Conflito: Este atendente já possui um compromisso neste horário.'
+                });
             }
         }
 
@@ -1347,6 +1355,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             console.error("Supabase Write Error:", appError);
             return res.status(500).json({ error: 'Erro no Banco de Dados' });
         }
+
+        // Último agendamento do aluno estava como No-show: vira Reagendado.
+        await rescheduleLastNoShow(clientId, createdAppointment.id, appointmentPayload.created_by || req.user?.id);
 
         // Log de criação: distribuição automática (com as verificações do algoritmo)
         // ou atendente escolhido manualmente por quem criou.
@@ -1543,7 +1554,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 console.log(`[DEBUG] Checking Schedule for ${attendant.name} (${attendant.id})`);
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
-                if (merged.type !== 'Fora da agenda' && !isCustomerSuccess(attendant.sector)) {
+                if (merged.type !== 'Fora da agenda' && merged.type !== 'Agendamento Pessoal' && !isCustomerSuccess(attendant.sector)) {
                     const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type, durationMinutes);
                     console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
 
@@ -1564,9 +1575,11 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                     .eq('attendant_id', merged.attendant_id)
                     .neq('status', 'Cancelado');
 
-                if (merged.type !== 'Fora da agenda' && existingAppts) {
+                if (existingAppts) {
+                    // Fora da agenda pode se sobrepor a outros agendamentos, mas não a um Agendamento Pessoal.
+                    const overlapsAllowed = merged.type === 'Fora da agenda';
                     // Pass 'id' as the 6th argument to exclude current appointment from conflict check
-                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id, durationMinutes);
+                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, conflictPoolFor(existingAppts, overlapsAllowed), id, durationMinutes);
                     console.log(`[DEBUG] hasConflict result: ${hasConflict}`);
 
                     if (hasConflict) {
