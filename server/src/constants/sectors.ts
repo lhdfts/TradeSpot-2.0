@@ -62,3 +62,17 @@ export const ARCHIVED_EMAIL_SUFFIX = '.desativado';
  */
 export const requiresLeadProfile = (sector?: string | null): boolean =>
     isPreVendas(sector);
+
+/**
+ * Colaborador e Co-líder de Pré-vendas só alteram o status de Ligação Closer, Reagendamento
+ * Closer e Upgrade quando é o ATENDENTE. Ter criado ou ser o responsável (owner)
+ * não basta: o status desses tipos é do Closer que atendeu. O Líder de Pré-vendas segue podendo.
+ */
+export const PRE_VENDAS_ATTENDANT_ONLY_STATUS_TYPES = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade'];
+export const isStatusLockedForPreVendas = (
+    user: { id?: string | null; sector?: string | null; role?: string | null } | null | undefined,
+    appointment: { type?: string | null; attendantId?: string | null }
+): boolean =>
+    !!user && isPreVendas(user.sector) && ['Colaborador', 'Co-líder'].includes(user.role || '') &&
+    PRE_VENDAS_ATTENDANT_ONLY_STATUS_TYPES.includes(appointment.type || '') &&
+    appointment.attendantId !== user.id;
