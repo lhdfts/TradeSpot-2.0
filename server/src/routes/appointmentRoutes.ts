@@ -7,7 +7,7 @@ import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } fr
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
 import { rescheduleLastNoShow } from '../utils/noShowReschedule.js';
-import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, hasGlobalView, isCustomerSuccess, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
+import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, hasGlobalView, isCustomerSuccess, isStatusLockedForPreVendas, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
@@ -1634,6 +1634,12 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         }
 
         if (updates.status && currentApp.status !== updates.status) {
+            // Colaborador e Co-líder de Pré-vendas só mudam o status de Ligação Closer, Reagendamento
+            // Closer e Upgrade quando é o atendente (criar ou ser o responsável não basta).
+            if (isStatusLockedForPreVendas(req.user, { type: currentApp.type, attendantId: currentApp.attendant_id })) {
+                return res.status(403).json({ error: 'Você só pode alterar o status deste agendamento se for o atendente.' });
+            }
+
             updatePayload.oldStatus = currentApp.status;
 
             // Increment edit count

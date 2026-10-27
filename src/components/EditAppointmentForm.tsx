@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput, canViewAllSectors } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
-import { SECTOR_PRE_VENDAS, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess, isPreVendas } from '../constants/sectors';
+import { SECTOR_PRE_VENDAS, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess, isPreVendas, isStatusLockedForPreVendas } from '../constants/sectors';
 import { isAldeiaToCloser, isAldeiaToCloserEvent } from '../constants/events';
 
 const BLOCKED_EVENT_ID = 'df5f53c4-d659-4fa5-b779-627f6ec4f064';
@@ -1078,7 +1078,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                             user.role === 'Colaborador' &&
                                             user.sector === 'Closer' &&
                                             (initialData.status_edit_count || 0) >= 3
-                                        )
+                                        ) || isStatusLockedForPreVendas(user, initialData)
                                     }
                                 />
                             )}
