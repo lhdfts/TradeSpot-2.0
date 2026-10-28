@@ -2,12 +2,11 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 
-// Server-side only: secret/service_role keys bypass RLS — never expose via VITE_
+// Server-side only: secret/service_role keys bypass RLS — never expose via VITE_.
+// No anon fallback: anon/authenticated roles have no access (supabase/lockdown_anon_access.sql).
 const supabaseKey =
     process.env.SUPABASE_SECRET_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_ANON_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 let supabaseInstance: SupabaseClient | null = null;
 

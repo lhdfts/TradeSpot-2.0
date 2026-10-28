@@ -1,3 +1,6 @@
+-- ⚠️ OBSOLETO / INSEGURO: NÃO EXECUTE. Este script concede ou não remove acesso de anon/authenticated.
+-- Use supabase/lockdown_anon_access.sql (todo acesso a dados passa pelo backend com a secret key).
+
 -- FIX RLS POLICIES FOR LEADERS
 -- Goal: Allow Leaders to see appointments created by their sector members (even if assigned to another sector)
 

@@ -109,7 +109,7 @@ Para cada tipo de agendamento, os dados são transformados no seguinte formato:
 1. **Pesquisar Lead**
    - URL: `https://unnichat.com.br/api/contact/search`
    - Método: POST
-   - Header: `Authorization: Bearer dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f`
+   - Header: `Authorization: Bearer <UNNICHAT_API_TOKEN>`
    - Body: `{ "email": "email_do_lead" }`
 
 2. **Adicionar Tag de Confirmação**
@@ -268,7 +268,7 @@ graph TD
 ## 🔑 Autenticação e Credenciais
 
 ### **UnniChat API**
-- **Token de Autorização**: `dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f`
+- **Token de Autorização**: `<UNNICHAT_API_TOKEN>`
 - **Base URL**: `https://unnichat.com.br/`
 
 ### **Webhooks TradeSpot 2.0**

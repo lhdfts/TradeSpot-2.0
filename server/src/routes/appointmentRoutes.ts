@@ -7,7 +7,7 @@ import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } fr
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
 import { rescheduleLastNoShow } from '../utils/noShowReschedule.js';
-import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, hasGlobalView, isCustomerSuccess, isStatusLockedForPreVendas, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
+import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, SECTOR_SEM_SETOR, hasGlobalView, isCustomerSuccess, isStatusLockedForPreVendas, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
@@ -26,6 +26,48 @@ const ALL_TIME_SLOTS: string[] = (() => {
 })();
 
 const router = Router();
+
+/**
+ * Mesma regra de visibilidade do GET / (lista), aplicada a um agendamento só.
+ * Usada nas rotas que alteram um agendamento pelo id, para ninguém editar o que
+ * não enxerga na lista.
+ */
+const canAccessAppointment = async (
+    user: AuthenticatedRequest['user'],
+    appt: { attendant_id?: string | null; created_by?: string | null; owner?: string | null }
+): Promise<boolean> => {
+    if (!user) return false;
+    if (hasGlobalView(user)) return true;
+
+    if (user.sector === 'Closer' && user.role === 'Colaborador') {
+        return appt.attendant_id === user.id || appt.owner === user.id ||
+            (!appt.owner && appt.created_by === user.id);
+    }
+
+    const aliases = sectorAliases(user.sector);
+    if (aliases.length === 0) {
+        // Fallback de segurança (mesmo da lista)
+        return appt.attendant_id === user.id || appt.created_by === user.id;
+    }
+
+    const involvedIds = [appt.attendant_id, appt.created_by, appt.owner].filter((v): v is string => !!v);
+    if (involvedIds.length === 0) return false;
+    const { data: involvedUsers, error } = await supabase.from('user').select('id, sector').in('id', involvedIds);
+    if (error) throw new Error(error.message);
+    return (involvedUsers || []).some(u => aliases.includes(u.sector));
+};
+
+// Quem gerencia cadastros (eventos, conexões Unnichat) de todos os setores.
+const canManageAllSectors = (user: AuthenticatedRequest['user']): boolean =>
+    !!user && (['Admin', 'Dev'].includes(user.role) || user.sector === 'TEI');
+
+// O registro (ou o setor de destino) pertence ao setor do usuário?
+const isInOwnSector = (user: AuthenticatedRequest['user'], sector?: string | null): boolean =>
+    !!user && !!sector && sectorAliases(user.sector).includes(sector);
+
+// Quem pode ver o link (webhook) do Unnichat.
+const canSeeUnnichatUrl = (user: AuthenticatedRequest['user']): boolean =>
+    canManageAllSectors(user) || user?.role === 'Líder';
 
 // Limite por requisição do Supabase (db-max-rows) e teto da listagem com período.
 const PAGE_SIZE = 1000;
@@ -446,7 +488,8 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
             const baseData: any = {
                 id: user.id,
                 name: user.name,
-                email: user.email,
+                // E-mail só para a gestão (PII)
+                email: isManagement ? user.email : undefined,
                 role: user.role,
                 sector: user.sector,
                 schedule: user.schedule,
@@ -465,10 +508,71 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 
+// Permissões de cadastro de atendentes (PUT/POST/DELETE).
+// Admin/Dev: qualquer atendente; só o Dev atribui o cargo Dev.
+// Líder: só atendentes do próprio setor (setor TEI: todos), nunca Admin/Dev, e só
+// atribui os cargos que a tela oferece a ele. Ninguém altera o próprio cargo.
+const PRIVILEGED_ROLES = ['Admin', 'Dev'];
+const LEADER_ASSIGNABLE_ROLES = ['Colaborador', 'Qualidade', 'Co-líder', 'Líder'];
+
+const checkAttendantChange = (
+    req: AuthenticatedRequest,
+    target: { id?: string; role?: string | null; sector?: string | null } | null,
+    newRole?: unknown,
+    newSector?: unknown
+): string | null => {
+    const requester = req.user!;
+    const isGlobal = PRIVILEGED_ROLES.includes(requester.role);
+    const crossSector = isGlobal || requester.sector === 'TEI';
+
+    // Só valida o cargo quando ele muda (o formulário reenvia o cargo atual ao editar).
+    const roleChanging = newRole !== undefined && (!target || newRole !== target.role);
+    if (target && target.id === requester.id && roleChanging) {
+        return 'Você não pode alterar o próprio cargo.';
+    }
+    if (roleChanging) {
+        if (typeof newRole !== 'string') return 'Cargo inválido.';
+        if (newRole === 'Dev' && requester.role !== 'Dev') {
+            return 'Acesso negado: apenas Dev pode atribuir o cargo Dev.';
+        }
+        if (!isGlobal && !LEADER_ASSIGNABLE_ROLES.includes(newRole)) {
+            return 'Acesso negado: você não pode atribuir este cargo.';
+        }
+    }
+    if (!isGlobal && target && PRIVILEGED_ROLES.includes(target.role || '')) {
+        return 'Acesso negado: você não pode alterar usuários Admin ou Dev.';
+    }
+    if (!crossSector) {
+        // "Sem setor": quem acabou de entrar; o Líder pode trazê-lo para o próprio setor.
+        if (target && !isInOwnSector(requester, target.sector) && target.sector !== SECTOR_SEM_SETOR) {
+            return 'Você só pode gerenciar colaboradores do seu setor.';
+        }
+        if (newSector !== undefined && (typeof newSector !== 'string' || !isInOwnSector(requester, newSector))) {
+            return 'Você só pode atribuir o seu próprio setor.';
+        }
+    }
+    return null;
+};
+
+const loadAttendantForChange = async (id: string) => {
+    const { data, error } = await supabase
+        .from('user')
+        .select('id, role, sector')
+        .eq('id', id)
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data;
+};
+
 // PUT /api/attendants/:id - Update attendant
 router.put('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+        const target = await loadAttendantForChange(id);
+        if (!target) return res.status(404).json({ error: 'Atendente não encontrado.' });
+        const denied = checkAttendantChange(req, target, req.body.role, req.body.sector);
+        if (denied) return res.status(403).json({ error: denied });
+
         const updatePayload: any = {};
         if (req.body.name !== undefined) updatePayload.name = req.body.name;
         if (req.body.role !== undefined) updatePayload.role = req.body.role;
@@ -511,6 +615,13 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
             return res.status(400).json({ error: 'Nome e email são obrigatórios.' });
         }
 
+        // Sem setor informado, o Líder cadastra no próprio setor (Admin/Dev/TEI: SDR, como antes).
+        const crossSector = PRIVILEGED_ROLES.includes(req.user!.role) || req.user!.sector === 'TEI';
+        const finalRole = role || 'Colaborador';
+        const finalSector = sector || (crossSector ? 'SDR' : req.user!.sector);
+        const denied = checkAttendantChange(req, null, finalRole, finalSector);
+        if (denied) return res.status(403).json({ error: denied });
+
         const { data: existingUser, error: checkError } = await supabase
             .from('user')
             .select('id')
@@ -529,8 +640,8 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
         const insertPayload: any = {
             name,
             email,
-            role: role || 'Colaborador',
-            sector: sector || 'SDR',
+            role: finalRole,
+            sector: finalSector,
             status: true
         };
 
@@ -558,7 +669,7 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
         });
     } catch (err: any) {
         console.error("Create Attendant Error:", err);
-        res.status(500).json({ error: err.message || 'Erro Interno' });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -566,6 +677,17 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
 router.delete('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+        const target = await loadAttendantForChange(id);
+        if (!target) return res.status(404).json({ error: 'Atendente não encontrado.' });
+        if (target.id === req.user!.id) {
+            return res.status(400).json({ error: 'Você não pode excluir o próprio usuário.' });
+        }
+        const denied = checkAttendantChange(req, target);
+        if (denied) return res.status(403).json({ error: denied });
+        const crossSector = PRIVILEGED_ROLES.includes(req.user!.role) || req.user!.sector === 'TEI';
+        if (!crossSector && !isInOwnSector(req.user, target.sector)) {
+            return res.status(403).json({ error: 'Você só pode gerenciar colaboradores do seu setor.' });
+        }
 
         const { error } = await supabase
             .from('user')
@@ -577,7 +699,7 @@ router.delete('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (r
         res.status(204).send();
     } catch (err: any) {
         console.error("Delete Attendant Error:", err);
-        res.status(500).json({ error: err.message || 'Erro Interno' });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -695,7 +817,8 @@ router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
             sector: event.sector,
             self_scheduling_link: event.self_scheduling_link,
             duration_minutes: event.duration_minutes,
-            unnichat_url: event.unnichat_url
+            // Link do webhook do Unnichat só para quem gerencia eventos/conexões
+            unnichat_url: canSeeUnnichatUrl(req.user) ? event.unnichat_url : undefined
         }));
 
         res.json(mappedData);
@@ -708,6 +831,11 @@ router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
 // POST /api/events - Create event
 router.post('/events', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
+        // Líder só cria eventos do próprio setor
+        if (!canManageAllSectors(req.user) && !isInOwnSector(req.user, req.body.sector)) {
+            return res.status(403).json({ error: 'Você só pode gerenciar eventos do seu setor.' });
+        }
+
         const { data: eventData, error } = await supabase
             .from('events')
             .insert({
@@ -755,6 +883,17 @@ router.post('/events', requireRole('Admin', 'Dev', 'Líder'), async (req: Authen
 router.put('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+
+        // Líder só altera eventos do próprio setor e não os move para outro setor
+        if (!canManageAllSectors(req.user)) {
+            const { data: current, error: curErr } = await supabase.from('events').select('sector').eq('id', id).maybeSingle();
+            if (curErr) throw new Error(curErr.message);
+            if (!current) return res.status(404).json({ error: 'Evento não encontrado.' });
+            if (!isInOwnSector(req.user, current.sector) || !isInOwnSector(req.user, req.body.sector)) {
+                return res.status(403).json({ error: 'Você só pode gerenciar eventos do seu setor.' });
+            }
+        }
+
         const { data: eventData, error } = await supabase
             .from('events')
             .update({
@@ -803,6 +942,16 @@ router.put('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: Aut
 router.delete('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+
+        if (!canManageAllSectors(req.user)) {
+            const { data: current, error: curErr } = await supabase.from('events').select('sector').eq('id', id).maybeSingle();
+            if (curErr) throw new Error(curErr.message);
+            if (!current) return res.status(404).json({ error: 'Evento não encontrado.' });
+            if (!isInOwnSector(req.user, current.sector)) {
+                return res.status(403).json({ error: 'Você só pode gerenciar eventos do seu setor.' });
+            }
+        }
+
         const { error } = await supabase.from('events').delete().eq('id', id);
 
         if (error) throw new Error(error.message);
@@ -850,7 +999,9 @@ router.get('/unnichat-connections', async (req: AuthenticatedRequest, res: Respo
     try {
         const { data, error } = await supabase.from('unnichat_connections').select('*').order('name', { ascending: true });
         if (error) throw new Error(error.message);
-        res.json(data || []);
+        // O link do webhook só vai para quem gerencia as conexões
+        const showUrl = canSeeUnnichatUrl(req.user);
+        res.json((data || []).map((c: any) => showUrl ? c : { ...c, unnichat_url: undefined }));
     } catch (err: any) {
         console.error("List Unnichat Connections Error:", err);
         res.status(500).json({ error: 'Erro Interno' });
@@ -879,7 +1030,7 @@ router.post('/unnichat-connections', requireRole('Admin', 'Dev', 'Líder', 'TEI'
         res.status(201).json(data);
     } catch (err: any) {
         console.error("Create Unnichat Connection Error:", err);
-        res.status(500).json({ error: err.message || 'Erro Interno' });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -891,8 +1042,18 @@ router.put('/unnichat-connections/:id', requireRole('Admin', 'Dev', 'Líder', 'T
             return res.status(400).json({ error: 'Nome da Conexão e Link do Webhook são obrigatórios' });
         }
 
+        // Líder só altera conexões do próprio setor (e elas continuam no setor dele)
+        if (!canManageAllSectors(req.user)) {
+            const { data: current, error: curErr } = await supabase.from('unnichat_connections').select('sector').eq('id', id).maybeSingle();
+            if (curErr) throw new Error(curErr.message);
+            if (!current) return res.status(404).json({ error: 'Conexão não encontrada.' });
+            if (!isInOwnSector(req.user, current.sector)) {
+                return res.status(403).json({ error: 'Você só pode gerenciar conexões do seu setor.' });
+            }
+        }
+
         let updatePayload: any = { name, unnichat_url };
-        if (req.user?.role === 'Admin' || req.user?.role === 'Dev' || req.user?.sector === 'TEI') {
+        if (canManageAllSectors(req.user)) {
             updatePayload.sector = sector || null;
         } else if (req.user?.role === 'Líder') {
             updatePayload.sector = req.user.sector;
@@ -909,13 +1070,21 @@ router.put('/unnichat-connections/:id', requireRole('Admin', 'Dev', 'Líder', 'T
         res.json(data);
     } catch (err: any) {
         console.error("Update Unnichat Connection Error:", err);
-        res.status(500).json({ error: err.message || 'Erro Interno' });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
 router.delete('/unnichat-connections/:id', requireRole('Admin', 'Dev', 'Líder', 'TEI'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+        if (!canManageAllSectors(req.user)) {
+            const { data: current, error: curErr } = await supabase.from('unnichat_connections').select('sector').eq('id', id).maybeSingle();
+            if (curErr) throw new Error(curErr.message);
+            if (!current) return res.status(404).json({ error: 'Conexão não encontrada.' });
+            if (!isInOwnSector(req.user, current.sector)) {
+                return res.status(403).json({ error: 'Você só pode gerenciar conexões do seu setor.' });
+            }
+        }
         const { error } = await supabase.from('unnichat_connections').delete().eq('id', id);
         if (error) throw new Error(error.message);
         res.status(204).send();
@@ -931,7 +1100,7 @@ router.get('/clients/email/:email', async (req: AuthenticatedRequest, res: Respo
         const { email } = req.params;
         const { data, error } = await supabase
             .from('clients')
-            .select('*')
+            .select('id, name, phone, email, interest_level, knowledge_level, financial_currency, financial_amount')
             .eq('email', email)
             .maybeSingle();
 
@@ -950,7 +1119,7 @@ router.get('/clients/phone/:phone', async (req: AuthenticatedRequest, res: Respo
         const { phone } = req.params;
         const { data, error } = await supabase
             .from('clients')
-            .select('*')
+            .select('id, name, phone, email, interest_level, knowledge_level, financial_currency, financial_amount')
             .eq('phone', phone)
             .maybeSingle();
 
@@ -1095,6 +1264,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         const cleanPhone = data.phone.replace(/\D/g, '');
         let finalAttendantId = data.attendantId;
+        // O front sempre envia createdBy = usuário logado; o backend usa o do token.
+        const creatorId = req.user?.id;
 
         // Agent Logic
         let distributionChecksLog: CheckLogItem[] | null = null;
@@ -1276,7 +1447,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
             const endIso = `${endDate}T${endTime}:00-03:00`;
 
-            const guestIds = [finalAttendantId, data.createdBy].filter((id): id is string => !!id);
+            const guestIds = [finalAttendantId, creatorId].filter((id): id is string => !!id);
             const attendees: string[] = [clientPayload.email].filter(Boolean) as string[];
 
             if (guestIds.length > 0) {
@@ -1321,20 +1492,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             interest_product: interestProduct,
             acquired_product: acquiredProduct,
             created_at: new Date().toISOString(),
-            // created_by logic
-            created_by: data.createdBy,
+            // Criador = usuário autenticado (vem do token, nunca do corpo da requisição).
+            created_by: creatorId,
             // Owner nasce igual ao criador; só o Líder troca depois (PUT /:id/owner).
-            owner: data.createdBy
+            owner: creatorId
         };
-
-        // Validate createdBy
-        if (appointmentPayload.created_by) {
-            const { data: u } = await supabase.from('user').select('id').eq('id', appointmentPayload.created_by).maybeSingle();
-            if (!u) {
-                appointmentPayload.created_by = undefined;
-                appointmentPayload.owner = undefined;
-            }
-        }
 
         const { data: createdAppointment, error: appError } = await supabase
             .from('appointments')
@@ -1489,6 +1651,10 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             .single();
 
         if (fetchError || !currentApp) return res.status(404).json({ error: 'Agendamento não encontrado' });
+        // Fora do escopo de visibilidade do usuário: responde como inexistente.
+        if (!(await canAccessAppointment(req.user, currentApp))) {
+            return res.status(404).json({ error: 'Agendamento não encontrado' });
+        }
 
         const merged = { ...currentApp, ...updates };
 
@@ -1624,12 +1790,13 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             updatePayload.financial_amount = updates.studentProfile.financial?.amount;
         }
 
-        if (req.body.updatedBy) updatePayload.updatedBy = req.body.updatedBy;
+        // Quem editou = usuário autenticado (o front enviava updatedBy no corpo; não é mais confiável).
+        if (req.user?.id) updatePayload.updatedBy = req.user.id;
 
         const isStatusChanged = updates.status && currentApp.status !== updates.status;
         const isAttendantChanged = updates.attendantId && currentApp.attendant_id !== updates.attendantId;
 
-        if (isStatusChanged || isAttendantChanged || req.body.updatedBy) {
+        if (isStatusChanged || isAttendantChanged || updatePayload.updatedBy) {
             updatePayload.updatedAt = new Date().toISOString();
         }
 
@@ -1647,15 +1814,13 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             updatePayload.status_edit_count = currentCount + 1;
 
             // Enforce Limit for Closers
-            if (req.body.updatedBy) {
-                const { data: updater } = await supabase.from('user').select('role, sector').eq('id', req.body.updatedBy).single();
-                if (updater) {
-                    const isCloser = updater.sector === 'Closer';
-                    const isColaborador = updater.role === 'Colaborador';
+            // (papel e setor vêm do usuário autenticado, buscado no banco pelo middleware)
+            if (req.user) {
+                const isCloser = req.user.sector === 'Closer';
+                const isColaborador = req.user.role === 'Colaborador';
 
-                    if (isCloser && isColaborador && currentCount >= 3) {
-                        return res.status(403).json({ error: 'Limite de edições de status excedido (Máximo: 3).' });
-                    }
+                if (isCloser && isColaborador && currentCount >= 3) {
+                    return res.status(403).json({ error: 'Limite de edições de status excedido (Máximo: 3).' });
                 }
             }
 

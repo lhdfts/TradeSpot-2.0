@@ -5,6 +5,9 @@ import { sectorAliases } from '../constants/sectors.js';
 
 const router = Router();
 
+// Teto de linhas por consulta (o padrão continua 200).
+const MAX_LIMIT = 500;
+
 /**
  * GET /api/execution-logs
  * Retorna o histórico de execuções da tabela `execution_logs`, relacionando com a tabela `clients`.
@@ -38,7 +41,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
                 )
             `)
             .order('created_at', { ascending: false })
-            .limit(parseInt(limit as string, 10) || 200);
+            .limit(Math.min(Math.max(parseInt(limit as string, 10) || 200, 1), MAX_LIMIT));
 
         // Se for Líder, filtra para ver apenas logs de atendentes do seu próprio setor
         if (req.user.role === 'Líder' && req.user.sector) {
@@ -71,7 +74,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
         return res.json(logs || []);
     } catch (error: any) {
         console.error('[EXECUTION LOGS] Unexpected error:', error);
-        return res.status(500).json({ error: error.message || 'Erro interno no servidor' });
+        return res.status(500).json({ error: 'Erro Interno' });
     }
 });
 

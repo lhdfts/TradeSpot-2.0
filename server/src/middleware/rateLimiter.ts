@@ -30,6 +30,21 @@ export const strictPublicRateLimiter = rateLimit({
 });
 
 /**
+ * Rate limiter for the public available-times lookup (self-scheduling page).
+ * Generous: each date click on the calendar triggers one request.
+ * Note: memory store is per-instance (on Vercel each lambda instance counts separately).
+ */
+export const availableTimesRateLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 60, // 60 requests per minute per IP
+    message: {
+        error: 'Muitas requisições. Por favor, aguarde um momento.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+/**
  * General API rate limiter for authenticated endpoints
  * More generous limits for logged-in users
  */

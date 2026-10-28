@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
-import { SearchPersonsSchema, SearchDealsSchema } from '../schemas/pipedriveSchemas.js';
+import { SearchPersonsSchema, SearchDealsSchema, PersonDealsQuerySchema } from '../schemas/pipedriveSchemas.js';
 
 const router = Router();
 
@@ -64,10 +64,24 @@ router.get('/deals', async (req: Request, res: Response) => {
 router.get('/persons/:id/deals', async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { status, limit, start } = req.query;
+        if (typeof id !== 'string' || !/^\d+$/.test(id)) {
+            res.status(400).json({ error: 'ID de pessoa inválido' });
+            return;
+        }
+
+        const validation = PersonDealsQuerySchema.safeParse(req.query);
+        if (!validation.success) {
+            res.status(400).json({
+                error: 'Erro de Validação',
+                details: validation.error.format()
+            });
+            return;
+        }
+
+        const { status, limit, start } = validation.data;
         const { token, url } = getSettings();
 
-        const response = await axios.get(`${url}/persons/${id}/deals`, {
+        const response = await axios.get(`${url}/persons/${encodeURIComponent(id)}/deals`, {
             params: {
                 api_token: token,
                 status: status || 'all_not_deleted',

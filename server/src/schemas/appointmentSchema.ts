@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeDateInput } from '../utils/dateInput.js';
 
 // Regex for names (Letters, spaces, hyphens, apostrophes)
 const nameRegex = /^[a-zA-Z\u00C0-\u00FF\s'.-]+$/;
@@ -84,9 +85,16 @@ export const createAppointmentSchema = z.object({
         message: 'Tipo de agendamento inválido'
     }),
 
-    // Date DD/MM/YYYY
-    // We refine to ensure strict format.
-    date: z.string().refine((val) => /^\d{4}-\d{2}-\d{2}$/.test(val) || /^\d{2}\/\d{2}\/\d{4}$/.test(val), "Formato de data inválido (Use YYYY-MM-DD ou DD/MM/YYYY)"),
+    // Date YYYY-MM-DD ou DD/MM/YYYY — normalizada para YYYY-MM-DD e validada como
+    // data real (o Postgres leria DD/MM como MM/DD).
+    date: z.string().transform((val, ctx) => {
+        const normalized = normalizeDateInput(val, true);
+        if (!normalized) {
+            ctx.addIssue({ code: 'custom', message: "Formato de data inválido (Use YYYY-MM-DD ou DD/MM/YYYY)" });
+            return z.NEVER;
+        }
+        return normalized;
+    }),
 
     // Time (00, 15, 30, 45) - Using strict regex from spec
     time: z.string().regex(/^(?:[01]\d|2[0-3]):(?:00|15|30|45)$/, "Horário inválido (minutos devem ser 00, 15, 30, 45)"),
@@ -142,13 +150,17 @@ export const publicAppointmentSchema = z.object({
         .email("Email inválido")
         .regex(/^[\w\-\.\+@]+$/, "Caracteres inválidos no email"),
 
-    // Date DD/MM/YYYY or YYYY-MM-DD
-    date: z.string().trim().refine((val) => /^\d{4}-\d{2}-\d{2}$/.test(val) || /^\d{2}\/\d{2}\/\d{4}$/.test(val), "Formato de data inválido"),
+    // Date YYYY-MM-DD (a página pública só envia ISO) — precisa ser uma data real
+    date: z.string().trim().refine((val) => normalizeDateInput(val, false) !== null, "Formato de data inválido"),
 
     // Time (00, 15, 30, 45)
     time: z.string().trim().regex(/^(?:[01]\d|2[0-3]):(?:00|15|30|45)$/, "Horário inválido"),
 
     attendantId: z.string().optional(),
+
+    // Formato UUID genérico (8-4-4-4-12 hex), sem exigir versão/variante RFC
+    eventId: z.string({ message: 'ID do evento é obrigatório' }).trim()
+        .regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, "Evento inválido"),
 
     // Type is optional in input but will be forced to 'Ligação Closer'
     type: z.string().optional(),

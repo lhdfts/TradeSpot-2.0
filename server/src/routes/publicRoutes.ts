@@ -7,8 +7,14 @@ import { createGoogleMeetLink } from '../services/googleMeet.js';
 import { supabase } from '../utils/supabaseClient.js';
 import { rescheduleLastNoShow } from '../utils/noShowReschedule.js';
 import { PRE_VENDAS_ALIASES, CUSTOMER_SUCCESS_ALIASES, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess, isPreVendas, sectorAliases } from '../constants/sectors.js';
+import { verifyFirebaseToken, requireRole } from '../middleware/firebaseAuth.js';
+import { availableTimesRateLimiter } from '../middleware/rateLimiter.js';
+import { normalizeDateInput } from '../utils/dateInput.js';
 
 const router = Router();
+
+// Janela máxima para auto-agendamento pelo link público
+const MAX_PUBLIC_BOOKING_DAYS_AHEAD = 180;
 
 // --- Event-specific Restrictions ---
 const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';
@@ -25,7 +31,8 @@ const RESTRICTED_EVENT_MAX_APPOINTMENTS = 2;
 // Statuses that do NOT count toward the limit (slot was freed up)
 const RESTRICTED_EVENT_FREE_STATUSES = ['Cancelado', 'Reagendado'];
 
-router.get('/events/feeds', async (req: Request, res: Response) => {
+// Usado só pelo painel interno (Events.tsx): exige sessão autenticada (cookie).
+router.get('/events/feeds', verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), async (req: Request, res: Response) => {
     const { sector } = req.query;
     if (!sector || typeof sector !== 'string') {
         return res.status(400).json({ error: 'Setor é obrigatório' });
@@ -120,7 +127,7 @@ router.get('/events/:link', async (req: Request, res: Response) => {
 
 // --- GET Available Times for a Date ---
 // Returns list of time slots that have at least one closer available
-router.get('/available-times', async (req: Request, res: Response) => {
+router.get('/available-times', availableTimesRateLimiter, async (req: Request, res: Response) => {
     // Disable caching for this endpoint
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.set('Pragma', 'no-cache');
@@ -139,7 +146,7 @@ router.get('/available-times', async (req: Request, res: Response) => {
     }
 
     // Validate date format
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (normalizeDateInput(date, false) === null) {
         return res.status(400).json({ error: 'Formato de data inválido. Use YYYY-MM-DD.' });
     }
 
@@ -390,17 +397,21 @@ router.post('/appointments', async (req: Request, res: Response) => {
         }
 
         const data = validation.data;
-        const eventId = req.body.eventId;
-        if (!eventId) return res.status(400).json({ error: 'ID do evento é obrigatório' });
+        const eventId = data.eventId;
 
         const { data: eventData, error: eventError } = await supabase
             .from('events')
-            .select('event_name, sector, duration_minutes')
+            .select('event_name, sector, duration_minutes, status, self_scheduling_link')
             .eq('id', eventId)
             .single();
 
-        if (eventError || !eventData) {
+        // Só eventos acessíveis pelo link público (mesma regra do GET /events/:link)
+        if (eventError || !eventData || !eventData.self_scheduling_link) {
             return res.status(404).json({ error: 'Evento não encontrado' });
+        }
+
+        if (!eventData.status) {
+            return res.status(400).json({ error: 'Este evento não está mais ativo' });
         }
 
         const durationMinutes = eventData.duration_minutes || 60;
@@ -419,7 +430,14 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // 2. Buffer Check (30 minutes or 12 hours)
         const now = new Date();
         const apptDateTime = new Date(`${data.date}T${data.time}:00-03:00`);
+        if (!Number.isFinite(apptDateTime.getTime())) {
+            return res.status(400).json({ error: 'Data ou horário inválido.' });
+        }
         const diffMinutes = (apptDateTime.getTime() - now.getTime()) / 60000;
+
+        if (diffMinutes > MAX_PUBLIC_BOOKING_DAYS_AHEAD * 24 * 60) {
+            return res.status(400).json({ error: `O agendamento pode ser feito com no máximo ${MAX_PUBLIC_BOOKING_DAYS_AHEAD} dias de antecedência.` });
+        }
 
         const isCsEvent = isCustomerSuccess(eventData.sector);
         const isSDR = eventData.sector === 'SDR';
@@ -554,13 +572,23 @@ router.post('/appointments', async (req: Request, res: Response) => {
         // Try to find existing first
         const { data: existingClient } = await supabase
             .from('clients')
-            .select('id')
+            .select('id, name, email, interest_level, knowledge_level, financial_currency, financial_amount')
             .eq('phone', cleanPhone)
             .single();
 
         if (existingClient) {
             clientId = existingClient.id;
-            await supabase.from('clients').update(clientPayload).eq('id', clientId);
+            // Link público não é autenticado: nunca sobrescreve dados já cadastrados do
+            // cliente (nome, email, perfil do CRM). Só preenche campos vazios.
+            const isEmpty = (v: unknown) => v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+            const fillPayload: Record<string, unknown> = {};
+            for (const key of ['name', 'email', 'interest_level', 'knowledge_level', 'financial_currency', 'financial_amount'] as const) {
+                if (isEmpty((existingClient as any)[key])) fillPayload[key] = clientPayload[key];
+            }
+            if (Object.keys(fillPayload).length > 0) {
+                const { error: fillError } = await supabase.from('clients').update(fillPayload).eq('id', clientId);
+                if (fillError) console.error('[PUBLIC] Falha ao completar cadastro do cliente:', fillError);
+            }
         } else {
             const { data: newClient } = await supabase.from('clients').insert(clientPayload).select('id').single();
             if (newClient) clientId = newClient.id;
