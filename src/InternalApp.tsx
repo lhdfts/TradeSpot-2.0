@@ -116,6 +116,15 @@ const InternalLayout: React.FC = () => {
 
   const currentView = location.pathname;
 
+  // Primeira página da sessão entra com o fade-up completo; nas trocas de
+  // página seguintes, só um fade curto de opacidade (navegar não deve "pular").
+  const [rotaAnterior, setRotaAnterior] = useState(currentView);
+  const [jaNavegou, setJaNavegou] = useState(false);
+  if (rotaAnterior !== currentView) {
+    setRotaAnterior(currentView);
+    setJaNavegou(true);
+  }
+
   // A rolagem é deste container, não da janela: sem isso a página nova abre
   // na altura em que a anterior estava.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -149,7 +158,7 @@ const InternalLayout: React.FC = () => {
                 >
                   <Menu size={22} />
                 </Button>
-              <h1 key={currentView} className="text-2xl sm:text-3xl font-bold text-foreground animate-slide-in-left truncate">
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground truncate">
                 {(currentView === '/' || currentView === '/my-appointments') && 'Meus Agendamentos'}
                 {currentView === '/all-appointments' && 'Todos os Agendamentos'}
                 {currentView === '/create-appointment' && 'Criar Agendamento'}
@@ -179,7 +188,7 @@ const InternalLayout: React.FC = () => {
             </header>
 
             {/* key por rota: a página nova reentra com animação a cada navegação */}
-            <div key={currentView} className="animate-fade-up">
+            <div key={currentView} className={jaNavegou ? 'animate-fade-in' : 'animate-fade-up'}>
             <Routes>
               {/* Login Route for consistency, though handled above */}
               <Route path="/login" element={<Navigate to="/" replace />} />
@@ -263,7 +272,7 @@ const MainRouter: React.FC = () => {
       return <Navigate to="/" replace />;
     }
     return (
-      <div className="flex h-screen bg-background text-foreground overflow-hidden">
+      <div className="flex h-dvh bg-background text-foreground overflow-hidden">
         <main className="flex-1 overflow-y-auto">
           <Routes>
             <Route path="/login" element={<Login />} />

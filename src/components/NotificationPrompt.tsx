@@ -45,14 +45,14 @@ export function NotificationPrompt() {
                 </div>
                 <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground">Receba um aviso 5 minutos antes dos seus agendamentos</p>
-                    <p className="text-xs text-secondary mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                         O navegador mostra a notificação enquanto o sistema estiver aberto, mesmo em outra aba.
                     </p>
                 </div>
             </div>
             <div className="flex items-center gap-2 sm:shrink-0">
                 <Button size="sm" onClick={enable}>Ativar notificações</Button>
-                <Button size="sm" variant="ghost" onClick={dismiss} className="text-secondary" aria-label="Agora não">
+                <Button size="sm" variant="ghost" onClick={dismiss} className="text-muted-foreground" aria-label="Agora não">
                     <X size={16} className="sm:mr-1" />
                     <span className="hidden sm:inline">Agora não</span>
                 </Button>

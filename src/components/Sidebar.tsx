@@ -1,6 +1,6 @@
 import React from 'react';
 import { Calendar, Users, PieChart, Ticket, Plus, User, ChevronLeft, ChevronRight, ChevronDown, LogOut, Webhook, History, Settings as SettingsIcon, X } from 'lucide-react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { cn } from './ui/button';
 import { Logo } from './Logo';
 import { LogoIcon } from './LogoIcon';
@@ -35,14 +35,14 @@ const ActiveBar: React.FC<{ active: boolean }> = ({ active }) => (
 );
 
 const navItemClasses = (isActive: boolean, collapsed?: boolean) => cn(
-    'group w-full flex items-center rounded-lg transition-all duration-200 text-sm font-medium relative text-left active:scale-[0.98]',
+    'group w-full flex items-center rounded-lg transition-[background-color,color,transform] duration-150 text-sm font-medium relative text-left active:scale-[0.98] motion-reduce:active:scale-100',
     collapsed ? 'justify-center p-3' : 'justify-start py-3 pl-12 pr-4',
     isActive
         ? 'bg-white/10 text-white border border-transparent'
         : 'text-gray-400 hover:bg-white/10 hover:text-white border border-transparent'
 );
 
-const iconMotion = 'transition-transform duration-200 ease-out group-hover:scale-110 group-hover:-rotate-3';
+const iconMotion = 'transition-transform duration-200 [transition-timing-function:var(--ease-out)] group-hover:scale-110 group-hover:-rotate-3 motion-reduce:transition-none motion-reduce:group-hover:scale-100 motion-reduce:group-hover:rotate-0';
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, to, collapsed }) => (
     <NavLink
@@ -68,12 +68,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
     const [isAgendamentosOpen, setIsAgendamentosOpen] = React.useState(true);
     const { user, logout } = useAuth();
     const { theme } = useTheme();
-    const navigate = useNavigate();
 
     // lg (1024px) para cima: menu lateral fixo. Abaixo: gaveta sobre a página.
     const isDesktop = useMediaQuery('(min-width: 1024px)');
     // Na gaveta o menu está sempre expandido (recolher só existe no desktop).
     const effectiveCollapsed = isDesktop && isCollapsed && !isHovered;
+
+    // Intenção de hover: o menu recolhido só abre se o mouse ficar 150ms em
+    // cima — passar o cursor de raspão a caminho da página não o expande.
+    const hoverTimer = React.useRef<number | undefined>(undefined);
+    React.useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+    const handleMouseEnter = () => {
+        if (!isCollapsed) return;
+        window.clearTimeout(hoverTimer.current);
+        hoverTimer.current = window.setTimeout(() => setIsHovered(true), 150);
+    };
+    const handleMouseLeave = () => {
+        window.clearTimeout(hoverTimer.current);
+        if (isCollapsed) setIsHovered(false);
+    };
 
     // Gaveta: Esc fecha.
     React.useEffect(() => {
@@ -95,22 +108,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
             <div className="mb-6 lg:mb-8 flex items-center justify-center shrink-0">
                 <NavLink to="/">
                     {effectiveCollapsed ? (
-                        <LogoIcon className="h-8 w-auto text-white transition-all duration-300" />
+                        <LogoIcon className="h-8 w-auto text-white" />
                     ) : (
-                        <Logo className="h-8 w-auto text-white transition-all duration-300" />
+                        <Logo className="h-8 w-auto text-white" />
                     )}
                 </NavLink>
             </div>
 
             {/* min-h-0 + overflow: em telas baixas (ex.: 1280x720) a lista rola e o
                 rodapé com tema, perfil e Sair continua visível */}
-            <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1 space-y-2 stagger-children">
+            <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain -mx-1 px-1 space-y-2 stagger-children">
                 {/* Collapsible Agendamentos Group */}
                 <div>
                     <button
                         onClick={() => setIsAgendamentosOpen(!isAgendamentosOpen)}
                         className={cn(
-                            'group w-full flex items-center rounded-lg transition-all duration-200 text-sm font-medium relative text-left active:scale-[0.98]',
+                            'group w-full flex items-center rounded-lg transition-[background-color,color,transform] duration-150 text-sm font-medium relative text-left active:scale-[0.98] motion-reduce:active:scale-100',
                             effectiveCollapsed ? 'justify-center p-3' : 'justify-start py-3 pl-12 pr-4',
                             'text-gray-400 hover:bg-white/10 hover:text-white border border-transparent'
                         )}
@@ -154,7 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
                                         to="/"
                                         tabIndex={isAgendamentosOpen ? 0 : -1}
                                         className={({ isActive }) => cn(
-                                            'w-full flex items-center rounded-lg transition-all duration-200 text-sm font-medium relative py-2 pl-12 pr-4 justify-start hover:translate-x-1',
+                                            'w-full flex items-center rounded-lg transition-[color,transform] duration-150 text-sm font-medium relative py-2 pl-12 pr-4 justify-start hover:translate-x-1 motion-reduce:hover:translate-x-0',
                                             isActive
                                                 ? 'text-white'
                                                 : 'text-gray-400 hover:text-white'
@@ -168,7 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
                                             to="/all-appointments"
                                             tabIndex={isAgendamentosOpen ? 0 : -1}
                                             className={({ isActive }) => cn(
-                                                'w-full flex items-center rounded-lg transition-all duration-200 text-sm font-medium relative py-2 pl-12 pr-4 justify-start hover:translate-x-1',
+                                                'w-full flex items-center rounded-lg transition-[color,transform] duration-150 text-sm font-medium relative py-2 pl-12 pr-4 justify-start hover:translate-x-1 motion-reduce:hover:translate-x-0',
                                                 isActive
                                                     ? 'text-white'
                                                     : 'text-gray-400 hover:text-white'
@@ -194,8 +207,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
                             <ActiveBar active={isActive} />
                             {/* O "+" gira ao passar o mouse */}
                             {effectiveCollapsed
-                                ? <span className="transition-transform duration-300 group-hover:rotate-90"><Plus size={20} /></span>
-                                : <div className="absolute left-4 top-1/2 -translate-y-1/2 transition-transform duration-300 group-hover:rotate-90"><Plus size={20} /></div>}
+                                ? <span className="transition-transform duration-200 [transition-timing-function:var(--ease-out)] group-hover:rotate-90 motion-reduce:transition-none motion-reduce:group-hover:rotate-0"><Plus size={20} /></span>
+                                : <div className="absolute left-4 top-1/2 -translate-y-1/2 transition-transform duration-200 [transition-timing-function:var(--ease-out)] group-hover:rotate-90 motion-reduce:transition-none motion-reduce:group-hover:rotate-0"><Plus size={20} /></div>}
                             {!effectiveCollapsed && <span className="w-full">Criar agendamento</span>}
                         </>
                     )}
@@ -281,10 +294,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
                 />
                 {isDesktop && (
                     <button
+                        type="button"
                         onClick={() => {
+                            window.clearTimeout(hoverTimer.current);
                             setIsCollapsed(!isCollapsed);
                             setIsHovered(false);
                         }}
+                        // Recolhido o botão é só o ícone: precisa de nome acessível.
+                        aria-label={effectiveCollapsed ? 'Expandir menu' : undefined}
+                        title={effectiveCollapsed ? 'Expandir menu' : undefined}
                         className={cn(
                             "w-full flex items-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors p-2 relative text-left",
                             effectiveCollapsed ? "justify-center" : "!justify-start py-3 pl-12 pr-4"
@@ -300,21 +318,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
                 <div className={cn("flex items-center gap-3", effectiveCollapsed ? "justify-center px-0" : "px-2")}>
                     <NavLink
                         to="/profile"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            navigate('/profile');
-                        }}
                         className="flex items-center gap-3 flex-1 overflow-hidden group hover:opacity-80 transition-opacity rounded-lg p-1 text-left cursor-pointer"
                         title="Abrir Perfil"
+                        aria-label={effectiveCollapsed ? 'Abrir perfil' : undefined}
                     >
                         <div
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navigate('/profile');
-                            }}
-                            className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0 group-hover:scale-105 transition-transform cursor-pointer"
-                            title="Abrir Perfil"
+                            aria-hidden
+                            className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0 group-hover:scale-105 transition-transform motion-reduce:group-hover:scale-100"
                         >
                             <User size={16} />
                         </div>
@@ -327,9 +337,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
                     </NavLink>
                     {!effectiveCollapsed && (
                         <button
+                            type="button"
                             onClick={logout}
                             className="text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10 shrink-0"
                             title="Sair"
+                            aria-label="Sair"
                         >
                             <LogOut size={16} />
                         </button>
@@ -347,7 +359,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
                 aria-hidden={!mobileOpen}
             >
                 <div
-                    className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', mobileOpen ? 'opacity-100' : 'opacity-0')}
+                    className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 [transition-timing-function:var(--ease-drawer)]', mobileOpen ? 'opacity-100' : 'opacity-0')}
                     onClick={onMobileClose}
                 />
                 <aside
@@ -356,15 +368,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
                     aria-label="Menu"
                     onClick={closeOnNavigate}
                     className={cn(
-                        'absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-black border-r border-white/10 flex flex-col p-6 text-white',
-                        'transition-transform duration-300 ease-in-out',
+                        // safe-area: no iPhone o conteúdo não fica sob o notch nem sob a barra de gestos
+                        'absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-black border-r border-white/10 flex flex-col px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] text-white',
+                        'transition-transform duration-300 [transition-timing-function:var(--ease-drawer)] motion-reduce:duration-150',
                         mobileOpen ? 'translate-x-0' : '-translate-x-full'
                     )}
                 >
                     <button
                         type="button"
                         onClick={onMobileClose}
-                        className="absolute right-3 top-3 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                        className="absolute right-3 top-[calc(0.75rem+env(safe-area-inset-top))] p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
                         aria-label="Fechar menu"
                     >
                         <X size={20} />
@@ -378,21 +391,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCreateClick, mobileOpen = fa
     return (
         // O espaço no layout segue só o estado fixado (isCollapsed). A expansão
         // pelo hover fica por cima do conteúdo, sem empurrar a página.
-        <div className={cn("relative shrink-0 transition-[width] duration-300 ease-in-out", isCollapsed ? "w-20" : "w-64")}>
+        <div className={cn("relative shrink-0 transition-[width] duration-200 [transition-timing-function:var(--ease-out)] motion-reduce:transition-none", isCollapsed ? "w-20" : "w-64")}>
         <aside
-            onMouseEnter={() => {
-                if (isCollapsed) {
-                    setIsHovered(true);
-                }
-            }}
-            onMouseLeave={() => {
-                if (isCollapsed) {
-                    setIsHovered(false);
-                }
-            }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
             className={cn(
-                "absolute inset-y-0 left-0 z-40 bg-black border-r border-white/10 flex flex-col transition-all duration-300 ease-in-out text-white overflow-hidden",
-                effectiveCollapsed ? "w-20 p-4" : "w-64 p-6"
+                // Só a largura anima (o padding é o mesmo nos dois estados, para nada
+                // pular). Abre em 200ms e recolhe mais rápido, em 150ms.
+                "absolute inset-y-0 left-0 z-40 bg-black border-r border-white/10 flex flex-col px-4 py-6 transition-[width] [transition-timing-function:var(--ease-out)] motion-reduce:transition-none text-white overflow-hidden",
+                effectiveCollapsed ? "w-20 duration-150" : "w-64 duration-200"
             )}
         >
             {content}

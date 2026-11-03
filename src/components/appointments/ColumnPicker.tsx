@@ -54,11 +54,11 @@ export const ColumnPicker: React.FC<ColumnPickerProps> = ({ visible, onToggle, o
                     id={panelId}
                     role="group"
                     aria-label="Colunas visíveis"
-                    className="absolute right-0 top-full mt-2 z-30 w-64 bg-surface border border-border rounded-lg shadow-lg animate-in fade-in zoom-in-95 duration-150"
+                    className="absolute right-0 top-full mt-2 z-30 w-64 bg-surface border border-border rounded-lg shadow-lg animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none"
                 >
                     <div className="px-3 pt-3 pb-2 border-b border-border">
                         <p className="text-sm font-semibold text-foreground">Colunas</p>
-                        <p className="text-xs text-secondary">Data/Hora, Aluno(a) e Status são fixas.</p>
+                        <p className="text-xs text-muted-foreground">Data/Hora, Aluno(a) e Status são fixas.</p>
                     </div>
                     <ul className="max-h-80 overflow-y-auto py-1">
                         {OPTIONAL_COLUMNS.map(col => {
@@ -85,7 +85,7 @@ export const ColumnPicker: React.FC<ColumnPickerProps> = ({ visible, onToggle, o
                             size="sm"
                             onClick={onReset}
                             disabled={isDefault}
-                            className="w-full justify-center gap-2 text-secondary hover:text-foreground"
+                            className="w-full justify-center gap-2 text-muted-foreground hover:text-foreground"
                         >
                             <RotateCcw size={14} />
                             Restaurar padrão

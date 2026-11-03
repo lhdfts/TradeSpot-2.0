@@ -34,8 +34,9 @@
 //  `aoTerminar` é chamado na hora.
 // ============================================================
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { tocarSomAbertura, TEMPOS } from './somAbertura';
+import { ESTRELA_SPOT } from './estrela';
 
 interface Letra {
   cx: number; // centro horizontal da letra, nas medidas do arquivo original
@@ -73,8 +74,7 @@ const SPOT: Letra[] = [
   { cx: 1071.5, d: ['M1114 72.0547V46.7457H1079.39V15H1047.17L1047.1 46.7457H1029V72.0547H1047.05L1046.95 118.386C1046.95 130.257 1048.69 139.657 1052.15 146.59C1055.61 153.528 1061.02 158.497 1068.37 161.497C1075.72 164.5 1085.38 166 1097.35 166H1114V136.829H1096.48C1091 136.829 1086.79 135.365 1083.83 132.429C1080.87 129.502 1079.39 125.243 1079.39 119.669V72.0502H1114V72.0547Z'] },
 ]
 
-const ESTRELA_SPOT =
-  'M676.276 18.9946C676.67 19.7525 680.738 20.5472 682.082 21.1523C687.173 23.4568 689.959 27.4423 691.765 32.5219C692.215 33.7933 691.968 34.9547 693.244 36H694.039C696.492 34.8753 696.406 31.6233 697.688 29.1294C699.297 25.9997 701.848 23.3773 704.949 21.6841C707.377 20.3638 709.923 20.1926 712 18.585V17.7904C711.051 15.3942 708.123 15.6204 705.867 14.5751C701.547 12.5701 698.391 8.64582 696.646 4.32416C695.993 2.69208 696.418 0.0880825 694.218 0.00250512C691.58 -0.0952975 692.122 2.69208 691.327 4.60534C689.651 8.64581 686.717 12.3012 682.748 14.3C680.596 15.382 674.642 15.816 676.282 18.9823L676.276 18.9946Z'
+// ESTRELA_SPOT (o desenho do TradeSpot) vem de ./estrela, compartilhado com o login.
 
 // --- Geometria ---------------------------------------------------------
 
@@ -135,9 +135,42 @@ export default function Abertura({ som = null, aoTerminar }: AberturaProps) {
   const desenhoTS = useRef<SVGGElement>(null);
   const desenhoSP = useRef<SVGGElement>(null);
   const clarao = useRef<HTMLDivElement>(null);
+  const raiz = useRef<HTMLDivElement>(null);
+  const saida = useRef<Animation | null>(null);
+  const saindo = useRef(false);
   const terminar = useRef(aoTerminar);
   const pararSom = useRef<() => void>(() => {});
-  terminar.current = aoTerminar;
+  // Sempre a versão mais recente do callback, sem reiniciar a vinheta.
+  useLayoutEffect(() => {
+    terminar.current = aoTerminar;
+  });
+
+  // Em vez de corte seco, a vinheta inteira esmaece antes de avisar que acabou.
+  // Só usa refs, então é estável entre renders.
+  const sair = useCallback((duracao: number) => {
+    if (saindo.current) return;
+    saindo.current = true;
+    const el = raiz.current;
+    if (!el || typeof el.animate !== 'function') {
+      terminar.current();
+      return;
+    }
+    // Durante o fade os cliques já passam para o sistema por baixo.
+    el.style.pointerEvents = 'none';
+    const a = el.animate([{ opacity: 1 }, { opacity: 0 }], {
+      duration: duracao,
+      easing: 'cubic-bezier(0.23, 1, 0.32, 1)',
+      fill: 'forwards',
+    });
+    saida.current = a;
+    a.onfinish = () => terminar.current();
+  }, []);
+
+  // Pular: o som para na hora e o fade é mais curto (150ms).
+  const pular = useCallback(() => {
+    pararSom.current();
+    sair(150);
+  }, [sair]);
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -303,7 +336,8 @@ export default function Abertura({ som = null, aoTerminar }: AberturaProps) {
     );
 
     pararSom.current = tocarSomAbertura(som);
-    const fim = setTimeout(() => terminar.current(), DURACAO);
+    // Fim natural: a tela já está escura; o fundo some em 280ms e revela o sistema.
+    const fim = setTimeout(() => sair(280), DURACAO);
 
     // Espaço pula (é o que o aviso na tela diz); Esc também, por costume.
     function teclado(e: KeyboardEvent) {
@@ -318,19 +352,17 @@ export default function Abertura({ som = null, aoTerminar }: AberturaProps) {
       clearTimeout(fim);
       window.removeEventListener('keydown', teclado);
       anims.forEach((a) => a.cancel());
+      saida.current?.cancel();
+      saida.current = null;
+      saindo.current = false;
       pararSom.current();
     };
-  }, [som]);
-
-  function pular() {
-    pararSom.current();
-    terminar.current();
-  }
+  }, [som, sair, pular]);
 
   const peca: React.CSSProperties = { transformBox: 'fill-box', transformOrigin: 'center', opacity: 0 };
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center overflow-hidden bg-[#070707] text-white">
+    <div ref={raiz} className="fixed inset-0 z-[100] grid place-items-center overflow-hidden bg-[#070707] text-white">
       <p className="sr-only" role="status">
         Entrando no TradeSpot
       </p>

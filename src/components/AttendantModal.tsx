@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/modal';
+import { notify } from './ui/notify';
 import { Input as BaseInput } from './ui/input';
 import { CustomSelect } from './CustomSelect';
 import { Button } from './ui/button';
@@ -9,12 +10,8 @@ import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { SECTOR_CUSTOMER_SUCCESS, SECTOR_PRE_VENDAS } from '../constants/sectors';
 
-const Input: React.FC<any> = ({ label, ...props }) => (
-    <div className="space-y-1">
-        {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
-        <BaseInput {...props} />
-    </div>
-);
+// O BaseInput já desenha o rótulo ligado ao campo (htmlFor), com o mesmo estilo.
+const Input: React.FC<any> = (props) => <BaseInput {...props} />;
 
 const Select = CustomSelect;
 
@@ -98,7 +95,10 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             onClose();
         } catch (error: any) {
             console.error('Failed to save attendant', error);
-            alert(error?.message || 'Erro ao salvar atendente');
+            notify.error(
+                attendant ? `Não foi possível salvar ${attendant.name}.` : 'Não foi possível criar o atendente.',
+                'Confira se o email já não está cadastrado e tente de novo.'
+            );
         } finally {
             setIsSubmitting(false);
         }
@@ -191,7 +191,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={attendant ? 'Editar Atendente' : 'Novo Atendente'}>
+        <Modal isOpen={isOpen} onClose={onClose} title={attendant ? 'Editar atendente' : 'Novo atendente'}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
                     label="Nome"
@@ -238,17 +238,17 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                             <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-2">
                                 <span className="text-sm font-medium text-foreground uppercase w-12 shrink-0">{day}</span>
                                 <div className="flex gap-2 items-center flex-1 min-w-0 basis-full sm:basis-auto order-last sm:order-none">
-                                    <span className="text-xs text-secondary shrink-0">Trabalho:</span>
+                                    <span className="text-xs text-muted-foreground shrink-0">Trabalho:</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-muted-foreground flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={formData.schedule?.[day]?.start || ''}
                                         onChange={e => updateSchedule(day, 'start', e.target.value)}
                                     />
-                                    <span className="text-secondary">-</span>
+                                    <span className="text-muted-foreground">-</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-muted-foreground flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={formData.schedule?.[day]?.end || ''}
                                         onChange={e => updateSchedule(day, 'end', e.target.value)}
                                     />
@@ -269,17 +269,17 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                             {/* Pauses List */}
                             {formData.pauses?.[day]?.map((pause, index) => (
                                 <div key={index} className="flex flex-wrap sm:flex-nowrap gap-2 items-center sm:pl-16">
-                                    <span className="text-xs text-secondary w-full sm:w-[52px] sm:shrink-0">Pausa {index + 1}:</span>
+                                    <span className="text-xs text-muted-foreground w-full sm:w-[52px] sm:shrink-0">Pausa {index + 1}:</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-muted-foreground flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={pause.start}
                                         onChange={e => updatePause(day, index, 'start', e.target.value)}
                                     />
-                                    <span className="text-xs text-secondary">-</span>
+                                    <span className="text-xs text-muted-foreground">-</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-muted-foreground flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={pause.end}
                                         onChange={e => updatePause(day, index, 'end', e.target.value)}
                                     />

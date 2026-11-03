@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/utils';
 import { ChevronDown, Check, Search } from 'lucide-react';
 import { countryList, type Country } from '../data/countries';
+import { useListbox } from '../hooks/useListbox';
 
 interface FloatingCountrySelectProps {
     label: string;
@@ -145,27 +146,55 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
         );
     }, [searchTerm]);
 
-    const handleSelect = (country: Country) => {
+    const labelId = useId();
+    const valueId = useId();
+    const errorId = useId();
+
+    // Teclado: o foco vai para a busca; setas movem, Enter escolhe, Esc fecha e volta ao gatilho
+    const listbox = useListbox({
+        isOpen,
+        setIsOpen,
+        count: filteredCountries.length,
+        selectedIndex: filteredCountries.findIndex(c => c.dial_code === value),
+        onSelect: (index) => handleSelect(filteredCountries[index]),
+        disabled,
+    });
+
+    // Ao filtrar, ativa o primeiro resultado
+    const { setActiveIndex } = listbox;
+    useEffect(() => {
+        if (isOpen && searchTerm) setActiveIndex(0);
+    }, [searchTerm, isOpen, setActiveIndex]);
+
+    function handleSelect(country: Country) {
         onChange(country.dial_code);
         setIsOpen(false);
-    };
-
+        // A busca some ao fechar: devolve o foco ao gatilho em vez de perdê-lo
+        listbox.triggerRef.current?.focus();
+    }
 
 
     const dropdown = (
         <div
             ref={dropdownRef}
             style={dropdownStyle}
-            className="bg-surface border border-border rounded-lg shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
+            className="bg-surface border border-border rounded-lg shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 motion-reduce:animate-none flex flex-col"
         >
             <div className="p-2 border-b border-border sticky top-0 bg-surface z-10">
                 <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Search aria-hidden="true" className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <input
                         ref={searchInputRef}
                         type="text"
+                        role="combobox"
+                        aria-label="Buscar país ou código"
+                        aria-autocomplete="list"
+                        aria-expanded={isOpen}
+                        aria-controls={listbox.listboxId}
+                        aria-activedescendant={listbox.activeIndex >= 0 && listbox.activeIndex < filteredCountries.length ? listbox.optionId(listbox.activeIndex) : undefined}
+                        onKeyDown={(e) => listbox.handleKeyDown(e, true)}
                         placeholder="Buscar país ou código..."
-                        className="w-full bg-muted/50 border border-border rounded-md pl-8 pr-3 py-1.5 text-base sm:text-sm outline-none focus:ring-1 focus:ring-ring"
+                        className="w-full bg-muted/50 border border-input rounded-md pl-8 pr-3 py-1.5 text-base sm:text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         value={searchTerm}
                         onChange={(e) => {
                             const val = e.target.value;
@@ -183,26 +212,24 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
                     />
                 </div>
             </div>
-            <ul className="overflow-auto py-1 max-h-[250px] scrollbar-thin">
+            <ul id={listbox.listboxId} role="listbox" aria-labelledby={labelId} className="overflow-auto py-1 max-h-[250px] scrollbar-thin">
                 {filteredCountries.length > 0 ? (
-                    filteredCountries.map(country => (
+                    filteredCountries.map((country, index) => (
                         <li
                             key={`${country.code}-${country.dial_code}`}
-                            onMouseDown={(e) => {
-                                e.preventDefault();
-                                handleSelect(country);
-                            }}
+                            {...listbox.getOptionProps(index, value === country.dial_code)}
                             className={cn(
-                                "px-3 py-2 cursor-pointer flex items-center gap-3 hover:bg-accent transition-colors",
-                                value === country.dial_code ? "bg-accent/50" : ""
+                                "px-3 py-2 cursor-pointer flex items-center gap-3 transition-colors",
+                                index === listbox.activeIndex ? "bg-accent" : value === country.dial_code ? "bg-accent/50" : ""
                             )}
                         >
+                            {/* Bandeira decorativa: o nome do país já está no texto da opção */}
                             <img
                                 src={`https://flagcdn.com/w40/${country.code.toLowerCase()}.png`}
                                 srcSet={`https://flagcdn.com/w80/${country.code.toLowerCase()}.png 2x`}
                                 width="30"
                                 height="20"
-                                alt={country.name}
+                                alt=""
                                 className="object-cover rounded-sm border border-border/50"
                             />
                             <div className="flex flex-col">
@@ -212,12 +239,12 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
                                 <span className="text-xs text-muted-foreground">{country.dial_code}</span>
                             </div>
                             {value === country.dial_code && (
-                                <Check size={14} className="ml-auto text-primary" />
+                                <Check size={14} aria-hidden="true" className="ml-auto text-primary" />
                             )}
                         </li>
                     ))
                 ) : (
-                    <li className="px-3 py-4 text-center text-sm text-muted-foreground">
+                    <li role="presentation" className="px-3 py-4 text-center text-sm text-muted-foreground">
                         Nenhum país encontrado
                     </li>
                 )}
@@ -228,22 +255,26 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
     return (
         <div className={cn("relative", className)} ref={containerRef}>
             <button
+                {...listbox.getTriggerProps()}
                 type="button"
-                onClick={() => !disabled && setIsOpen(!isOpen)}
+                aria-labelledby={`${labelId} ${valueId}`}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
+                onClick={listbox.handleTriggerClick(() => !disabled && setIsOpen(!isOpen))}
                 // onBlur={handleBlur} // Removing blur here to handle search clicking properly
                 className={cn(
-                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-surface text-foreground text-left flex items-center gap-2",
+                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-[border-color,box-shadow] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring text-sm bg-surface text-foreground text-left flex items-center gap-2",
                     error
-                        ? "border-destructive focus:border-destructive"
+                        ? "border-destructive"
                         : isOpen
                             ? "border-ring ring-1 ring-ring"
-                            : "border-border hover:border-input focus:border-ring",
+                            : "border-input",
                     disabled && "opacity-50 cursor-not-allowed"
                 )}
                 disabled={disabled}
             >
                 {selectedCountry ? (
-                    <div className="flex items-center gap-2 pt-1">
+                    <div id={valueId} className="flex items-center gap-2 pt-1">
                         <img
                             src={`https://flagcdn.com/w40/${selectedCountry.code.toLowerCase()}.png`}
                             srcSet={`https://flagcdn.com/w80/${selectedCountry.code.toLowerCase()}.png 2x`}
@@ -255,22 +286,24 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
                         <span>{selectedCountry.dial_code}</span>
                     </div>
                 ) : (
-                    <span className="pt-1 text-muted-foreground">Select...</span>
+                    <span id={valueId} className="pt-1 text-muted-foreground">Selecione...</span>
                 )}
                 <ChevronDown
                     size={16}
+                    aria-hidden="true"
                     className={cn(
-                        "ml-auto text-muted-foreground transition-transform duration-200",
+                        "ml-auto shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
                         isOpen && "transform rotate-180"
                     )}
                 />
             </button>
 
             <label
+                id={labelId}
                 className={cn(
-                    "absolute left-2 bg-surface px-1 transition-all duration-200 pointer-events-none z-10",
+                    "absolute left-2 bg-surface px-1 transition-[top,font-size,color] duration-200 motion-reduce:transition-none pointer-events-none z-10",
                     (value || isOpen)
-                        ? `-top-2 text-xs ${error ? "text-destructive" : isOpen ? "text-primary" : "text-muted-foreground"}`
+                        ? `-top-2 text-xs ${error ? "text-destructive" : isOpen ? "text-foreground" : "text-muted-foreground"}`
                         : `top-3 text-sm ${error ? "text-destructive" : "text-muted-foreground"}`
                 )}
             >
@@ -279,7 +312,7 @@ export const FloatingCountrySelect: React.FC<FloatingCountrySelectProps> = ({
 
             {isOpen && !disabled && createPortal(dropdown, document.body)}
 
-            {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+            {error && <p id={errorId} className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
     );
 };

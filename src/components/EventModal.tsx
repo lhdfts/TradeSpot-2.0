@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/modal';
+import { notify } from './ui/notify';
 import { Input as BaseInput } from './ui/input';
 import { CustomSelect } from './CustomSelect';
 import { Button } from './ui/button';
@@ -11,12 +12,8 @@ import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { SECTOR_CUSTOMER_SUCCESS, SECTOR_PRE_VENDAS } from '../constants/sectors';
 
-const Input: React.FC<any> = ({ label, ...props }) => (
-    <div className="space-y-1">
-        {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
-        <BaseInput {...props} />
-    </div>
-);
+// O BaseInput já desenha o rótulo ligado ao campo (htmlFor), com o mesmo estilo.
+const Input: React.FC<any> = (props) => <BaseInput {...props} />;
 
 const Select = CustomSelect;
 
@@ -171,7 +168,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
             onClose();
         } catch (error) {
             console.error('Failed to save event', error);
-            alert('Erro ao salvar evento ou permissões de atendentes.');
+            notify.error('Não foi possível salvar o evento.', 'Verifique a conexão e tente de novo. Se o erro continuar, confira as permissões em "Recebimento".');
         } finally {
             setSaving(false);
         }
@@ -184,20 +181,20 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={event ? 'Editar Evento' : 'Novo Evento'}>
+        <Modal isOpen={isOpen} onClose={onClose} title={event ? 'Editar evento' : 'Novo evento'}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Tabs defaultValue="geral">
                     <TabsList className="mb-6 bg-muted/30 p-1 gap-2 rounded-lg w-fit">
                         <TabsTrigger 
                             value="geral"
-                            className="px-4 py-2 rounded-md data-[active]:bg-background data-[active]:text-foreground data-[active]:shadow-sm text-muted-foreground hover:text-foreground transition-all"
+                            className="px-4 py-2 rounded-md data-[active]:bg-background data-[active]:text-foreground data-[active]:shadow-sm text-muted-foreground hover:text-foreground transition-[background-color,color,box-shadow] duration-150"
                         >
                             Geral
                         </TabsTrigger>
                         {event && (
                             <TabsTrigger 
                                 value="atendentes"
-                                className="px-4 py-2 rounded-md data-[active]:bg-background data-[active]:text-foreground data-[active]:shadow-sm text-muted-foreground hover:text-foreground transition-all"
+                                className="px-4 py-2 rounded-md data-[active]:bg-background data-[active]:text-foreground data-[active]:shadow-sm text-muted-foreground hover:text-foreground transition-[background-color,color,box-shadow] duration-150"
                             >
                                 Recebimento
                             </TabsTrigger>
@@ -276,11 +273,12 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
 
                         {event && event.self_scheduling_link && (
                             <div className="space-y-1">
-                                <label className="block text-sm font-medium text-secondary">Link de Auto-Agendamento</label>
+                                <label htmlFor="event-self-scheduling-link" className="block text-sm font-medium text-muted-foreground">Link de Auto-Agendamento</label>
                                 <div className="flex gap-2">
                                     {/* min-w-0: o link longo não empurra o botão Copiar para fora do modal */}
                                     <div className="flex-1 min-w-0">
                                         <BaseInput
+                                            id="event-self-scheduling-link"
                                             readOnly
                                             value={`${window.location.origin}/agendar/${event.self_scheduling_link}`}
                                             className="bg-muted text-muted-foreground"
@@ -303,7 +301,7 @@ export const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSucce
 
                     <TabsContent value="atendentes" className="space-y-4">
                         <div className="space-y-2">
-                            <h3 className="text-sm font-medium text-secondary">Atendentes que podem receber deste evento</h3>
+                            <h3 className="text-sm font-medium text-muted-foreground">Atendentes que podem receber deste evento</h3>
                             <div className="max-h-[300px] overflow-y-auto space-y-2 border rounded-md p-4 bg-muted/30">
                                 {loadingAttendants ? (
                                     <div className="text-center py-4 text-muted-foreground">Carregando atendentes...</div>

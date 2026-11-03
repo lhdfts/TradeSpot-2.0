@@ -3,7 +3,7 @@ import { staggerStyle } from '../lib/motion';
 import { Loader2, Save } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { api } from '../services/api';
-import { toastManager } from '../components/ui/toast';
+import { notify } from '../components/ui/notify';
 
 /** Configurações do sistema que antes exigiriam mudar o código. Admin e Dev. */
 export const Settings = () => {
@@ -20,7 +20,7 @@ export const Settings = () => {
                 setSelected(r.sectors);
                 setSaved(r.sectors);
             })
-            .catch(() => toastManager.add({ title: 'Erro', description: 'Não foi possível carregar as configurações.', type: 'error' }))
+            .catch(() => notify.error('Não foi possível carregar as configurações.', 'Recarregue a página para tentar de novo.'))
             .finally(() => setLoading(false));
     }, []);
 
@@ -35,9 +35,10 @@ export const Settings = () => {
             const r = await api.settings.updateOwnerChangeSectors(selected);
             setSaved(r.sectors);
             setSelected(r.sectors);
-            toastManager.add({ title: 'Configurações salvas', description: 'Setores com troca de responsável atualizados.', type: 'success' });
+            notify.success('Configurações salvas', 'Setores com troca de responsável atualizados.');
         } catch (err: any) {
-            toastManager.add({ title: 'Erro', description: err?.message || 'Não foi possível salvar.', type: 'error' });
+            console.error('Failed to save settings', err);
+            notify.error('Não foi possível salvar as configurações.', 'Verifique a conexão e tente de novo.');
         } finally {
             setSaving(false);
         }
@@ -48,13 +49,13 @@ export const Settings = () => {
             <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm space-y-4">
                 <div>
                     <h3 className="text-lg font-bold text-foreground">Troca de responsável</h3>
-                    <p className="text-sm text-secondary mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                         Nos setores marcados, o Líder pode trocar o responsável (quem recebe a comissão) dos agendamentos criados pela equipe dele.
                     </p>
                 </div>
 
                 {loading ? (
-                    <div className="flex justify-center py-6"><Loader2 className="animate-spin text-muted-foreground" /></div>
+                    <div className="flex justify-center py-6"><Loader2 className="animate-spin motion-reduce:animate-none text-muted-foreground" aria-label="Carregando configurações" /></div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {available.map(sector => (
@@ -73,7 +74,7 @@ export const Settings = () => {
 
                 <div className="flex justify-end">
                     <Button onClick={handleSave} disabled={loading || saving || !isDirty} className="w-full sm:w-auto">
-                        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        {saving ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <Save size={16} />}
                         <span className="ml-2">Salvar</span>
                     </Button>
                 </div>

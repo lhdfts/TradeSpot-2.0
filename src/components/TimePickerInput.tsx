@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock, ChevronDown } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -32,6 +32,11 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, above: false, maxHeight: 384 });
     const containerRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
+    const gridRef = useRef<HTMLDivElement>(null);
+    // Liga o rótulo e o valor ao botão para leitores de tela
+    const labelId = useId();
+    const valueId = useId();
+    const popupId = useId();
 
     const [isMobile, setIsMobile] = useState(false);
 
@@ -46,7 +51,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
     const generateAllTimes = () => {
         const times: string[] = [];
         for (let hour = 0; hour < 24; hour++) {
-            for (let minute of [0, 15, 30, 45]) {
+            for (const minute of [0, 15, 30, 45]) {
                 const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
                 times.push(timeStr);
             }
@@ -126,6 +131,51 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
         if (availableTimesSet.has(time)) {
             onChange(time);
             setIsOpen(false);
+            // A lista some ao fechar: devolve o foco ao botão
+            buttonRef.current?.focus();
+        }
+    };
+
+    // Ao abrir, o foco vai para o horário escolhido (ou o primeiro disponível)
+    useEffect(() => {
+        if (!isOpen) return;
+        const timer = setTimeout(() => {
+            const grid = gridRef.current;
+            if (!grid) return;
+            const target =
+                grid.querySelector<HTMLButtonElement>('button[aria-pressed="true"]:not(:disabled)') ??
+                grid.querySelector<HTMLButtonElement>('button:not(:disabled)');
+            target?.focus({ preventScroll: true });
+            target?.scrollIntoView({ block: 'nearest' });
+        }, 0);
+        return () => clearTimeout(timer);
+    }, [isOpen]);
+
+    // Teclado na grade: setas andam entre horários disponíveis, Esc fecha
+    const handleGridKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsOpen(false);
+            buttonRef.current?.focus();
+            return;
+        }
+        const grid = gridRef.current;
+        if (!grid) return;
+        const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
+        const steps: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols };
+        const step = steps[e.key];
+        if (!step) return;
+        const buttons = Array.from(grid.querySelectorAll<HTMLButtonElement>('button'));
+        let index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        if (index < 0) return;
+        e.preventDefault();
+        // Pula horários indisponíveis na mesma direção
+        for (index += step; index >= 0 && index < buttons.length; index += step) {
+            if (!buttons[index].disabled) {
+                buttons[index].focus();
+                return;
+            }
         }
     };
 
@@ -137,6 +187,9 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
 
     const timePickerContent = (
         <div
+            id={popupId}
+            role="dialog"
+            aria-labelledby={labelId}
             className={cn(
                 "bg-surface border border-border rounded-lg shadow-lg p-4",
                 isMobile
@@ -151,7 +204,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
             } : undefined}
             onClick={(e) => e.stopPropagation()}
         >
-            <div className={cn("grid gap-2", pickerGridClass || "grid-cols-4")}>
+            <div ref={gridRef} onKeyDown={handleGridKeyDown} className={cn("grid gap-2", pickerGridClass || "grid-cols-4")}>
                 {filteredAllTimes.map(time => {
                     // For Pré-vendas events, hide :15 and :45 time slots
                     if (isPreVendasEvent) {
@@ -163,6 +216,7 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
 
                     const available = isTimeAvailable(time);
                     if (!available && hideUnavailable) return null;
+                    const selected = value === time && available;
 
                     return (
                         <button
@@ -170,14 +224,16 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                             type="button"
                             onClick={() => handleSelectTime(time)}
                             disabled={!available}
+                            aria-pressed={selected}
                             className={cn(
                                 // py-2.5 no celular: alvo de toque maior
-                                'px-2 py-2.5 sm:py-2 text-sm rounded transition-colors font-medium',
-                                value === time && available
-                                    ? 'bg-[#070707] text-white'
+                                'px-2 py-2.5 sm:py-2 text-sm rounded transition-colors font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                                selected
+                                    // Token primário: antes #070707 sumia sobre o fundo escuro
+                                    ? 'bg-primary text-primary-foreground'
                                     : available
-                                        ? 'bg-blue-500/20 text-blue-600 dark:text-white hover:bg-blue-500/30 cursor-pointer'
-                                        : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
+                                        ? 'bg-primary/10 text-primary dark:text-foreground hover:bg-primary/20 cursor-pointer'
+                                        : 'bg-muted text-muted-foreground/60 line-through cursor-not-allowed'
                             )}
                         >
                             {time}
@@ -199,35 +255,43 @@ export const TimePickerInput: React.FC<TimePickerInputProps> = ({
                         setIsOpen(!isOpen);
                     }
                 }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Escape' && isOpen) {
+                        e.stopPropagation();
+                        setIsOpen(false);
+                    }
+                }}
                 disabled={disabled || readOnly}
+                aria-labelledby={`${labelId} ${valueId}`}
+                aria-haspopup="dialog"
+                aria-expanded={isOpen}
+                aria-controls={isOpen ? popupId : undefined}
                 className={cn(
-                    'w-full h-11 px-3 py-0 bg-surface border border-border rounded-md text-foreground text-left flex items-center justify-between outline-none shadow-sm transition-all duration-200',
+                    'w-full h-11 px-3 py-0 bg-surface border rounded-md text-foreground text-left flex items-center justify-between outline-none focus-visible:ring-2 focus-visible:ring-ring shadow-sm transition-[border-color,box-shadow] duration-200',
                     (disabled || readOnly) && 'opacity-50 cursor-not-allowed',
-                    isOpen
-                        ? "border-[#070707] dark:border-gray-400 focus:border-[#070707] dark:focus:border-gray-400 ring-1 ring-[#070707] dark:ring-gray-400"
-                        : "border-border focus:border-[#070707] dark:focus:border-gray-400 focus:ring-1 focus:ring-[#070707] dark:focus:ring-gray-400"
+                    isOpen ? "border-ring ring-1 ring-ring" : "border-input"
                 )}
             >
-                <span className="flex items-center gap-2 pt-1 text-sm">
-                    <Clock size={16} className="text-muted-foreground" />
+                <span id={valueId} className="flex items-center gap-2 pt-1 text-sm">
+                    <Clock size={16} aria-hidden="true" className="text-muted-foreground" />
                     {value}
                 </span>
                 <ChevronDown
                     size={16}
+                    aria-hidden="true"
                     className={cn(
-                        'text-muted-foreground transition-transform duration-200',
+                        'shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none',
                         isOpen && 'transform rotate-180'
                     )}
                 />
             </button>
 
             <label
+                id={labelId}
                 className={cn(
-                    "absolute left-2 bg-surface px-1 transition-all duration-200 pointer-events-none z-10",
-                    hasValue || isOpen
-                        ? "-top-2 text-xs text-[#070707] dark:text-gray-400"
-                        : "top-3 text-sm text-muted-foreground",
-                    isOpen ? "text-[#070707] dark:text-gray-400" : "text-muted-foreground"
+                    "absolute left-2 bg-surface px-1 transition-[top,font-size,color] duration-200 motion-reduce:transition-none pointer-events-none z-10",
+                    hasValue || isOpen ? "-top-2 text-xs" : "top-3 text-sm",
+                    isOpen ? "text-foreground" : "text-muted-foreground"
                 )}
             >
                 {label}

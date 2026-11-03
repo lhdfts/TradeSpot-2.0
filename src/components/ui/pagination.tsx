@@ -127,7 +127,7 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({ totalItems, pageSi
     const last = Math.min(props.currentPage * pageSize, totalItems);
     return (
         <div className={cn("flex flex-col sm:flex-row items-center justify-between gap-3", className)}>
-            <span className="text-sm text-secondary tabular-nums">
+            <span className="text-sm text-muted-foreground tabular-nums">
                 Mostrando <span className="font-semibold text-foreground">{first}–{last}</span> de{' '}
                 <span className="font-semibold text-foreground">{totalItems}</span>
             </span>

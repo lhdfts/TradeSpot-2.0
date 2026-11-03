@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import axios from 'axios';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
@@ -15,6 +16,8 @@ const router = Router();
 
 // Janela máxima para auto-agendamento pelo link público
 const MAX_PUBLIC_BOOKING_DAYS_AHEAD = 180;
+// Antecedência mínima padrão do POST (CS e SDR têm regras próprias)
+const PUBLIC_MIN_LEAD_MINUTES = 30;
 
 // --- Event-specific Restrictions ---
 const RESTRICTED_EVENT_ID = 'c375b72f-85a5-4f2e-b99a-614d04e5b6fb';
@@ -125,6 +128,149 @@ router.get('/events/:link', async (req: Request, res: Response) => {
     }
 });
 
+// ---------------------------------------------------------------- disponibilidade
+// Regras compartilhadas por GET /available-times (horários de um dia) e
+// GET /available-days (dias com horário no mês). Um único lugar para as regras
+// de setor/tipo, para os dois endpoints nunca divergirem.
+
+interface AvailabilityContext {
+    appointmentType: string;
+    sectors: string[];
+    durationMinutes: number;
+    /** Todos os atendentes do setor (o limite do CS conta o time inteiro). */
+    attendants: any[];
+    /** Atendentes que podem receber este evento (sem os bloqueados). */
+    filteredAttendants: any[];
+}
+
+// Tipo de agendamento, setores e duração usados para um evento.
+async function resolveAvailabilityRules(eventId?: string) {
+    let appointmentType = 'Ligação Closer';
+    let sectors = ['Closer'];
+    let durationMinutes = 60;
+
+    if (eventId) {
+        const { data: eventData } = await supabase.from('events').select('event_name, sector, duration_minutes').eq('id', eventId).single();
+        if (eventData) {
+            if (eventData.duration_minutes) durationMinutes = eventData.duration_minutes;
+            // 1. Tipo base
+            if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
+                appointmentType = 'Gold Call';
+            }
+
+            // 2. Ajustes por setor
+            if (isCustomerSuccess(eventData.sector)) {
+                sectors = [...CUSTOMER_SUCCESS_ALIASES];
+                appointmentType = 'Onboarding';
+            } else if (eventData.sector === 'CEO') {
+                sectors = ['CEO'];
+                appointmentType = 'Agendamento Pessoal';
+            } else if (isPreVendas(eventData.sector)) {
+                sectors = [...PRE_VENDAS_ALIASES];
+            } else if (eventData.sector === 'SDR') {
+                sectors = ['SDR'];
+                appointmentType = 'Ligação SDR';
+            } else if (eventData.sector === 'Closer') {
+                sectors = ['Closer'];
+            } else {
+                sectors = [eventData.sector];
+            }
+        }
+    }
+
+    return { appointmentType, sectors, durationMinutes };
+}
+
+// Monta o contexto (regras + atendentes). Lança erro se a busca falhar.
+async function loadAvailabilityContext(eventId?: string): Promise<AvailabilityContext> {
+    const { appointmentType, sectors, durationMinutes } = await resolveAvailabilityRules(eventId);
+
+    // Atendentes do setor (sem Líder). Ignora attendantId do link público: a
+    // distribuição é sempre automática.
+    let attendantsQuery = supabase.from('user').select('*').neq('role', 'Líder').in('sector', sectors);
+    // SDR e Customer Success: só Colaborador e Co-líder (no CS ficam de fora o
+    // Admin e as Qualidades que vieram do Suporte).
+    if (sectors.includes('SDR') || sectors.some(s => isCustomerSuccess(s))) {
+        attendantsQuery = attendantsQuery.in('role', ['Colaborador', 'Co-líder']);
+    }
+
+    const { data: attendants, error } = await attendantsQuery;
+    if (error || !attendants) {
+        console.error('Error fetching attendants:', error);
+        throw new Error('Erro ao buscar atendentes');
+    }
+
+    const filteredAttendants = eventId
+        ? attendants.filter(a => !isAttendantBlockedForEvent(a, eventId, appointmentType))
+        : attendants;
+
+    return { appointmentType, sectors, durationMinutes, attendants, filteredAttendants };
+}
+
+// Horários livres de um dia. `dayAppointments` deve conter só os agendamentos
+// (não cancelados) DESTE dia: hasConflictingAppointment não compara a data.
+// `accept` filtra horários extras; com `stopAtFirst` para no primeiro livre
+// (basta saber se o dia tem horário).
+async function computeAvailableTimes(
+    ctx: AvailabilityContext,
+    date: string,
+    dayAppointments: any[],
+    options: { accept?: (time: string) => boolean; stopAtFirst?: boolean } = {}
+): Promise<string[]> {
+    const { appointmentType, sectors, durationMinutes, attendants, filteredAttendants } = ctx;
+    const accept = options.accept ?? (() => true);
+    const availableTimes: string[] = [];
+
+    // CEO: usa as datas personalizadas da agenda dele em vez de 0-24h
+    if (sectors.includes('CEO')) {
+        if (filteredAttendants.length === 0) return [];
+        const ceo = filteredAttendants[0];
+        const customDates = ceo.schedule?.custom_dates || {};
+        const ceoTimesForDate: string[] = customDates[date] || [];
+
+        for (const timeSlot of ceoTimesForDate) {
+            if (!accept(timeSlot)) continue;
+            if (!hasConflictingAppointment(ceo.id, date, timeSlot, appointmentType, dayAppointments, undefined, durationMinutes)) {
+                availableTimes.push(timeSlot);
+                if (options.stopAtFirst) break;
+            }
+        }
+        return Array.from(new Set(availableTimes)).sort();
+    }
+
+    const isCsEvent = sectors.some(s => isCustomerSuccess(s));
+    const isSDR = sectors.includes('SDR');
+    const allowedMinutes = isCsEvent ? [0, 30] : [0, 15, 30, 45];
+    const now = Date.now();
+
+    for (let hour = 0; hour < 24; hour++) {
+        for (const minute of allowedMinutes) {
+            const timeSlot = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+            const diffMinutes = (new Date(`${date}T${timeSlot}:00-03:00`).getTime() - now) / 60000;
+
+            if (isCsEvent) {
+                // Janela das 09:00 às 21:00 (último horário às 21:00)
+                if (hour < 9 || hour > 21 || (hour === 21 && minute > 0)) continue;
+                // 12h de antecedência para o Customer Success (link externo)
+                if (diffMinutes < 12 * 60) continue;
+                if (hasSectorTimeLimit(SECTOR_CUSTOMER_SUCCESS, date, timeSlot, appointmentType, dayAppointments, attendants, undefined, durationMinutes)) continue;
+            }
+
+            // 1h de antecedência para SDR (link externo)
+            if (isSDR && diffMinutes < 60) continue;
+
+            if (!accept(timeSlot)) continue;
+
+            if (await checkIfAnyCloserAvailable(filteredAttendants, dayAppointments, date, timeSlot, appointmentType, durationMinutes)) {
+                availableTimes.push(timeSlot);
+                if (options.stopAtFirst) return availableTimes;
+            }
+        }
+    }
+
+    return availableTimes;
+}
+
 // --- GET Available Times for a Date ---
 // Returns list of time slots that have at least one closer available
 router.get('/available-times', availableTimesRateLimiter, async (req: Request, res: Response) => {
@@ -133,13 +279,8 @@ router.get('/available-times', availableTimesRateLimiter, async (req: Request, r
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
 
-    const { date } = req.query;
-    const { attendantId } = req.query;
-    const { eventId } = req.query;
-
+    const { date, eventId } = req.query;
     const eventIdStr = eventId && typeof eventId === 'string' ? eventId : undefined;
-
-    console.log('[AVAILABLE-TIMES] Request received:', { date, attendantId, eventId });
 
     if (!date || typeof date !== 'string') {
         return res.status(400).json({ error: 'Data é obrigatória (formato: YYYY-MM-DD)' });
@@ -151,71 +292,8 @@ router.get('/available-times', availableTimesRateLimiter, async (req: Request, r
     }
 
     try {
-        let APPOINTMENT_TYPE = 'Ligação Closer';
-        let sectors = ['Closer'];
-        let durationMinutes = 60;
+        const ctx = await loadAvailabilityContext(eventIdStr);
 
-        if (eventId && typeof eventId === 'string') {
-            const { data: eventData, error: eventError } = await supabase.from('events').select('event_name, sector, duration_minutes').eq('id', eventId).single();
-            console.log('[AVAILABLE-TIMES] Event lookup:', { eventId, eventData, eventError });
-            if (eventData) {
-                if (eventData.duration_minutes) durationMinutes = eventData.duration_minutes;
-                // 1. Determine base Appointment Type
-                if (eventData.event_name === 'Primeiro Dólar na Prática' || eventData.event_name === 'Dollar On Demand') {
-                    APPOINTMENT_TYPE = 'Gold Call';
-                }
-
-                // 2. Sector-specific overrides for Availability
-                if (isCustomerSuccess(eventData.sector)) {
-                    sectors = [...CUSTOMER_SUCCESS_ALIASES];
-                    APPOINTMENT_TYPE = 'Onboarding';
-                } else if (eventData.sector === 'CEO') {
-                    sectors = ['CEO'];
-                    APPOINTMENT_TYPE = 'Agendamento Pessoal';
-                } else if (isPreVendas(eventData.sector)) {
-                    sectors = [...PRE_VENDAS_ALIASES];
-                } else if (eventData.sector === 'SDR') {
-                    sectors = ['SDR'];
-                    APPOINTMENT_TYPE = 'Ligação SDR';
-                } else if (eventData.sector === 'Closer') {
-                    sectors = ['Closer'];
-                } else {
-                    // Default fallback
-                    sectors = [eventData.sector];
-                }
-            }
-        } else {
-            console.log('[AVAILABLE-TIMES] No eventId received in query params');
-        }
-
-        console.log('[AVAILABLE-TIMES] Using sectors:', sectors, '| Type:', APPOINTMENT_TYPE);
-
-        // 1. Fetch Attendants based on sector (excluding Líder role)
-        let attendantsQuery = supabase.from('user').select('*').neq('role', 'Líder');
-        
-        // Always fetch by sectors, ignoring any attendantId from public links to enforce automatic distribution
-        attendantsQuery = attendantsQuery.in('sector', sectors);
-        // SDR e Customer Success: só Colaborador e Co-líder (no CS ficam de fora o
-        // Admin e as Qualidades que vieram do Suporte).
-        if (sectors.includes('SDR') || sectors.some(s => isCustomerSuccess(s))) {
-            attendantsQuery = attendantsQuery.in('role', ['Colaborador', 'Co-líder']);
-        }
-        
-        const { data: attendants, error: attError } = await attendantsQuery;
-
-        console.log('[AVAILABLE-TIMES] Attendants found:', attendants?.length || 0, attendants?.map(a => ({ name: a.name, sector: a.sector, hasSchedule: !!a.schedule })));
-
-        if (attError || !attendants) {
-            console.error("Error fetching attendants:", attError);
-            return res.status(500).json({ error: 'Erro ao buscar atendentes' });
-        }
-
-        // Use attendants directly - already filtered by query above
-        const filteredAttendants = eventIdStr
-            ? attendants.filter(a => !isAttendantBlockedForEvent(a, eventIdStr, APPOINTMENT_TYPE))
-            : attendants;
-
-        // 2. Fetch Appointments for this date
         const { data: appointments, error: appError } = await supabase
             .from('appointments')
             .select('id, attendant_id, date, time, end_time, type, status')
@@ -223,111 +301,113 @@ router.get('/available-times', availableTimesRateLimiter, async (req: Request, r
             .neq('status', 'Cancelado');
 
         if (appError) {
-            console.error("Error fetching appointments:", appError);
+            console.error('Error fetching appointments:', appError);
             return res.status(500).json({ error: 'Erro ao buscar agendamentos' });
         }
 
-        const existingAppointments = appointments || [];
-
-        // 3 & 4. Generate  time slots and filter
-        const availableTimes: string[] = [];
-
-        // If we are looking for CEO, we use their custom_dates instead of allTimes 0-24h
-        if (sectors.includes('CEO') && filteredAttendants.length > 0) {
-            // Assume only one CEO is fetched if sector is CEO
-            const ceo = filteredAttendants[0];
-            const customDates = ceo.schedule?.custom_dates || {};
-            const ceoTimesForDate = customDates[date] || [];
-
-            for (const timeSlot of ceoTimesForDate) {
-                const hasConflict = hasConflictingAppointment(
-                    ceo.id,
-                    date,
-                    timeSlot,
-                    APPOINTMENT_TYPE,
-                    existingAppointments,
-                    undefined,
-                    durationMinutes
-                );
-                if (!hasConflict) {
-                    availableTimes.push(timeSlot);
-                }
-            }
-        } else {
-        // Standard Closer Logic
-        const allTimes: string[] = [];
-        const isCsEvent = sectors.some(s => isCustomerSuccess(s));
-        const isSDR = sectors.includes('SDR');
-        const allowedMinutes = isCsEvent ? [0, 30] : [0, 15, 30, 45];
-
-        for (let hour = 0; hour < 24; hour++) {
-            for (const minute of allowedMinutes) {
-                const timeSlot = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-
-                // Adjustment 1: 12h lead time for Customer Success (External Link)
-                if (isCsEvent) {
-                    // Time window between 09:00 and 21:00 (last slot at 21:00)
-                    if (hour < 9 || hour > 21 || (hour === 21 && minute > 0)) {
-                        continue;
-                    }
-
-                    const now = new Date();
-                    const slotDateTime = new Date(`${date}T${timeSlot}:00-03:00`);
-                    const diffMinutes = (slotDateTime.getTime() - now.getTime()) / 60000;
-
-                    if (diffMinutes < 12 * 60) {
-                        continue; // Skip slots with less than 12h lead time
-                    }
-                }
-
-                // Adjustment: 1h lead time for SDR events (External Link)
-                if (isSDR) {
-                    const now = new Date();
-                    const slotDateTime = new Date(`${date}T${timeSlot}:00-03:00`);
-                    const diffMinutes = (slotDateTime.getTime() - now.getTime()) / 60000;
-
-                    if (diffMinutes < 60) {
-                        continue; // Skip slots with less than 1h lead time
-                    }
-                }
-
-                allTimes.push(timeSlot);
-            }
-        }
-
-        for (const timeSlot of allTimes) {
-                if (isCsEvent) {
-                    const sectorLimitCheck = SECTOR_CUSTOMER_SUCCESS;
-                    if (hasSectorTimeLimit(sectorLimitCheck, date, timeSlot, APPOINTMENT_TYPE, existingAppointments, attendants, undefined, durationMinutes)) {
-                        continue;
-                    }
-                }
-
-                const hasAvailableCloser = await checkIfAnyCloserAvailable(
-                    filteredAttendants,
-                    existingAppointments,
-                    date,
-                    timeSlot,
-                    APPOINTMENT_TYPE,
-                    durationMinutes
-                );
-                if (hasAvailableCloser) availableTimes.push(timeSlot);
-            }
-        }
+        const availableTimes = await computeAvailableTimes(ctx, date, appointments || []);
 
         console.log('[AVAILABLE-TIMES] Final result:', {
             date,
-            attendantsCount: filteredAttendants.length,
-            appointmentsCount: existingAppointments.length,
+            sectors: ctx.sectors,
+            type: ctx.appointmentType,
+            attendantsCount: ctx.filteredAttendants.length,
             availableTimesCount: availableTimes.length,
-            sampleAvailableTimes: availableTimes.slice(0, 5)
         });
 
-        const finalAvailableTimes = Array.from(new Set(availableTimes)).sort();
-        res.json({ date, availableTimes: finalAvailableTimes });
+        res.json({ date, availableTimes: Array.from(new Set(availableTimes)).sort() });
 
     } catch (err: any) {
         console.error("Available Times Fetch Error:", err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// --- GET Available Days for a Month ---
+// Dias do mês com pelo menos um horário livre, para o calendário da página
+// pública não oferecer dias vazios. Só até PUBLIC_CALENDAR_DAYS_AHEAD dias.
+const PUBLIC_CALENDAR_DAYS_AHEAD = 60;
+const availableDaysQuerySchema = z.object({
+    eventId: z.string().uuid('Evento inválido'),
+    month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mês inválido. Use YYYY-MM.'),
+});
+
+// "YYYY-MM-DD" em Brasília (UTC-3 fixo), deslocado em `days` dias.
+const brazilISO = (ms: number, days = 0) => new Date(ms - 3 * 3_600_000 + days * 86_400_000).toISOString().slice(0, 10);
+
+router.get('/available-days', availableTimesRateLimiter, async (req: Request, res: Response) => {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    const parsed = availableDaysQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+        return res.status(400).json({ error: 'Parâmetros inválidos', details: parsed.error.format() });
+    }
+    const { eventId, month } = parsed.data;
+
+    try {
+        // Mesma regra do POST: só eventos ativos com link público
+        const { data: eventData, error: eventError } = await supabase
+            .from('events')
+            .select('sector, status, self_scheduling_link')
+            .eq('id', eventId)
+            .single();
+        if (eventError || !eventData || !eventData.self_scheduling_link) {
+            return res.status(404).json({ error: 'Evento não encontrado' });
+        }
+        if (!eventData.status) {
+            return res.status(400).json({ error: 'Este evento não está mais ativo' });
+        }
+
+        // Interseção do mês pedido com a janela [hoje, hoje + 60 dias]
+        const now = Date.now();
+        const windowStart = brazilISO(now);
+        const windowEnd = brazilISO(now, PUBLIC_CALENDAR_DAYS_AHEAD);
+        const [year, monthNum] = month.split('-').map(Number);
+        const lastDay = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
+        const from = `${month}-01` < windowStart ? windowStart : `${month}-01`;
+        const to = `${month}-${String(lastDay).padStart(2, '0')}` > windowEnd ? windowEnd : `${month}-${String(lastDay).padStart(2, '0')}`;
+
+        if (from > to) return res.json({ month, days: [] });
+
+        // Atendentes e agendamentos do período buscados uma vez só
+        const ctx = await loadAvailabilityContext(eventId);
+        const { data: appointments, error: appError } = await supabase
+            .from('appointments')
+            .select('id, attendant_id, date, time, end_time, type, status')
+            .gte('date', from)
+            .lte('date', to)
+            .neq('status', 'Cancelado');
+
+        if (appError) {
+            console.error('Error fetching appointments:', appError);
+            return res.status(500).json({ error: 'Erro ao buscar agendamentos' });
+        }
+
+        const byDate = new Map<string, any[]>();
+        for (const appt of appointments || []) {
+            const list = byDate.get(appt.date);
+            if (list) list.push(appt);
+            else byDate.set(appt.date, [appt]);
+        }
+
+        // Mesmos filtros que a página aplica antes de mostrar um horário:
+        // antecedência mínima do POST (30 min; CS e SDR já filtrados acima) e,
+        // em Pré-vendas, só :00 e :30.
+        const preVendas = isPreVendas(eventData.sector);
+        const minStart = now + PUBLIC_MIN_LEAD_MINUTES * 60_000;
+
+        const days: string[] = [];
+        for (let day = from; day <= to; day = brazilISO(Date.parse(`${day}T12:00:00-03:00`), 1)) {
+            const accept = (time: string) =>
+                Date.parse(`${day}T${time}:00-03:00`) >= minStart &&
+                (!preVendas || time.endsWith(':00') || time.endsWith(':30'));
+            const times = await computeAvailableTimes(ctx, day, byDate.get(day) || [], { accept, stopAtFirst: true });
+            if (times.length > 0) days.push(day);
+        }
+
+        res.json({ month, days });
+    } catch (err: any) {
+        console.error('Available Days Fetch Error:', err);
         res.status(500).json({ error: 'Erro Interno' });
     }
 });
@@ -342,45 +422,13 @@ async function checkIfAnyCloserAvailable(
     durationMinutes: number = 60
 ): Promise<boolean> {
     // Filter by schedule first
-    const availableBySchedule = attendants.filter(a => {
-        const isWithinSchedule = isAttendantWithinSchedule(a, date, time, type, durationMinutes);
-        if (!isWithinSchedule && time === '09:00') {
-            console.log(`[DEBUG] ${a.name} (${a.id}): NOT within schedule for ${date} ${time}`, {
-                hasSchedule: !!a.schedule,
-                schedule: a.schedule
-            });
-        }
-        return isWithinSchedule;
-    });
+    const availableBySchedule = attendants.filter(a => isAttendantWithinSchedule(a, date, time, type, durationMinutes));
+    if (availableBySchedule.length === 0) return false;
 
-    if (availableBySchedule.length === 0) {
-        if (time === '09:00') {
-            console.log(`[DEBUG] No attendants within schedule for ${date} ${time}`);
-        }
-        return false;
-    }
-
-    // Check if at least one doesn't have a conflict
-    for (const attendant of availableBySchedule) {
-        const hasConflict = hasConflictingAppointment(
-            attendant.id,
-            date,
-            time,
-            type,
-            appointments,
-            undefined,
-            durationMinutes
-        );
-
-        if (!hasConflict) {
-            return true; // At least one closer is available
-        }
-    }
-
-    if (time === '09:00') {
-        console.log(`[DEBUG] All available attendants have conflicts for ${date} ${time}`);
-    }
-    return false;
+    // At least one without a conflict
+    return availableBySchedule.some(attendant =>
+        !hasConflictingAppointment(attendant.id, date, time, type, appointments, undefined, durationMinutes)
+    );
 }
 
 // --- POST Create Appointment ---
@@ -441,7 +489,7 @@ router.post('/appointments', async (req: Request, res: Response) => {
 
         const isCsEvent = isCustomerSuccess(eventData.sector);
         const isSDR = eventData.sector === 'SDR';
-        const minLeadMinutes = isCsEvent ? 12 * 60 : isSDR ? 60 : 30;
+        const minLeadMinutes = isCsEvent ? 12 * 60 : isSDR ? 60 : PUBLIC_MIN_LEAD_MINUTES;
 
         if (diffMinutes < minLeadMinutes) {
             let errorMsg = 'O agendamento deve ter pelo menos 30 minutos de antecedência.';

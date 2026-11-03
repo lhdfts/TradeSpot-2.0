@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 
-/** Atraso em cascata para o item `index` (limitado para listas longas não demorarem). */
-export function staggerStyle(index: number, step = 40, max = 12): CSSProperties {
+/** Atraso em cascata para o item `index` (limitado a 8 passos para listas longas não demorarem). */
+export function staggerStyle(index: number, step = 40, max = 8): CSSProperties {
   return { '--delay': `${Math.min(index, max) * step}ms` } as CSSProperties;
 }
 
