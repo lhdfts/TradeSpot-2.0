@@ -606,6 +606,23 @@ router.put('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req:
     }
 });
 
+// Erros do Postgres no cadastro de atendente traduzidos para quem está na tela.
+// Sem isso tudo virava "Erro Interno" e o motivo só aparecia no log.
+const describeAttendantInsertError = (error: { code?: string; message?: string; details?: string }) => {
+    const column = /column "([^"]+)"/.exec(error.message || '')?.[1];
+    switch (error.code) {
+        case '23505':
+            return { status: 409, message: 'Já existe um atendente cadastrado com este email.' };
+        case '23502':
+            return { status: 400, message: `O banco exige o campo "${column || 'desconhecido'}", que não foi enviado no cadastro.` };
+        case '23514':
+        case '22P02':
+            return { status: 400, message: `O banco recusou o valor de um campo${column ? ` ("${column}")` : ''}: ${error.message}` };
+        default:
+            return null;
+    }
+};
+
 // POST /api/attendants - Create new attendant
 router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -655,7 +672,11 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
             .select()
             .single();
 
-        if (error) throw new Error(error.message);
+        if (error) {
+            console.error("Create Attendant Error:", error);
+            const known = describeAttendantInsertError(error);
+            return res.status(known ? known.status : 500).json({ error: known ? known.message : 'Erro Interno' });
+        }
 
         res.status(201).json({
             id: userData.id,

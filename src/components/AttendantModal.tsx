@@ -25,11 +25,16 @@ interface AttendantModalProps {
 export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose, onSuccess, attendant }) => {
     const { user } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // Igual ao servidor: Admin, Dev e o setor TEI cadastram em qualquer setor; os demais
+    // só no próprio. Antes o cadastro novo vinha com SDR fixo e o servidor recusava (403)
+    // quando um líder de outro setor criava alguém.
+    const canPickAnySector = !!user && (['Admin', 'Dev'].includes(user.role) || user.sector === 'TEI');
+    const defaultSector = canPickAnySector || !user?.sector ? 'SDR' : user.sector;
     const [formData, setFormData] = useState<Partial<Attendant>>({
         name: '',
         email: '',
         role: 'Colaborador',
-        sector: 'SDR',
+        sector: defaultSector,
         schedule: {
             mon: { start: '09:00', end: '18:00' },
             tue: { start: '09:00', end: '18:00' },
@@ -56,7 +61,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                 name: '',
                 email: '',
                 role: 'Colaborador',
-                sector: 'SDR',
+                sector: defaultSector,
                 schedule: {
                     mon: { start: '09:00', end: '18:00' },
                     tue: { start: '09:00', end: '18:00' },
@@ -71,7 +76,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                 }
             });
         }
-    }, [attendant, isOpen]);
+    }, [attendant, isOpen, defaultSector]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -95,9 +100,13 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
             onClose();
         } catch (error: any) {
             console.error('Failed to save attendant', error);
+            // Mostra o motivo que o servidor devolveu (setor não permitido, email repetido, campo recusado...).
+            const reason = error?.message && !/^Failed to/.test(error.message) && error.message !== 'Erro Interno'
+                ? error.message
+                : 'Tente de novo. Se continuar, avise o time de sistemas.';
             notify.error(
                 attendant ? `Não foi possível salvar ${attendant.name}.` : 'Não foi possível criar o atendente.',
-                'Confira se o email já não está cadastrado e tente de novo.'
+                reason
             );
         } finally {
             setIsSubmitting(false);
@@ -190,6 +199,19 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
         return [];
     };
 
+    const allSectors = [
+        { value: 'SDR', label: 'SDR' },
+        { value: 'Closer', label: 'Closer' },
+        { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
+        { value: SECTOR_CUSTOMER_SUCCESS, label: SECTOR_CUSTOMER_SUCCESS },
+        { value: 'Social Seller', label: 'Social Seller' },
+        { value: 'CEO', label: 'CEO' }
+    ];
+    // No cadastro novo, quem não é Admin/Dev/TEI só vê o próprio setor (o único que o servidor aceita).
+    const sectorOptions = canPickAnySector || attendant || !user?.sector
+        ? allSectors
+        : [{ value: user.sector, label: user.sector }];
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={attendant ? 'Editar atendente' : 'Novo atendente'}>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -217,14 +239,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                         label="Setor"
                         value={formData.sector}
                         onChange={(e: any) => setFormData({ ...formData, sector: e.target.value as any })}
-                        options={[
-                            { value: 'SDR', label: 'SDR' },
-                            { value: 'Closer', label: 'Closer' },
-                            { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
-                            { value: SECTOR_CUSTOMER_SUCCESS, label: SECTOR_CUSTOMER_SUCCESS },
-                            { value: 'Social Seller', label: 'Social Seller' },
-                            { value: 'CEO', label: 'CEO' }
-                        ]}
+                        options={sectorOptions}
                     />
                 </div>
 
