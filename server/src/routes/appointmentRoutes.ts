@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook, getGlobalAppointmentWebhook, getSyncEventsWebhook } from '../config/webhooks.js';
-import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
+import { createAppointmentSchema, updateAppointmentSchema } from '../schemas/appointmentSchema.js';
 import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, conflictPoolFor, hasSectorTimeLimit, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
@@ -1659,7 +1659,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
     try {
-        const validation = createAppointmentSchema.partial().safeParse(req.body);
+        const validation = updateAppointmentSchema.safeParse(req.body);
         if (!validation.success) {
             return res.status(400).json({ error: 'Erro de Validação', details: validation.error.format() });
         }
