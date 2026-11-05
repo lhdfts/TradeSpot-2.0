@@ -17,7 +17,9 @@ const professionRegex = /^[a-zA-Z\u00C0-\u00FF0-9\s()\/.,'"-]*$/;
 // Dor segue as regras do campo de nome (letras, acentos e espaços).
 const painRegex = /^[a-zA-Z\u00C0-\u00FF\s]*$/;
 
-export const createAppointmentSchema = z.object({
+// Objeto base, sem refinamentos: o zod 4.6+ lança erro em .partial()/.pick()/.omit()
+// de objetos com .refine(). Derive variantes daqui e refine depois.
+const appointmentBaseSchema = z.object({
     // Strict number validation (Backend removes mask, but we validate strictly numbers)
     phone: z.coerce.string()
         .regex(/^\d+$/, "O telefone deve conter apenas números")
@@ -125,10 +127,16 @@ export const createAppointmentSchema = z.object({
 
     // Creator ID
     createdBy: z.string().optional()
-}).refine(data => data.student || data.lead, {
+});
+
+export const createAppointmentSchema = appointmentBaseSchema.refine(data => data.student || data.lead, {
     message: "O nome do aluno (student ou lead) deve ser fornecido",
     path: ["student"]
 });
+
+// Edição (PUT): todos os campos opcionais. Mesmo comportamento do zod 4.2, que
+// descartava o refine acima ao aplicar .partial().
+export const updateAppointmentSchema = appointmentBaseSchema.partial();
 
 export type CreateAppointmentDTO = z.infer<typeof createAppointmentSchema>;
 
