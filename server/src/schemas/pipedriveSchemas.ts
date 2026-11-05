@@ -21,5 +21,12 @@ export const SearchDealsSchema = z.object({
     path: ["term"]
 });
 
+// Query de GET /persons/:id/deals (o :id é validado na rota)
+export const PersonDealsQuerySchema = z.object({
+    status: z.enum(['open', 'won', 'lost', 'deleted', 'all_not_deleted'], { message: 'Status inválido' }).optional(),
+    limit: z.string().regex(/^\d+$/, 'Limite inválido').transform(Number).pipe(z.number().int().min(1).max(500)).optional(),
+    start: z.string().regex(/^\d+$/, 'Início inválido').transform(Number).pipe(z.number().int().min(0)).optional()
+});
+
 export type SearchPersonsDTO = z.infer<typeof SearchPersonsSchema>;
 export type SearchDealsDTO = z.infer<typeof SearchDealsSchema>;

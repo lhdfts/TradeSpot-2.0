@@ -1,8 +1,12 @@
 // Estrutura única das listas de agendamentos (Meus e Todos). Cada página só
-// fornece os dados já filtrados, os filtros dela e as colunas extras.
+// fornece os dados já filtrados, os filtros dela e as colunas padrão.
+//
+// Colunas: Data/Hora, Aluno(a) e Status são fixas; as demais (appointmentColumns.ts)
+// quem está acima de Colaborador escolhe no botão "Colunas", e a escolha fica no
+// navegador, por tela e por usuário.
 //
 // Pensado para não deslocar o layout:
-//  - colunas com largura fixa (table-fixed), iguais em toda página e filtro;
+//  - colunas com largura fixa (table-fixed), que não mudam com filtro ou página;
 //  - enquanto a primeira busca não termina, linhas-esqueleto da mesma altura
 //    das reais, em vez do aviso de lista vazia;
 //  - numa nova busca, a lista atual continua no lugar (esmaecida);
@@ -28,17 +32,16 @@ import { FloatingInput } from '../FloatingInput';
 import { CalendarView } from '../CalendarView';
 import { StatusBadge } from './StatusBadge';
 import { AppointmentDate, CopyPhoneButton, LeadCell } from './AppointmentCells';
+import { ColumnPicker } from './ColumnPicker';
+import { OPTIONAL_COLUMNS, useColumnPreferences, type AppointmentColumnId, type ColumnLookups } from './appointmentColumns';
 
 export type ViewMode = 'table' | 'calendar';
 
-export interface ExtraColumn {
-    header: string;
-    /** Classe de largura da coluna, ex.: "w-[12%]" (colunas de texto cortam com reticências). */
-    width: string;
-    render: (appt: Appointment) => React.ReactNode;
-    /** Só aparece com o painel "Filtros avançados" aberto. */
-    onlyWithAdvanced?: boolean;
-}
+// Larguras das colunas fixas (px). Aluno(a) fica com o espaço que sobrar, com este mínimo.
+const DATE_COL_WIDTH = 150;
+const LEAD_COL_MIN_WIDTH = 220;
+const STATUS_COL_WIDTH = 150;
+const ACTION_COL_WIDTH = 120;
 
 interface AppointmentsListViewProps {
     /** Já filtrados e ordenados pela página. */
@@ -60,7 +63,13 @@ interface AppointmentsListViewProps {
     page: number;
     onPageChange: (page: number) => void;
     pageSize: number;
-    extraColumns?: ExtraColumn[];
+    /** Colunas opcionais que a tela mostra enquanto a pessoa não escolher outras. */
+    defaultColumns: AppointmentColumnId[];
+    /** Chave da escolha de colunas no navegador (inclua a tela e o usuário). */
+    columnsStorageKey: string;
+    /** Mostra o botão "Colunas" (acima de Colaborador). */
+    canChooseColumns: boolean;
+    columnLookups: ColumnLookups;
     actionLabel: string;
     onOpen: (appt: Appointment) => void;
     onCreate: () => void;
@@ -94,7 +103,10 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
     page,
     onPageChange,
     pageSize,
-    extraColumns: allExtraColumns = [],
+    defaultColumns,
+    columnsStorageKey,
+    canChooseColumns,
+    columnLookups,
     actionLabel,
     onOpen,
     onCreate,
@@ -104,7 +116,22 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const advancedPanelId = useId();
     const now = useNow();
-    const extraColumns = allExtraColumns.filter(col => !col.onlyWithAdvanced || advancedOpen);
+
+    const columnPrefs = useColumnPreferences(columnsStorageKey, defaultColumns, canChooseColumns);
+    const shownColumns = OPTIONAL_COLUMNS.filter(col => columnPrefs.visible.includes(col.id));
+    const columnsBeforeStatus = shownColumns.filter(col => col.beforeStatus);
+    const columnsAfterStatus = shownColumns.filter(col => !col.beforeStatus);
+    const tableMinWidth = DATE_COL_WIDTH + LEAD_COL_MIN_WIDTH + STATUS_COL_WIDTH + ACTION_COL_WIDTH +
+        shownColumns.reduce((sum, col) => sum + col.width, 0);
+
+    const optionalCell = (col: typeof OPTIONAL_COLUMNS[number], appt: Appointment) => {
+        const value = col.value(appt, columnLookups) || '-';
+        return (
+            <td key={col.id} className="px-4 py-4 text-sm text-foreground truncate" title={value !== '-' ? value : undefined}>
+                {value}
+            </td>
+        );
+    };
 
     // Esqueleto só quando não há nada para mostrar ainda; com dados antigos na
     // tela, eles ficam (esmaecidos) até a busca nova chegar.
@@ -164,7 +191,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
         <div className="space-y-6">
             {headerActions && createPortal(
                 <div className="flex flex-col text-right mr-4 min-w-[5.5rem]">
-                    <span className="text-[10px] tracking-wider text-secondary font-bold uppercase">Quantidade</span>
+                    <span className="text-xs tracking-wider text-muted-foreground font-bold uppercase">Quantidade</span>
                     <span className="text-xl font-bold text-foreground leading-none tabular-nums">
                         {showSkeleton ? '–' : appointments.length}
                     </span>
@@ -173,7 +200,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
             )}
 
             {truncated && !loading && (
-                <div className="p-3 rounded-lg border border-[#FF9100]/40 bg-[#FF9100]/10 text-sm text-foreground">
+                <div className="p-3 rounded-lg border border-status-noshow/40 bg-status-noshow/10 text-sm text-foreground">
                     O período selecionado tem mais agendamentos do que o limite de carregamento. A lista está incompleta — reduza o período.
                 </div>
             )}
@@ -210,7 +237,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         <span className="hidden sm:inline">Filtros avançados</span>
                         {advancedActiveCount > 0 && (
                             <span
-                                className="grid place-items-center min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums animate-in zoom-in-50 duration-200"
+                                className="grid place-items-center min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-xs font-bold tabular-nums animate-in zoom-in-90 duration-150 motion-reduce:animate-none"
                                 aria-label={`${advancedActiveCount} filtro${advancedActiveCount > 1 ? 's' : ''} avançado${advancedActiveCount > 1 ? 's' : ''} ativo${advancedActiveCount > 1 ? 's' : ''}`}
                             >
                                 {advancedActiveCount}
@@ -222,11 +249,22 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                     {/* Seletor de visualização: sempre na barra, encostado à direita.
                         "Limpar filtros" vem antes dele só quando há filtro ativo. */}
                     <div className="ml-auto flex items-center gap-2">
+                        {canChooseColumns && viewMode === 'table' && (
+                            // Só na tabela (desktop); no celular a lista é em cartões.
+                            <div className="hidden md:block">
+                                <ColumnPicker
+                                    visible={columnPrefs.visible}
+                                    onToggle={columnPrefs.toggle}
+                                    onReset={columnPrefs.reset}
+                                    isDefault={columnPrefs.isDefault}
+                                />
+                            </div>
+                        )}
                         {hasActiveFilters && (
                             <Button
                                 variant="ghost"
                                 onClick={onClearFilters}
-                                className="h-11 px-3 text-secondary hover:text-foreground animate-in fade-in zoom-in-95 duration-200"
+                                className="h-11 px-3 text-muted-foreground hover:text-foreground animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none"
                                 title="Limpar filtros"
                                 aria-label="Limpar filtros"
                             >
@@ -241,7 +279,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                             onClick={() => setViewMode('table')}
                             aria-pressed={viewMode === 'table'}
                             aria-label="Ver em lista"
-                            className={`h-full aspect-square rounded flex items-center justify-center transition-all duration-200 active:scale-90 ${viewMode === 'table' ? 'bg-gray-200 dark:bg-surface shadow text-black dark:text-white' : 'text-secondary hover:text-primary'}`}
+                            className={`h-full aspect-square rounded flex items-center justify-center transition-[background-color,color,transform] duration-150 active:scale-[0.97] ${viewMode === 'table' ? 'bg-muted dark:bg-surface shadow-sm text-foreground' : 'text-muted-foreground hover:text-primary'}`}
                             title="Lista"
                         >
                             <List size={18} />
@@ -250,7 +288,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                             onClick={() => setViewMode('calendar')}
                             aria-pressed={viewMode === 'calendar'}
                             aria-label="Ver em calendário"
-                            className={`h-full aspect-square rounded flex items-center justify-center transition-all duration-200 active:scale-90 ${viewMode === 'calendar' ? 'bg-gray-200 dark:bg-surface shadow text-black dark:text-white' : 'text-secondary hover:text-primary'}`}
+                            className={`h-full aspect-square rounded flex items-center justify-center transition-[background-color,color,transform] duration-150 active:scale-[0.97] ${viewMode === 'calendar' ? 'bg-muted dark:bg-surface shadow-sm text-foreground' : 'text-muted-foreground hover:text-primary'}`}
                             title="Calendário"
                         >
                             <CalendarIcon size={18} />
@@ -291,25 +329,24 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         {/* Barra de progresso sobreposta: não ocupa espaço */}
                         {loading && <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary/40 animate-shimmer" />}
                         <div className="overflow-x-auto">
-                            {/* Colunas de conteúdo previsível em px; as de nomes em %; Aluno(a) fica com o resto. */}
-                            <table className={cn('w-full table-fixed text-left', ['min-w-[860px]', 'min-w-[960px]', 'min-w-[1040px]'][Math.min(extraColumns.length, 2)])}>
+                            {/* Todas as colunas em px, menos Aluno(a), que fica com o resto. Com muitas
+                                colunas a largura mínima passa da tela e a tabela rola na horizontal. */}
+                            <table className="w-full table-fixed text-left" style={{ minWidth: tableMinWidth }}>
                                 <colgroup>
-                                    <col className="w-[150px]" />
+                                    <col style={{ width: DATE_COL_WIDTH }} />
                                     <col />
-                                    <col className={extraColumns.length ? 'w-[10%]' : 'w-[14%]'} />
-                                    <col className="w-[150px]" />
-                                    {extraColumns.map(col => <col key={col.header} className={col.width} />)}
-                                    <col className={extraColumns.length ? 'w-[12%]' : 'w-[16%]'} />
-                                    <col className="w-[120px]" />
+                                    {columnsBeforeStatus.map(col => <col key={col.id} style={{ width: col.width }} />)}
+                                    <col style={{ width: STATUS_COL_WIDTH }} />
+                                    {columnsAfterStatus.map(col => <col key={col.id} style={{ width: col.width }} />)}
+                                    <col style={{ width: ACTION_COL_WIDTH }} />
                                 </colgroup>
                                 <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                                     <tr>
                                         <th className="px-4 py-4">Data/Hora</th>
                                         <th className="px-4 py-4">Aluno(a)</th>
-                                        <th className="px-4 py-4">Tipo</th>
+                                        {columnsBeforeStatus.map(col => <th key={col.id} className="px-4 py-4 truncate" title={col.header}>{col.header}</th>)}
                                         <th className="px-4 py-4">Status</th>
-                                        {extraColumns.map(col => <th key={col.header} className="px-4 py-4">{col.header}</th>)}
-                                        <th className="px-4 py-4">Atendente</th>
+                                        {columnsAfterStatus.map(col => <th key={col.id} className="px-4 py-4 truncate" title={col.header}>{col.header}</th>)}
                                         <th className="px-4 py-4 text-center">Ações</th>
                                     </tr>
                                 </thead>
@@ -319,10 +356,9 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                             <tr key={i} aria-hidden>
                                                 <SkeletonCell first="w-20" second="w-14" />
                                                 <SkeletonCell first="w-40" second="w-28" />
+                                                {columnsBeforeStatus.map(col => <SkeletonCell key={col.id} first="w-20" />)}
                                                 <SkeletonCell first="w-20" />
-                                                <SkeletonCell first="w-20" />
-                                                {extraColumns.map(col => <SkeletonCell key={col.header} first="w-24" />)}
-                                                <SkeletonCell first="w-24" />
+                                                {columnsAfterStatus.map(col => <SkeletonCell key={col.id} first="w-24" />)}
                                                 <SkeletonCell first="w-16 mx-auto" />
                                             </tr>
                                         ))
@@ -339,18 +375,11 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                                 <td className="px-4 py-4">
                                                     <LeadCell lead={appt.lead} phone={appt.phone} />
                                                 </td>
-                                                <td className="px-4 py-4 text-sm text-foreground truncate" title={appt.type}>{appt.type}</td>
+                                                {columnsBeforeStatus.map(col => optionalCell(col, appt))}
                                                 <td className="px-4 py-4">
                                                     <StatusBadge status={getDisplayStatus(appt, now)} />
                                                 </td>
-                                                {extraColumns.map(col => (
-                                                    <td key={col.header} className="px-4 py-4 text-sm text-foreground truncate">
-                                                        {col.render(appt)}
-                                                    </td>
-                                                ))}
-                                                <td className="px-4 py-4 text-sm text-foreground truncate">
-                                                    {appt.attendantName || appt.attendantId}
-                                                </td>
+                                                {columnsAfterStatus.map(col => optionalCell(col, appt))}
                                                 <td className="px-4 py-4 text-center">
                                                     {actionButton(appt)}
                                                 </td>
@@ -382,7 +411,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                     <div className="flex justify-between items-start gap-3">
                                         <div className="min-w-0">
                                             <h3 className="text-foreground font-semibold truncate">{appt.lead}</h3>
-                                            <div className="flex items-center gap-3 text-sm text-secondary mt-1">
+                                            <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
                                                 {appt.phone}
                                                 <CopyPhoneButton phone={appt.phone} size={14} />
                                             </div>
@@ -392,11 +421,11 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
 
                                     <div className="grid grid-cols-2 gap-2 text-sm">
                                         <div>
-                                            <span className="text-secondary block text-xs">Data</span>
+                                            <span className="text-muted-foreground block text-xs">Data</span>
                                             <AppointmentDate date={appt.date} time={appt.time} inline />
                                         </div>
                                         <div className="min-w-0">
-                                            <span className="text-secondary block text-xs">Tipo</span>
+                                            <span className="text-muted-foreground block text-xs">Tipo</span>
                                             <span className="text-foreground block truncate">{appt.type}</span>
                                         </div>
                                     </div>

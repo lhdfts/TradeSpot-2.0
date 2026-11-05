@@ -18,6 +18,7 @@ import unnichatRoutes from './routes/unnichatRoutes.js';
 import executionLogRoutes from './routes/executionLogRoutes.js';
 import integrationRoutes, { priorAppointmentRouter } from './routes/integrationRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
+import professionRoutes from './routes/professionRoutes.js';
 
 // Middleware
 import { verifyFirebaseToken, requireRole, AuthenticatedRequest } from './middleware/firebaseAuth.js';
@@ -37,6 +38,15 @@ app.disable('x-powered-by');
 // Force port 3000 to match Vite proxy configuration and avoid .env conflicts
 const PORT = 3000;
 
+// Escopo (time/conta) da Vercel nas URLs de preview, opcional (CORS_VERCEL_SCOPE, ex.:
+// "meu-time-projects"): libera tradespot-ts-git-<branch>-<escopo>.vercel.app e
+// tradespot-ts-<hash>-<escopo>.vercel.app. Sem a variável, só a própria URL do deploy
+// (VERCEL_URL / VERCEL_BRANCH_URL) é aceita além da lista fixa.
+const VERCEL_PREVIEW_SCOPE = (process.env.CORS_VERCEL_SCOPE || 'lhdfs-projects').replace(/[^a-zA-Z0-9-]/g, '');
+const vercelPreviewOriginRegex = VERCEL_PREVIEW_SCOPE
+    ? new RegExp(`^https:\\/\\/tradespot(-ts)?-(git-[a-z0-9-]+|[a-z0-9]+)-${VERCEL_PREVIEW_SCOPE}\\.vercel\\.app$`)
+    : /^$/;
+
 app.use(cors({
     origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps, curl requests)
@@ -53,8 +63,18 @@ app.use(cors({
             return callback(null, true);
         }
         
-        // Allow Vercel preview deployments for this specific project
-        if (/^https:\/\/tradespot[a-zA-Z0-9-]*\.vercel\.app$/.test(origin)) {
+        // A própria URL deste deploy (Vercel expõe VERCEL_URL / VERCEL_BRANCH_URL):
+        // mantém as previews funcionando mesmo sem o escopo configurado abaixo.
+        const ownDeploymentOrigins = [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]
+            .filter((h): h is string => !!h)
+            .map(h => `https://${h}`);
+        if (ownDeploymentOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        // Previews do projeto, só do escopo (time) da Vercel do projeto. Antes valia
+        // qualquer "tradespot*.vercel.app", ou seja, projetos de qualquer conta.
+        if (vercelPreviewOriginRegex.test(origin)) {
             return callback(null, true);
         }
         
@@ -138,6 +158,7 @@ app.use('/api/pipedrive', apiRateLimiter, verifyFirebaseToken, requireRole('Admi
 app.use('/api/unnichat-connections', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), unnichatRoutes);
 app.use('/api/execution-logs', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder'), executionLogRoutes);
 app.use('/api/settings', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), settingsRoutes);
+app.use('/api/professions', apiRateLimiter, verifyFirebaseToken, requireRole('Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade', 'Colaborador'), professionRoutes);
 // Integrações máquina-a-máquina (n8n): autenticadas por token + id de workflow, não por Firebase.
 // Montada antes do bloco abaixo para ser validada contra o SEU workflow, não o do Partners.
 app.use('/api/integrations/prior-appointment', apiRateLimiter, priorAppointmentAuth, priorAppointmentRouter);

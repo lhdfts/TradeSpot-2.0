@@ -25,6 +25,8 @@ export interface ApiService {
         create: (data: Omit<Attendant, 'id'>) => Promise<Attendant>;
         update: (id: string, data: Partial<Attendant>) => Promise<Attendant>;
         delete: (id: string) => Promise<void>;
+        pendingCount: (id: string) => Promise<number>;
+        archive: (id: string) => Promise<void>;
     };
     events: {
         list: () => Promise<Event[]>;
@@ -38,6 +40,9 @@ export interface ApiService {
         create: (data: Omit<UnnichatConnection, 'id' | 'created_at'>) => Promise<UnnichatConnection>;
         update: (id: string | number, data: Partial<UnnichatConnection>) => Promise<UnnichatConnection>;
         delete: (id: string | number) => Promise<void>;
+    };
+    professions: {
+        list: () => Promise<string[]>;
     };
     clients: {
         getByEmail: (email: string) => Promise<any | null>;

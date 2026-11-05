@@ -1,4 +1,8 @@
 import type { Attendant, Appointment } from '../types';
+import { isCustomerSuccess } from '../constants/sectors';
+
+// Limite de agendamentos simultâneos do Customer Success (igual ao do servidor).
+const CUSTOMER_SUCCESS_CONCURRENT_LIMIT = 4;
 
 // Map JS day index (0-6) to our type's schedule keys
 const DAY_MAP: Record<number, string> = {
@@ -23,6 +27,13 @@ const timeToMinutes = (time: string): number => {
     const m = parseInt(match[2], 10);
     return h * 60 + m;
 };
+
+/**
+ * Pausa só vale com início e fim. Uma linha vazia ({ start: '', end: '' }) virava
+ * 00:00–24:00 e bloqueava o dia inteiro (mesma regra em server/src/utils/distribution.ts).
+ */
+const isCompletePause = (pause?: { start?: string; end?: string } | null): boolean =>
+    !!pause?.start && !!pause?.end;
 
 export const getDuration = (_type?: string, durationMinutes: number = 60): number => {
     return durationMinutes;
@@ -103,6 +114,7 @@ export const isAttendantWithinSchedule = (
     // Check pauses
     if (attendant.pauses && attendant.pauses[dayKey] && attendant.pauses[dayKey].length > 0) {
         for (const pause of attendant.pauses[dayKey]) {
+            if (!isCompletePause(pause)) continue;
             const pauseStart = timeToMinutes(pause.start);
             let pauseEnd = timeToMinutes(pause.end);
 
@@ -179,10 +191,11 @@ export const hasSectorTimeLimit = (
     attendants: Attendant[],
     excludeAppointmentId?: string
 ): boolean => {
-    if (sector !== 'Aldeia' && sector !== 'Tribo') return false;
+    // Só o Customer Success tem limite, contado sobre o time todo.
+    if (!isCustomerSuccess(sector)) return false;
     if (appointmentType === 'Agendamento Pessoal') return false;
 
-    const sectorAttendants = new Set(attendants.filter(a => a.sector === sector).map(a => a.id));
+    const sectorAttendants = new Set(attendants.filter(a => isCustomerSuccess(a.sector)).map(a => a.id));
     
     const newStart = timeToMinutes(timeStr);
     const newEnd = newStart + getDuration(appointmentType);
@@ -211,7 +224,7 @@ export const hasSectorTimeLimit = (
         }
     }
 
-    return concurrentCount >= 2;
+    return concurrentCount >= CUSTOMER_SUCCESS_CONCURRENT_LIMIT;
 };
 
 export interface CheckLogItem {
@@ -239,7 +252,7 @@ export const findAvailableCloserWithLogs = (
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento'].includes(appointmentType);
     const eligibleAttendants = (
         appointmentType === 'Ligação Equipe Aldeia'
-            ? attendants.filter(a => a.sector === 'Aldeia')
+            ? attendants.filter(a => isCustomerSuccess(a.sector))
             : (isCloserType ? attendants.filter(a => ['Closer', 'Co-líder'].includes(a.sector) || a.role === 'Co-líder') : attendants)
     ).filter(a => a.role !== 'Líder');
 
@@ -267,6 +280,7 @@ export const findAvailableCloserWithLogs = (
                 let isPause = false;
                 if (a.pauses && a.pauses[dayKey]) {
                     for (const pause of a.pauses[dayKey]) {
+                        if (!isCompletePause(pause)) continue;
                         const pauseStart = timeToMinutes(pause.start);
                         let pauseEnd = timeToMinutes(pause.end);
                         if (pauseEnd <= pauseStart && pauseEnd !== 0) pauseEnd += 1440;

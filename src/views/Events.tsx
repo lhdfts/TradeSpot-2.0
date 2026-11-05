@@ -8,9 +8,12 @@ import type { Event } from '../types';
 import { Button } from '../components/ui/button';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingInput } from '../components/FloatingInput';
-import { Plus, Edit } from 'lucide-react';
+import { Plus, Edit, CalendarRange, SearchX } from 'lucide-react';
 import { EventModal } from '../components/EventModal';
 import { ExportIcon } from '../components/ExportIcon';
+import { notify } from '../components/ui/notify';
+import { EmptyState } from '../components/ui/empty-state';
+import { cn } from '../lib/utils';
 
 import { useAuth } from '../context/AuthContext';
 import { canViewAllSectors, isMedinaUser, getAllowedSectors, escapeCsvValue, isDualLeader } from '../utils/security';
@@ -44,9 +47,7 @@ export const Events: React.FC = () => {
 
             const filteredData = isSuperUser || isMedinaUser(user)
                 ? data.filter(event => allowedSectors.includes(event.sector || ''))
-                : user?.sector === 'Suporte'
-                    ? data.filter(event => ['Tribo', 'Aldeia', 'SDR', 'Closer'].includes(event.sector || ''))
-                    : data.filter(event => event.sector === user?.sector);
+                : data.filter(event => event.sector === user?.sector);
 
             setEvents(filteredData);
 
@@ -84,7 +85,7 @@ export const Events: React.FC = () => {
             const eventAppointments = allAppointments.filter(app => app.eventId === event.id);
 
             if (eventAppointments.length === 0) {
-                alert('Não há agendamentos para exportar neste evento.');
+                notify.error(`${event.event_name} ainda não tem agendamentos.`, 'Não há nada para exportar. Compartilhe o link de auto-agendamento para receber os primeiros.');
                 return;
             }
 
@@ -111,7 +112,7 @@ export const Events: React.FC = () => {
             document.body.removeChild(link);
         } catch (error) {
             console.error('Failed to export', error);
-            alert('Erro ao exportar agendamentos');
+            notify.error('Não foi possível exportar os agendamentos.', 'Verifique a conexão e tente de novo.');
         } finally {
             setLoading(false);
         }
@@ -154,8 +155,8 @@ export const Events: React.FC = () => {
 
             {portalContainer && canCreateEvents && createPortal(
                 // No celular só o ícone, para caber ao lado do título
-                <Button onClick={handleAddNew} aria-label="Novo Evento" title="Novo Evento" className="px-2.5 sm:px-4">
-                    <Plus size={18} className="sm:mr-2" /><span className="hidden sm:inline">Novo Evento</span>
+                <Button onClick={handleAddNew} aria-label="Novo evento" title="Novo evento" className="px-2.5 sm:px-4">
+                    <Plus size={18} className="sm:mr-2" /><span className="hidden sm:inline">Novo evento</span>
                 </Button>,
                 portalContainer
             )}
@@ -164,14 +165,18 @@ export const Events: React.FC = () => {
                 {(user?.sector === 'Closer' || canViewAllSectors(user) || isMedinaUser(user) || user?.role === 'Admin' || user?.role === 'Dev' || isDualLeader(user)) && (
                     <div className="flex gap-2 p-1 bg-muted/30 rounded-lg w-full sm:w-fit">
                         <button
+                            type="button"
+                            aria-pressed={activeTab === 'meus'}
                             onClick={() => setActiveTab('meus')}
-                            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'meus' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-[background-color,color,box-shadow] duration-150 ${activeTab === 'meus' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                             Meus Eventos
                         </button>
                         <button
+                            type="button"
+                            aria-pressed={activeTab === 'feeds'}
                             onClick={() => setActiveTab('feeds')}
-                            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'feeds' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-[background-color,color,box-shadow] duration-150 ${activeTab === 'feeds' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                             Eventos Recebidos ({feedEvents.filter(e => e.status === true).length})
                         </button>
@@ -215,7 +220,30 @@ export const Events: React.FC = () => {
                 </div>
             </div>
 
-            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
+            {displayEvents.length === 0 ? (
+                searchTerm.trim() || sectorFilter !== 'all' || (activeTab === 'meus' && statusFilter !== 'all') ? (
+                    <EmptyState
+                        icons={[SearchX]}
+                        title="Nenhum evento com esses filtros"
+                        description={searchTerm.trim() ? `Nada encontrado para "${searchTerm}". Confira a grafia.` : 'Tente outro setor ou status.'}
+                        action={{ label: 'Limpar filtros', onClick: () => { setSearchTerm(''); setSectorFilter('all'); setStatusFilter('all'); } }}
+                    />
+                ) : activeTab === 'feeds' ? (
+                    <EmptyState
+                        icons={[CalendarRange]}
+                        title="Nenhum evento recebido"
+                        description="Eventos ativos que outros setores direcionam para o Closer aparecem aqui."
+                    />
+                ) : (
+                    <EmptyState
+                        icons={[CalendarRange]}
+                        title="Nenhum evento ainda"
+                        description="Eventos agrupam agendamentos e geram um link de auto-agendamento para os alunos."
+                        action={canCreateEvents ? { label: 'Novo evento', icon: Plus, onClick: handleAddNew } : undefined}
+                    />
+                )
+            ) : (
+            <div style={staggerStyle(0, 80)} className="animate-fade-up bg-surface rounded-lg border border-border overflow-hidden shadow-sm">
                 {/* Rolagem horizontal em telas pequenas para não cortar colunas */}
                 <div className="overflow-x-auto">
                 <table className="w-full text-left min-w-[760px]">
@@ -233,33 +261,41 @@ export const Events: React.FC = () => {
                         {displayEvents.map((event, i) => (
                             <tr style={staggerStyle(i, 30)} key={event.id} className="animate-fade-up hover:bg-background/50 transition-colors">
                                 <td className="px-6 py-4 text-foreground font-medium">
-                                    <span
+                                    <button
+                                        type="button"
                                         onClick={() => navigateToAppointments(event.event_name)}
-                                        className="cursor-pointer hover:text-primary transition-colors"
+                                        className="text-left hover:text-primary hover:underline underline-offset-4 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
                                         title="Ver agendamentos"
+                                        aria-label={`Ver agendamentos de ${event.event_name}`}
                                     >
                                         {event.event_name}
-                                    </span>
+                                    </button>
                                 </td>
                                 <td className="px-6 py-4 text-foreground">{event.sector || '-'}</td>
                                 <td className="px-6 py-4 text-foreground whitespace-nowrap">{event.created_at ? new Date(event.created_at).toLocaleDateString('pt-BR') : '-'}</td>
                                 <td className="px-6 py-4">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${event.status ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                                        'bg-gray-500/10 text-gray-400 border-gray-500/20'
-                                        }`}>
+                                    <span className={cn('px-2 py-1 rounded-full text-xs font-semibold border', event.status
+                                        ? 'bg-status-realizado/10 text-status-realizado border-status-realizado/25'
+                                        : 'bg-muted text-muted-foreground border-border')}>
                                         {event.status ? 'Ativo' : 'Arquivado'}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                     {event.self_scheduling_link && (
                                         <button
-                                            onClick={() => {
+                                            type="button"
+                                            onClick={async () => {
                                                 const url = `${window.location.origin}/agendar/${event.self_scheduling_link}`;
-                                                navigator.clipboard.writeText(url);
-                                                alert('Link copiado!');
+                                                try {
+                                                    await navigator.clipboard.writeText(url);
+                                                    notify.success('Link copiado', `Link de auto-agendamento de ${event.event_name}.`);
+                                                } catch {
+                                                    notify.error('Não foi possível copiar o link.', 'Permita o acesso à área de transferência no navegador e tente de novo.');
+                                                }
                                             }}
-                                            className="inline-flex p-1.5 text-foreground hover:text-primary transition-colors"
-                                            title="Copiar Link de Auto-Agendamento"
+                                            className="inline-flex p-1.5 rounded-md text-foreground hover:text-primary transition-colors"
+                                            title="Copiar link de auto-agendamento"
+                                            aria-label={`Copiar link de auto-agendamento de ${event.event_name}`}
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
@@ -272,18 +308,22 @@ export const Events: React.FC = () => {
                                     <td className="px-6 py-4 text-center whitespace-nowrap space-x-1">
                                         {canEditEvents && (
                                             <button
+                                                type="button"
                                                 onClick={() => handleEdit(event)}
-                                                className="inline-flex p-1.5 text-foreground hover:text-primary transition-colors"
-                                                title="Editar"
+                                                className="inline-flex p-1.5 rounded-md text-foreground hover:text-primary transition-colors"
+                                                title="Editar evento"
+                                                aria-label={`Editar evento ${event.event_name}`}
                                             >
                                                 <Edit size={18} />
                                             </button>
                                         )}
                                         {canExportEvents && (
                                             <button
+                                                type="button"
                                                 onClick={() => handleExport(event)}
-                                                className="inline-flex p-1.5 text-foreground hover:text-primary transition-colors"
-                                                title="Exportar Agendamentos"
+                                                className="inline-flex p-1.5 rounded-md text-foreground hover:text-primary transition-colors"
+                                                title="Exportar agendamentos"
+                                                aria-label={`Exportar agendamentos de ${event.event_name}`}
                                             >
                                                 <ExportIcon size={18} />
                                             </button>
@@ -296,6 +336,7 @@ export const Events: React.FC = () => {
                 </table>
                 </div>
             </div>
+            )}
 
             <EventModal
                 isOpen={isModalOpen}

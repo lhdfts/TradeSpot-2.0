@@ -2,11 +2,13 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook, getGlobalAppointmentWebhook, getSyncEventsWebhook } from '../config/webhooks.js';
 import { createAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, hasSectorTimeLimit, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
+import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, conflictPoolFor, hasSectorTimeLimit, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
-import { PRE_VENDAS_ALIASES, sectorAliases } from '../constants/sectors.js';
+import { rescheduleLastNoShow } from '../utils/noShowReschedule.js';
+import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, SECTOR_SEM_SETOR, hasGlobalView, isCustomerSuccess, isStatusLockedForPreVendas, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
+import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
 import { isAldeiaToCloser } from '../constants/events.js';
@@ -24,6 +26,48 @@ const ALL_TIME_SLOTS: string[] = (() => {
 })();
 
 const router = Router();
+
+/**
+ * Mesma regra de visibilidade do GET / (lista), aplicada a um agendamento só.
+ * Usada nas rotas que alteram um agendamento pelo id, para ninguém editar o que
+ * não enxerga na lista.
+ */
+const canAccessAppointment = async (
+    user: AuthenticatedRequest['user'],
+    appt: { attendant_id?: string | null; created_by?: string | null; owner?: string | null }
+): Promise<boolean> => {
+    if (!user) return false;
+    if (hasGlobalView(user)) return true;
+
+    if (user.sector === 'Closer' && user.role === 'Colaborador') {
+        return appt.attendant_id === user.id || appt.owner === user.id ||
+            (!appt.owner && appt.created_by === user.id);
+    }
+
+    const aliases = sectorAliases(user.sector);
+    if (aliases.length === 0) {
+        // Fallback de segurança (mesmo da lista)
+        return appt.attendant_id === user.id || appt.created_by === user.id;
+    }
+
+    const involvedIds = [appt.attendant_id, appt.created_by, appt.owner].filter((v): v is string => !!v);
+    if (involvedIds.length === 0) return false;
+    const { data: involvedUsers, error } = await supabase.from('user').select('id, sector').in('id', involvedIds);
+    if (error) throw new Error(error.message);
+    return (involvedUsers || []).some(u => aliases.includes(u.sector));
+};
+
+// Quem gerencia cadastros (eventos, conexões Unnichat) de todos os setores.
+const canManageAllSectors = (user: AuthenticatedRequest['user']): boolean =>
+    !!user && (['Admin', 'Dev'].includes(user.role) || user.sector === 'TEI');
+
+// O registro (ou o setor de destino) pertence ao setor do usuário?
+const isInOwnSector = (user: AuthenticatedRequest['user'], sector?: string | null): boolean =>
+    !!user && !!sector && sectorAliases(user.sector).includes(sector);
+
+// Quem pode ver o link (webhook) do Unnichat.
+const canSeeUnnichatUrl = (user: AuthenticatedRequest['user']): boolean =>
+    canManageAllSectors(user) || user?.role === 'Líder';
 
 // Limite por requisição do Supabase (db-max-rows) e teto da listagem com período.
 const PAGE_SIZE = 1000;
@@ -45,8 +89,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
         // Escopo de visibilidade (filtro `or` do PostgREST); null = vê tudo.
         let scopeFilter: string | null = null;
-        if (userSector === 'TEI' || userSector === 'Suporte') {
-            // Regra 1: TEI e Suporte podem ver tudo de todos os setores
+        if (hasGlobalView(req.user)) {
+            // Regra 1: o setor TEI e os cargos globais (Admin, Dev, Qualidade, Suporte)
+            // veem tudo de todos os setores. Antes valia pelo SETOR Suporte, que foi
+            // incorporado ao Customer Success.
             scopeFilter = null;
         } else if (userSector === 'Closer' && userRole === 'Colaborador') {
             // Regra 2: Colaborador do setor Closer só pode ver os próprios agendamentos.
@@ -157,6 +203,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
                     amount: app.financial_amount != null ? String(app.financial_amount) : undefined
                 }
             },
+            profession: app.profession,
+            pain: app.pain,
+            interestProduct: app.interest_product,
+            acquiredProduct: app.acquired_product,
             oldStatus: app.oldStatus,
             updatedBy: app.updatedBy,
             updater: app.updater
@@ -192,9 +242,11 @@ const loadDistributionContext = async (
         eventSector = ev?.sector || null;
     }
 
-    const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+    // Eventos do Customer Success (antigos Aldeia e Tribo): limite de simultâneos e sem checagem de escala.
+    const isCsEvent = isCustomerSuccess(eventSector);
     const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Fechamento', 'Direcionar Closer'].includes(type);
-    const ignoreSchedule = isAldeiaOrTribo && !isCloserAppt;
+    // Agendamento Pessoal não depende da escala (pode ser marcado fora do expediente), em qualquer setor.
+    const ignoreSchedule = (isCsEvent && !isCloserAppt) || type === 'Agendamento Pessoal';
 
     const [{ data: existingAppts, error: apptError }, { data: allAttendants, error: attError }] = await Promise.all([
         supabase.from('appointments').select('id, attendant_id, date, time, end_time, type, status').eq('date', date).neq('status', 'Cancelado'),
@@ -220,7 +272,7 @@ const loadDistributionContext = async (
 
         const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Fechamento', 'Direcionar Closer'].includes(type);
         if (type === 'Ligação Equipe Aldeia') {
-            candidates = candidates.filter(a => a.sector === 'Aldeia');
+            candidates = candidates.filter(a => isCustomerSuccess(a.sector));
         } else if (isCloserType) {
             // Só o SETOR conta. Aceitar também o cargo 'Co-líder' colocava no pool
             // Co-líderes de Aldeia, Tribo, Cobrança e Financeiro — que o guard de
@@ -233,7 +285,7 @@ const loadDistributionContext = async (
     return {
         durationMinutes,
         eventSector,
-        isAldeiaOrTribo,
+        isCsEvent,
         ignoreSchedule,
         existingAppts: existingAppts || [],
         allAttendants,
@@ -314,10 +366,10 @@ router.get('/available-times', async (req: AuthenticatedRequest, res: Response) 
         if (!ctx) {
             return res.status(500).json({ error: 'Erro ao buscar horários disponíveis.' });
         }
-        const { durationMinutes, eventSector, isAldeiaOrTribo, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
+        const { durationMinutes, eventSector, isCsEvent, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
 
         const availableTimes = ALL_TIME_SLOTS.filter(time => {
-            if (isAldeiaOrTribo && type !== 'Agendamento Pessoal' &&
+            if (isCsEvent && type !== 'Agendamento Pessoal' &&
                 hasSectorTimeLimit(eventSector as string, date, time, type, existingAppts || [], allAttendants, undefined, durationMinutes)) {
                 return false;
             }
@@ -356,10 +408,10 @@ router.get('/resolve-attendant', async (req: AuthenticatedRequest, res: Response
         if (!ctx) {
             return res.status(500).json({ error: 'Erro ao resolver atendente.' });
         }
-        const { durationMinutes, eventSector, isAldeiaOrTribo, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
+        const { durationMinutes, eventSector, isCsEvent, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
 
-        // Limite de agendamentos simultâneos do setor (Aldeia/Tribo)
-        if (isAldeiaOrTribo && type !== 'Agendamento Pessoal' &&
+        // Limite de agendamentos simultâneos do Customer Success
+        if (isCsEvent && type !== 'Agendamento Pessoal' &&
             hasSectorTimeLimit(eventSector as string, date, time, type, existingAppts, allAttendants, undefined, durationMinutes)) {
             return res.json({ attendantId: null, motivo: 'Limite de agendamentos do setor atingido para este horário.' });
         }
@@ -414,8 +466,8 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
 
         // Management roles can see all attendants with full details
         const isManagement = ['Admin', 'Dev', 'Líder', 'Co-líder', 'Qualidade'].includes(userRole || '');
-        // TEI and Suporte sectors have cross-sector visibility
-        const hasCrossSectorAccess = userSector === 'TEI' || userSector === 'Suporte';
+        // Setor TEI e cargos globais enxergam todos os setores
+        const hasCrossSectorAccess = hasGlobalView(req.user);
 
         let query = supabase.from('user').select('id, name, email, role, sector, schedule, pauses, denied_events');
 
@@ -436,7 +488,8 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
             const baseData: any = {
                 id: user.id,
                 name: user.name,
-                email: user.email,
+                // E-mail só para a gestão (PII)
+                email: isManagement ? user.email : undefined,
                 role: user.role,
                 sector: user.sector,
                 schedule: user.schedule,
@@ -455,10 +508,71 @@ router.get('/attendants', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 
+// Permissões de cadastro de atendentes (PUT/POST/DELETE).
+// Admin/Dev: qualquer atendente; só o Dev atribui o cargo Dev.
+// Líder: só atendentes do próprio setor (setor TEI: todos), nunca Admin/Dev, e só
+// atribui os cargos que a tela oferece a ele. Ninguém altera o próprio cargo.
+const PRIVILEGED_ROLES = ['Admin', 'Dev'];
+const LEADER_ASSIGNABLE_ROLES = ['Colaborador', 'Qualidade', 'Co-líder', 'Líder'];
+
+const checkAttendantChange = (
+    req: AuthenticatedRequest,
+    target: { id?: string; role?: string | null; sector?: string | null } | null,
+    newRole?: unknown,
+    newSector?: unknown
+): string | null => {
+    const requester = req.user!;
+    const isGlobal = PRIVILEGED_ROLES.includes(requester.role);
+    const crossSector = isGlobal || requester.sector === 'TEI';
+
+    // Só valida o cargo quando ele muda (o formulário reenvia o cargo atual ao editar).
+    const roleChanging = newRole !== undefined && (!target || newRole !== target.role);
+    if (target && target.id === requester.id && roleChanging) {
+        return 'Você não pode alterar o próprio cargo.';
+    }
+    if (roleChanging) {
+        if (typeof newRole !== 'string') return 'Cargo inválido.';
+        if (newRole === 'Dev' && requester.role !== 'Dev') {
+            return 'Acesso negado: apenas Dev pode atribuir o cargo Dev.';
+        }
+        if (!isGlobal && !LEADER_ASSIGNABLE_ROLES.includes(newRole)) {
+            return 'Acesso negado: você não pode atribuir este cargo.';
+        }
+    }
+    if (!isGlobal && target && PRIVILEGED_ROLES.includes(target.role || '')) {
+        return 'Acesso negado: você não pode alterar usuários Admin ou Dev.';
+    }
+    if (!crossSector) {
+        // "Sem setor": quem acabou de entrar; o Líder pode trazê-lo para o próprio setor.
+        if (target && !isInOwnSector(requester, target.sector) && target.sector !== SECTOR_SEM_SETOR) {
+            return 'Você só pode gerenciar colaboradores do seu setor.';
+        }
+        if (newSector !== undefined && (typeof newSector !== 'string' || !isInOwnSector(requester, newSector))) {
+            return 'Você só pode atribuir o seu próprio setor.';
+        }
+    }
+    return null;
+};
+
+const loadAttendantForChange = async (id: string) => {
+    const { data, error } = await supabase
+        .from('user')
+        .select('id, role, sector')
+        .eq('id', id)
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data;
+};
+
 // PUT /api/attendants/:id - Update attendant
 router.put('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+        const target = await loadAttendantForChange(id);
+        if (!target) return res.status(404).json({ error: 'Atendente não encontrado.' });
+        const denied = checkAttendantChange(req, target, req.body.role, req.body.sector);
+        if (denied) return res.status(403).json({ error: denied });
+
         const updatePayload: any = {};
         if (req.body.name !== undefined) updatePayload.name = req.body.name;
         if (req.body.role !== undefined) updatePayload.role = req.body.role;
@@ -492,6 +606,23 @@ router.put('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req:
     }
 });
 
+// Erros do Postgres no cadastro de atendente traduzidos para quem está na tela.
+// Sem isso tudo virava "Erro Interno" e o motivo só aparecia no log.
+const describeAttendantInsertError = (error: { code?: string; message?: string; details?: string }) => {
+    const column = /column "([^"]+)"/.exec(error.message || '')?.[1];
+    switch (error.code) {
+        case '23505':
+            return { status: 409, message: 'Já existe um atendente cadastrado com este email.' };
+        case '23502':
+            return { status: 400, message: `O banco exige o campo "${column || 'desconhecido'}", que não foi enviado no cadastro.` };
+        case '23514':
+        case '22P02':
+            return { status: 400, message: `O banco recusou o valor de um campo${column ? ` ("${column}")` : ''}: ${error.message}` };
+        default:
+            return null;
+    }
+};
+
 // POST /api/attendants - Create new attendant
 router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -500,6 +631,13 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
         if (!name || !email) {
             return res.status(400).json({ error: 'Nome e email são obrigatórios.' });
         }
+
+        // Sem setor informado, o Líder cadastra no próprio setor (Admin/Dev/TEI: SDR, como antes).
+        const crossSector = PRIVILEGED_ROLES.includes(req.user!.role) || req.user!.sector === 'TEI';
+        const finalRole = role || 'Colaborador';
+        const finalSector = sector || (crossSector ? 'SDR' : req.user!.sector);
+        const denied = checkAttendantChange(req, null, finalRole, finalSector);
+        if (denied) return res.status(403).json({ error: denied });
 
         const { data: existingUser, error: checkError } = await supabase
             .from('user')
@@ -519,8 +657,8 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
         const insertPayload: any = {
             name,
             email,
-            role: role || 'Colaborador',
-            sector: sector || 'SDR',
+            role: finalRole,
+            sector: finalSector,
             status: true
         };
 
@@ -534,7 +672,11 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
             .select()
             .single();
 
-        if (error) throw new Error(error.message);
+        if (error) {
+            console.error("Create Attendant Error:", error);
+            const known = describeAttendantInsertError(error);
+            return res.status(known ? known.status : 500).json({ error: known ? known.message : 'Erro Interno' });
+        }
 
         res.status(201).json({
             id: userData.id,
@@ -548,7 +690,7 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
         });
     } catch (err: any) {
         console.error("Create Attendant Error:", err);
-        res.status(500).json({ error: err.message || 'Erro Interno' });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -556,6 +698,17 @@ router.post('/attendants', requireRole('Admin', 'Dev', 'Líder'), async (req: Au
 router.delete('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+        const target = await loadAttendantForChange(id);
+        if (!target) return res.status(404).json({ error: 'Atendente não encontrado.' });
+        if (target.id === req.user!.id) {
+            return res.status(400).json({ error: 'Você não pode excluir o próprio usuário.' });
+        }
+        const denied = checkAttendantChange(req, target);
+        if (denied) return res.status(403).json({ error: denied });
+        const crossSector = PRIVILEGED_ROLES.includes(req.user!.role) || req.user!.sector === 'TEI';
+        if (!crossSector && !isInOwnSector(req.user, target.sector)) {
+            return res.status(403).json({ error: 'Você só pode gerenciar colaboradores do seu setor.' });
+        }
 
         const { error } = await supabase
             .from('user')
@@ -567,7 +720,104 @@ router.delete('/attendants/:id', requireRole('Admin', 'Dev', 'Líder'), async (r
         res.status(204).send();
     } catch (err: any) {
         console.error("Delete Attendant Error:", err);
-        res.status(500).json({ error: err.message || 'Erro Interno' });
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// Arquivamento de atendentes.
+// Admin/Dev arquivam qualquer um; o Líder só arquiva colaboradores do próprio setor.
+// Ninguém arquiva a si mesmo, e o Líder não arquiva Admin/Dev.
+type ArchivableAttendant =
+    | { target: { id: string; name: string; email: string; role: string; sector: string } }
+    | { status: number; error: string };
+
+const loadArchivableAttendant = async (req: AuthenticatedRequest, id: string): Promise<ArchivableAttendant> => {
+    const { data: target, error } = await supabase
+        .from('user')
+        .select('id, name, email, role, sector')
+        .eq('id', id)
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!target) return { status: 404, error: 'Atendente não encontrado.' };
+
+    const requester = req.user!;
+    if (target.id === requester.id) {
+        return { status: 400, error: 'Você não pode arquivar o próprio usuário.' };
+    }
+    if (target.sector === SECTOR_DESATIVADO) {
+        return { status: 400, error: 'Este colaborador já está arquivado.' };
+    }
+    const isGlobal = ['Admin', 'Dev'].includes(requester.role);
+    if (!isGlobal) {
+        const sameSector = sectorAliases(requester.sector).includes(target.sector);
+        if (!sameSector || ['Admin', 'Dev'].includes(target.role)) {
+            return { status: 403, error: 'Você só pode arquivar colaboradores do seu setor.' };
+        }
+    }
+    return { target };
+};
+
+const countPendingAppointments = async (attendantId: string): Promise<number> => {
+    const { count, error } = await supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .eq('attendant_id', attendantId)
+        .eq('status', 'Pendente');
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+};
+
+// GET /api/appointments/attendants/:id/pending-count - Atendimentos pendentes (pré-checagem do arquivamento)
+router.get('/attendants/:id/pending-count', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const result = await loadArchivableAttendant(req, req.params.id);
+        if ('error' in result) return res.status(result.status).json({ error: result.error });
+
+        res.json({ pendingCount: await countPendingAppointments(result.target.id) });
+    } catch (err: any) {
+        console.error('Pending Count Error:', err);
+        res.status(500).json({ error: 'Erro Interno' });
+    }
+});
+
+// POST /api/appointments/attendants/:id/archive - Arquiva (desativa) o colaborador.
+// Bloqueado enquanto houver atendimentos Pendentes. O setor vira "Desativado", o que o
+// tira da distribuição, e o e-mail ganha o sufixo ".desativado", o que impede o login.
+router.post('/attendants/:id/archive', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const result = await loadArchivableAttendant(req, req.params.id);
+        if ('error' in result) return res.status(result.status).json({ error: result.error });
+        const { target } = result;
+
+        const pendingCount = await countPendingAppointments(target.id);
+        if (pendingCount > 0) {
+            return res.status(409).json({
+                error: `O colaborador ainda possui ${pendingCount} atendimento(s) pendente(s). Resolva-os antes de arquivar.`,
+                pendingCount
+            });
+        }
+
+        const { error: updateError } = await supabase
+            .from('user')
+            .update({ sector: SECTOR_DESATIVADO, email: `${target.email}${ARCHIVED_EMAIL_SUFFIX}` })
+            .eq('id', target.id);
+        if (updateError) throw new Error(updateError.message);
+
+        // Derruba as sessões abertas. Sem conta no Firebase (ou com falha aqui) o
+        // arquivamento continua válido: o login já é barrado pelo e-mail alterado.
+        try {
+            const auth = getFirebaseAuth();
+            const firebaseUser = await auth.getUserByEmail(target.email);
+            await auth.revokeRefreshTokens(firebaseUser.uid);
+        } catch (revokeErr: any) {
+            console.warn('[ARCHIVE] Não foi possível revogar sessões do Firebase:', revokeErr?.message);
+        }
+
+        logSuccessfulAction(req, 'ARCHIVE', 'attendant', target.id);
+        res.json({ id: target.id, sector: SECTOR_DESATIVADO });
+    } catch (err: any) {
+        console.error('Archive Attendant Error:', err);
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -588,7 +838,8 @@ router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
             sector: event.sector,
             self_scheduling_link: event.self_scheduling_link,
             duration_minutes: event.duration_minutes,
-            unnichat_url: event.unnichat_url
+            // Link do webhook do Unnichat só para quem gerencia eventos/conexões
+            unnichat_url: canSeeUnnichatUrl(req.user) ? event.unnichat_url : undefined
         }));
 
         res.json(mappedData);
@@ -601,6 +852,11 @@ router.get('/events', async (req: AuthenticatedRequest, res: Response) => {
 // POST /api/events - Create event
 router.post('/events', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
+        // Líder só cria eventos do próprio setor
+        if (!canManageAllSectors(req.user) && !isInOwnSector(req.user, req.body.sector)) {
+            return res.status(403).json({ error: 'Você só pode gerenciar eventos do seu setor.' });
+        }
+
         const { data: eventData, error } = await supabase
             .from('events')
             .insert({
@@ -648,6 +904,17 @@ router.post('/events', requireRole('Admin', 'Dev', 'Líder'), async (req: Authen
 router.put('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+
+        // Líder só altera eventos do próprio setor e não os move para outro setor
+        if (!canManageAllSectors(req.user)) {
+            const { data: current, error: curErr } = await supabase.from('events').select('sector').eq('id', id).maybeSingle();
+            if (curErr) throw new Error(curErr.message);
+            if (!current) return res.status(404).json({ error: 'Evento não encontrado.' });
+            if (!isInOwnSector(req.user, current.sector) || !isInOwnSector(req.user, req.body.sector)) {
+                return res.status(403).json({ error: 'Você só pode gerenciar eventos do seu setor.' });
+            }
+        }
+
         const { data: eventData, error } = await supabase
             .from('events')
             .update({
@@ -696,6 +963,16 @@ router.put('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: Aut
 router.delete('/events/:id', requireRole('Admin', 'Dev', 'Líder'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+
+        if (!canManageAllSectors(req.user)) {
+            const { data: current, error: curErr } = await supabase.from('events').select('sector').eq('id', id).maybeSingle();
+            if (curErr) throw new Error(curErr.message);
+            if (!current) return res.status(404).json({ error: 'Evento não encontrado.' });
+            if (!isInOwnSector(req.user, current.sector)) {
+                return res.status(403).json({ error: 'Você só pode gerenciar eventos do seu setor.' });
+            }
+        }
+
         const { error } = await supabase.from('events').delete().eq('id', id);
 
         if (error) throw new Error(error.message);
@@ -743,7 +1020,9 @@ router.get('/unnichat-connections', async (req: AuthenticatedRequest, res: Respo
     try {
         const { data, error } = await supabase.from('unnichat_connections').select('*').order('name', { ascending: true });
         if (error) throw new Error(error.message);
-        res.json(data || []);
+        // O link do webhook só vai para quem gerencia as conexões
+        const showUrl = canSeeUnnichatUrl(req.user);
+        res.json((data || []).map((c: any) => showUrl ? c : { ...c, unnichat_url: undefined }));
     } catch (err: any) {
         console.error("List Unnichat Connections Error:", err);
         res.status(500).json({ error: 'Erro Interno' });
@@ -772,7 +1051,7 @@ router.post('/unnichat-connections', requireRole('Admin', 'Dev', 'Líder', 'TEI'
         res.status(201).json(data);
     } catch (err: any) {
         console.error("Create Unnichat Connection Error:", err);
-        res.status(500).json({ error: err.message || 'Erro Interno' });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
@@ -784,8 +1063,18 @@ router.put('/unnichat-connections/:id', requireRole('Admin', 'Dev', 'Líder', 'T
             return res.status(400).json({ error: 'Nome da Conexão e Link do Webhook são obrigatórios' });
         }
 
+        // Líder só altera conexões do próprio setor (e elas continuam no setor dele)
+        if (!canManageAllSectors(req.user)) {
+            const { data: current, error: curErr } = await supabase.from('unnichat_connections').select('sector').eq('id', id).maybeSingle();
+            if (curErr) throw new Error(curErr.message);
+            if (!current) return res.status(404).json({ error: 'Conexão não encontrada.' });
+            if (!isInOwnSector(req.user, current.sector)) {
+                return res.status(403).json({ error: 'Você só pode gerenciar conexões do seu setor.' });
+            }
+        }
+
         let updatePayload: any = { name, unnichat_url };
-        if (req.user?.role === 'Admin' || req.user?.role === 'Dev' || req.user?.sector === 'TEI') {
+        if (canManageAllSectors(req.user)) {
             updatePayload.sector = sector || null;
         } else if (req.user?.role === 'Líder') {
             updatePayload.sector = req.user.sector;
@@ -802,13 +1091,21 @@ router.put('/unnichat-connections/:id', requireRole('Admin', 'Dev', 'Líder', 'T
         res.json(data);
     } catch (err: any) {
         console.error("Update Unnichat Connection Error:", err);
-        res.status(500).json({ error: err.message || 'Erro Interno' });
+        res.status(500).json({ error: 'Erro Interno' });
     }
 });
 
 router.delete('/unnichat-connections/:id', requireRole('Admin', 'Dev', 'Líder', 'TEI'), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+        if (!canManageAllSectors(req.user)) {
+            const { data: current, error: curErr } = await supabase.from('unnichat_connections').select('sector').eq('id', id).maybeSingle();
+            if (curErr) throw new Error(curErr.message);
+            if (!current) return res.status(404).json({ error: 'Conexão não encontrada.' });
+            if (!isInOwnSector(req.user, current.sector)) {
+                return res.status(403).json({ error: 'Você só pode gerenciar conexões do seu setor.' });
+            }
+        }
         const { error } = await supabase.from('unnichat_connections').delete().eq('id', id);
         if (error) throw new Error(error.message);
         res.status(204).send();
@@ -824,7 +1121,7 @@ router.get('/clients/email/:email', async (req: AuthenticatedRequest, res: Respo
         const { email } = req.params;
         const { data, error } = await supabase
             .from('clients')
-            .select('*')
+            .select('id, name, phone, email, interest_level, knowledge_level, financial_currency, financial_amount')
             .eq('email', email)
             .maybeSingle();
 
@@ -843,7 +1140,7 @@ router.get('/clients/phone/:phone', async (req: AuthenticatedRequest, res: Respo
         const { phone } = req.params;
         const { data, error } = await supabase
             .from('clients')
-            .select('*')
+            .select('id, name, phone, email, interest_level, knowledge_level, financial_currency, financial_amount')
             .eq('phone', phone)
             .maybeSingle();
 
@@ -903,7 +1200,30 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
         const additionalInfo = data.additional_info || data.additionalInfo;
 
-        // 1.5 Fetch Event to check sector for Aldeia/Tribo specific rules (Internal Link)
+        // Perfil do lead: obrigatório para quem cria pelo setor Pré-vendas. O Closer
+        // envia esses campos de forma opcional; os demais setores não os enviam.
+        const profession = data.profession || null;
+        const pain = data.pain || null;
+        const interestProduct = data.interestProduct || null;
+        if (requiresLeadProfile(req.user?.sector)) {
+            const missing = [
+                !profession && 'Profissão',
+                !pain && 'Dor',
+                !interestProduct && 'Produto de interesse'
+            ].filter(Boolean);
+            if (missing.length > 0) {
+                return res.status(400).json({ error: `Campos obrigatórios: ${missing.join(', ')}.` });
+            }
+        }
+
+        // Produto Adquirido: obrigatório para quem cria pelo Customer Success. O n8n
+        // usa esse valor (acquired_product) para escolher a conexão do Unnichat.
+        const acquiredProduct = data.acquiredProduct || null;
+        if (isCustomerSuccess(req.user?.sector) && !acquiredProduct) {
+            return res.status(400).json({ error: 'Campo obrigatório: Produto Adquirido.' });
+        }
+
+        // 1.5 Fetch Event to check sector for Customer Success rules (Internal Link)
         let eventSector = '';
         let durationMinutes = 60;
         if (data.eventId) {
@@ -913,7 +1233,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 if (ev.duration_minutes) durationMinutes = ev.duration_minutes;
             }
         }
-        const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+        const isCsEvent = isCustomerSuccess(eventSector);
 
         // 0.5. Event-specific Whitelist & Limit Check
         if (data.eventId === RESTRICTED_EVENT_ID) {
@@ -965,12 +1285,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         const cleanPhone = data.phone.replace(/\D/g, '');
         let finalAttendantId = data.attendantId;
+        // O front sempre envia createdBy = usuário logado; o backend usa o do token.
+        const creatorId = req.user?.id;
 
         // Agent Logic
         let distributionChecksLog: CheckLogItem[] | null = null;
         if (!finalAttendantId || finalAttendantId === 'distribuicao_automatica') {
             const isCloserAppt = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call', 'Direcionar Closer'].includes(data.type);
-            const ignoreSched = isAldeiaOrTribo && !isCloserAppt;
+            const ignoreSched = (isCsEvent && !isCloserAppt) || data.type === 'Agendamento Pessoal';
             const resDist = await findBestAttendantWithLogs(data.date, data.time, data.type, data.eventId, { ignoreSchedule: ignoreSched, durationMinutes });
             if (!resDist.attendantId) {
                 return res.status(409).json({ error: 'Nenhum atendente disponível para este horário.' });
@@ -1017,10 +1339,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 closerSectors.push(...PRE_VENDAS_ALIASES);
             }
 
+            // Reagendamento Closer: só Closer recebe (o Customer Success cria, mas não recebe).
             const allowedSectors = [...closerSectors];
-            if (data.type === 'Reagendamento Closer') {
-                allowedSectors.push('Aldeia');
-            }
 
             if (closerTypes.includes(data.type) && !allowedSectors.includes(attendant.sector)) {
                 console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to ${data.type}. Expected sectors: ${allowedSectors.join(', ')}`);
@@ -1036,14 +1356,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
                 });
             }
 
-            if (data.type === 'Ligação Equipe Aldeia' && attendant.sector !== 'Aldeia') {
+            if (data.type === 'Ligação Equipe Aldeia' && !isCustomerSuccess(attendant.sector)) {
                 console.warn(`[SECTOR GUARD] Rejected: Attendant ${attendant.name} (sector: ${attendant.sector}) assigned to Ligação Equipe Aldeia.`);
                 return res.status(409).json({
-                    error: `O atendente ${attendant.name} não pertence ao setor Aldeia (setor atual: ${attendant.sector}). Atualize a página e tente novamente.`
+                    error: `O atendente ${attendant.name} não pertence ao Customer Success (setor atual: ${attendant.sector}). Atualize a página e tente novamente.`
                 });
             }
 
-            if (data.type !== 'Fora da agenda' && attendant.sector !== 'Aldeia' && attendant.sector !== 'Tribo') {
+            if (data.type !== 'Fora da agenda' && data.type !== 'Agendamento Pessoal' && !isCustomerSuccess(attendant.sector)) {
                 const isWithinSchedule = isAttendantWithinSchedule(attendant, data.date, data.time, data.type, durationMinutes);
                 if (!isWithinSchedule) {
                     return res.status(409).json({ error: 'O atendente não está disponível neste horário (Escala/Pausa).' });
@@ -1062,11 +1382,17 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             .eq('attendant_id', finalAttendantId)
             .neq('status', 'Cancelado');
 
-        if (data.type !== 'Fora da agenda' && data.type !== 'Fechamento' && existingAppts) {
+        if (existingAppts) {
+            // Fora da agenda e Fechamento podem se sobrepor a outros agendamentos, mas não a um Agendamento Pessoal.
+            const overlapsAllowed = data.type === 'Fora da agenda' || data.type === 'Fechamento';
             // @ts-ignore
-            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, existingAppts, undefined, durationMinutes);
+            const hasConflict = hasConflictingAppointment(finalAttendantId, data.date, data.time, data.type, conflictPoolFor(existingAppts, overlapsAllowed), undefined, durationMinutes);
             if (hasConflict) {
-                return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
+                return res.status(409).json({
+                    error: overlapsAllowed
+                        ? 'Conflito: Este atendente tem um Agendamento Pessoal neste horário.'
+                        : 'Conflito: Este atendente já possui um compromisso neste horário.'
+                });
             }
         }
 
@@ -1142,7 +1468,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             }
             const endIso = `${endDate}T${endTime}:00-03:00`;
 
-            const guestIds = [finalAttendantId, data.createdBy].filter((id): id is string => !!id);
+            const guestIds = [finalAttendantId, creatorId].filter((id): id is string => !!id);
             const attendees: string[] = [clientPayload.email].filter(Boolean) as string[];
 
             if (guestIds.length > 0) {
@@ -1182,21 +1508,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             knowledge_level: data.studentProfile?.knowledge ?? null,
             financial_currency: data.studentProfile?.financial?.currency ?? null,
             financial_amount: financialAmount,
+            profession,
+            pain,
+            interest_product: interestProduct,
+            acquired_product: acquiredProduct,
             created_at: new Date().toISOString(),
-            // created_by logic
-            created_by: data.createdBy,
+            // Criador = usuário autenticado (vem do token, nunca do corpo da requisição).
+            created_by: creatorId,
             // Owner nasce igual ao criador; só o Líder troca depois (PUT /:id/owner).
-            owner: data.createdBy
+            owner: creatorId
         };
-
-        // Validate createdBy
-        if (appointmentPayload.created_by) {
-            const { data: u } = await supabase.from('user').select('id').eq('id', appointmentPayload.created_by).maybeSingle();
-            if (!u) {
-                appointmentPayload.created_by = undefined;
-                appointmentPayload.owner = undefined;
-            }
-        }
 
         const { data: createdAppointment, error: appError } = await supabase
             .from('appointments')
@@ -1215,6 +1536,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             console.error("Supabase Write Error:", appError);
             return res.status(500).json({ error: 'Erro no Banco de Dados' });
         }
+
+        // Último agendamento do aluno estava como No-show: vira Reagendado.
+        await rescheduleLastNoShow(clientId, createdAppointment.id, appointmentPayload.created_by || req.user?.id);
 
         // Log de criação: distribuição automática (com as verificações do algoritmo)
         // ou atendente escolhido manualmente por quem criou.
@@ -1348,10 +1672,14 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             .single();
 
         if (fetchError || !currentApp) return res.status(404).json({ error: 'Agendamento não encontrado' });
+        // Fora do escopo de visibilidade do usuário: responde como inexistente.
+        if (!(await canAccessAppointment(req.user, currentApp))) {
+            return res.status(404).json({ error: 'Agendamento não encontrado' });
+        }
 
         const merged = { ...currentApp, ...updates };
 
-        // 1.5 Fetch Event sector for Aldeia/Tribo rules (Internal Link)
+        // 1.5 Fetch Event sector for Customer Success rules (Internal Link)
         let eventSector = '';
         let durationMinutes = 60;
         const eventIdToCheck = merged.event_id;
@@ -1362,7 +1690,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 if (ev.duration_minutes) durationMinutes = ev.duration_minutes;
             }
         }
-        const isAldeiaOrTribo = eventSector === 'Aldeia' || eventSector === 'Tribo';
+        const isCsEvent = isCustomerSuccess(eventSector);
 
         // Event-specific blocklist for assignment changes only
         const isAttendantChangeRequested = typeof (updates as any).attendantId === 'string' && (updates as any).attendantId.length > 0;
@@ -1411,7 +1739,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                 console.log(`[DEBUG] Checking Schedule for ${attendant.name} (${attendant.id})`);
                 console.log(`[DEBUG] Target Time: ${merged.date} ${merged.time} (${merged.type})`);
 
-                if (merged.type !== 'Fora da agenda' && attendant.sector !== 'Aldeia' && attendant.sector !== 'Tribo') {
+                if (merged.type !== 'Fora da agenda' && merged.type !== 'Agendamento Pessoal' && !isCustomerSuccess(attendant.sector)) {
                     const isWithin = isAttendantWithinSchedule(attendant, merged.date, merged.time, merged.type, durationMinutes);
                     console.log(`[DEBUG] isWithinSchedule result: ${isWithin}`);
 
@@ -1432,9 +1760,11 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
                     .eq('attendant_id', merged.attendant_id)
                     .neq('status', 'Cancelado');
 
-                if (merged.type !== 'Fora da agenda' && existingAppts) {
+                if (existingAppts) {
+                    // Fora da agenda pode se sobrepor a outros agendamentos, mas não a um Agendamento Pessoal.
+                    const overlapsAllowed = merged.type === 'Fora da agenda';
                     // Pass 'id' as the 6th argument to exclude current appointment from conflict check
-                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, existingAppts, id, durationMinutes);
+                    const hasConflict = hasConflictingAppointment(merged.attendant_id, merged.date, merged.time, merged.type, conflictPoolFor(existingAppts, overlapsAllowed), id, durationMinutes);
                     console.log(`[DEBUG] hasConflict result: ${hasConflict}`);
 
                     if (hasConflict) {
@@ -1481,16 +1811,23 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             updatePayload.financial_amount = updates.studentProfile.financial?.amount;
         }
 
-        if (req.body.updatedBy) updatePayload.updatedBy = req.body.updatedBy;
+        // Quem editou = usuário autenticado (o front enviava updatedBy no corpo; não é mais confiável).
+        if (req.user?.id) updatePayload.updatedBy = req.user.id;
 
         const isStatusChanged = updates.status && currentApp.status !== updates.status;
         const isAttendantChanged = updates.attendantId && currentApp.attendant_id !== updates.attendantId;
 
-        if (isStatusChanged || isAttendantChanged || req.body.updatedBy) {
+        if (isStatusChanged || isAttendantChanged || updatePayload.updatedBy) {
             updatePayload.updatedAt = new Date().toISOString();
         }
 
         if (updates.status && currentApp.status !== updates.status) {
+            // Colaborador e Co-líder de Pré-vendas só mudam o status de Ligação Closer, Reagendamento
+            // Closer e Upgrade quando é o atendente (criar ou ser o responsável não basta).
+            if (isStatusLockedForPreVendas(req.user, { type: currentApp.type, attendantId: currentApp.attendant_id })) {
+                return res.status(403).json({ error: 'Você só pode alterar o status deste agendamento se for o atendente.' });
+            }
+
             updatePayload.oldStatus = currentApp.status;
 
             // Increment edit count
@@ -1498,15 +1835,13 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             updatePayload.status_edit_count = currentCount + 1;
 
             // Enforce Limit for Closers
-            if (req.body.updatedBy) {
-                const { data: updater } = await supabase.from('user').select('role, sector').eq('id', req.body.updatedBy).single();
-                if (updater) {
-                    const isCloser = updater.sector === 'Closer';
-                    const isColaborador = updater.role === 'Colaborador';
+            // (papel e setor vêm do usuário autenticado, buscado no banco pelo middleware)
+            if (req.user) {
+                const isCloser = req.user.sector === 'Closer';
+                const isColaborador = req.user.role === 'Colaborador';
 
-                    if (isCloser && isColaborador && currentCount >= 3) {
-                        return res.status(403).json({ error: 'Limite de edições de status excedido (Máximo: 3).' });
-                    }
+                if (isCloser && isColaborador && currentCount >= 3) {
+                    return res.status(403).json({ error: 'Limite de edições de status excedido (Máximo: 3).' });
                 }
             }
 

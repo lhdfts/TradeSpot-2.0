@@ -127,7 +127,7 @@ O workflow utiliza um **Switch** com 7 condições baseadas no evento:
 **Ação**: Integração com UnniChat
 1. **Pesquisar Lead**
    - URL: `https://unnichat.com.br/api/contact/search`
-   - Header: `Authorization: Bearer dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f`
+   - Header: `Authorization: Bearer <UNNICHAT_API_TOKEN>`
    - Body: `{ "email": "clientEmail" }`
 
 2. **Adicionar Tag**
@@ -307,7 +307,7 @@ O workflow utiliza um **Switch** com 6 condições baseadas no evento:
 **Ação**: Integração com UnniChat
 1. **Pesquisar Lead**
    - URL: `https://unnichat.com.br/api/contact/search`
-   - Header: `Authorization: Bearer dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f`
+   - Header: `Authorization: Bearer <UNNICHAT_API_TOKEN>`
    - Body: `{ "email": "clientEmail" }`
 
 2. **Adicionar Tag**
@@ -418,7 +418,7 @@ O workflow utiliza um **Switch** com 6 condições baseadas no evento:
 
 ### Token de Autenticação
 
-- **Bearer Token**: `dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f`
+- **Bearer Token**: `<UNNICHAT_API_TOKEN>`
 - **Usado em**: Pesquisa de contatos, adicionar tags e preencher campos personalizados
 
 ---
@@ -660,7 +660,7 @@ WHERE
 2. Testar pesquisa de lead manualmente:
 ```bash
 curl -X POST https://unnichat.com.br/api/contact/search \
-  -H "Authorization: Bearer dbb05cd6-b607-41f0-b7f8-0dc36a0c0f6f" \
+  -H "Authorization: Bearer <UNNICHAT_API_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"email": "cliente@example.com"}'
 ```

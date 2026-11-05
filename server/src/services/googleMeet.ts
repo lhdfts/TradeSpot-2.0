@@ -34,6 +34,9 @@ export const createGoogleMeetLink = async (summary: string, startTime: string, e
                 timeZone: 'America/Sao_Paulo',
             },
             attendees: finalAttendees.map(email => ({ email })),
+            // Convidados externos (alunos) não devem ver os emails internos nem convidar terceiros
+            guestsCanSeeOtherGuests: false,
+            guestsCanInviteOthers: false,
             conferenceData: {
                 createRequest: {
                     requestId: `sample-${Date.now()}`,

@@ -1,17 +1,31 @@
 import { Request, Response, NextFunction } from 'express';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { supabase } from '../utils/supabaseClient.js';
+import { ARCHIVED_EMAIL_SUFFIX, SECTOR_SEM_SETOR } from '../constants/sectors.js';
 
 /**
- * Safely extracts client IP address, handling string, string[], or undefined.
+ * IP do cliente para o log de auditoria. Usa req.ip, que o Express resolve a partir
+ * do X-Forwarded-For respeitando o 'trust proxy' (server.ts). Ler o primeiro valor do
+ * cabeçalho diretamente permitia que o cliente forjasse o IP registrado.
  */
-const getClientIp = (req: Request): string => {
-    const rawIp = req.headers['x-forwarded-for'];
-    const ipString = Array.isArray(rawIp) ? rawIp[0] : rawIp;
-    if (typeof ipString === 'string') {
-        return ipString.split(',')[0].trim() || req.ip || 'unknown';
-    }
-    return req.ip || 'unknown';
+const getClientIp = (req: Request): string => req.ip || 'unknown';
+
+/**
+ * Provedores de login aceitos (claim firebase.sign_in_provider). O front entra só
+ * pelo SAML do Google Workspace (src/views/Login.tsx). Configurável pela variável
+ * ALLOWED_SIGN_IN_PROVIDERS (separada por vírgulas).
+ */
+const DEFAULT_SIGN_IN_PROVIDERS = ['saml.sistema-depositos-google-workspace'];
+export const getAllowedSignInProviders = (): string[] => {
+    const fromEnv = (process.env.ALLOWED_SIGN_IN_PROVIDERS || '')
+        .split(',')
+        .map(p => p.trim())
+        .filter(Boolean);
+    return fromEnv.length > 0 ? fromEnv : DEFAULT_SIGN_IN_PROVIDERS;
+};
+export const isAllowedSignInProvider = (decoded: { firebase?: { sign_in_provider?: string } }): boolean => {
+    const provider = decoded.firebase?.sign_in_provider;
+    return !!provider && getAllowedSignInProviders().includes(provider);
 };
 
 // Extended request type with authenticated user info
@@ -96,6 +110,23 @@ export const verifyFirebaseToken = async (
         const decodedToken = await auth.verifySessionCookie(sessionCookie, true /** checkRevoked */);
         const email = decodedToken.email;
 
+        if (!isAllowedSignInProvider(decodedToken)) {
+            logActivity({
+                timestamp: new Date().toISOString(),
+                userId: decodedToken.uid,
+                userName: email || 'Unknown',
+                userRole: 'none',
+                userSector: 'none',
+                action: req.method,
+                resource: req.originalUrl,
+                ipAddress,
+                userAgent,
+                success: false,
+                errorMessage: `Sign-in provider not allowed: ${decodedToken.firebase?.sign_in_provider}`
+            });
+            return res.status(401).json({ error: 'Token inválido ou expirado' });
+        }
+
         if (!email) {
             logActivity({
                 timestamp: new Date().toISOString(),
@@ -121,6 +152,31 @@ export const verifyFirebaseToken = async (
             .single();
 
         if (error || !userData) {
+            // Colaborador arquivado: o e-mail ganhou o sufixo ".desativado" e não deve
+            // ser recadastrado automaticamente com o e-mail original.
+            const { data: archivedUser } = await supabase
+                .from('user')
+                .select('id')
+                .eq('email', `${email}${ARCHIVED_EMAIL_SUFFIX}`)
+                .maybeSingle();
+
+            if (archivedUser) {
+                logActivity({
+                    timestamp: new Date().toISOString(),
+                    userId: archivedUser.id,
+                    userName: email,
+                    userRole: 'none',
+                    userSector: 'none',
+                    action: req.method,
+                    resource: req.originalUrl,
+                    ipAddress,
+                    userAgent,
+                    success: false,
+                    errorMessage: 'Archived user'
+                });
+                return res.status(403).json({ error: 'Usuário desativado' });
+            }
+
             // New logic: Auto-register user if they pass Firebase auth
             const defaultName = decodedToken.name || email.split('@')[0];
 
@@ -129,7 +185,7 @@ export const verifyFirebaseToken = async (
                 userId: decodedToken.uid,
                 userName: defaultName,
                 userRole: 'Colaborador',
-                userSector: 'Suporte',
+                userSector: SECTOR_SEM_SETOR,
                 action: 'REGISTER_NEW_USER',
                 resource: req.originalUrl,
                 ipAddress,
@@ -144,7 +200,7 @@ export const verifyFirebaseToken = async (
                     email: email,
                     name: defaultName,
                     role: 'Colaborador', // Default role
-                    sector: 'Suporte',       // Default sector
+                    sector: SECTOR_SEM_SETOR, // Sem acesso a setor nenhum até um líder ajustar o cadastro
                     status: true         // Make sure they are active
                 })
                 .select('id, name, role, sector')

@@ -7,13 +7,17 @@ import type { UnnichatConnection } from '../types';
 import { Button } from '../components/ui/button';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingInput } from '../components/FloatingInput';
-import { Plus, Edit, Trash2, Copy } from 'lucide-react';
+import { Plus, Edit, Trash2, Copy, Webhook, SearchX } from 'lucide-react';
 import { UnnichatConnectionModal } from '../components/UnnichatConnectionModal';
 import { useAuth } from '../context/AuthContext';
 import { canViewAllSectors, isMedinaUser, getAllowedSectors } from '../utils/security';
+import { useConfirm } from '../components/ui/confirm-dialog';
+import { notify } from '../components/ui/notify';
+import { EmptyState } from '../components/ui/empty-state';
 
 export const UnnichatConnections: React.FC = () => {
     const { user } = useAuth();
+    const confirm = useConfirm();
     const [connections, setConnections] = useState<UnnichatConnection[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedConnection, setSelectedConnection] = useState<UnnichatConnection | null>(null);
@@ -56,13 +60,21 @@ export const UnnichatConnections: React.FC = () => {
     };
 
     const handleDelete = async (conn: UnnichatConnection) => {
-        if (!confirm(`Tem certeza que deseja excluir a conexão "${conn.name}"?`)) return;
+        const ok = await confirm({
+            title: `Excluir ${conn.name}?`,
+            description: 'Os leads enviados pelo Unnichat para este webhook deixarão de virar agendamentos. Os agendamentos já criados continuam.',
+            confirmLabel: 'Excluir conexão',
+            cancelLabel: 'Cancelar',
+            destructive: true,
+        });
+        if (!ok) return;
         try {
             await api.unnichatConnections.delete(conn.id);
+            notify.success('Conexão excluída', conn.name);
             await fetchConnections();
         } catch (error: any) {
             console.error('Failed to delete connection', error);
-            alert('Erro ao excluir conexão unnichat.');
+            notify.error(`Não foi possível excluir ${conn.name}.`, 'Verifique a conexão e tente de novo.');
         }
     };
 
@@ -87,8 +99,8 @@ export const UnnichatConnections: React.FC = () => {
         <div className="space-y-6">
             {portalContainer && canManageConnections && createPortal(
                 // No celular só o ícone, para caber ao lado do título
-                <Button onClick={handleAddNew} variant="default" aria-label="Nova Conexão" title="Nova Conexão" className="px-2.5 sm:px-4">
-                    <Plus size={18} className="sm:mr-2" /><span className="hidden sm:inline">Nova Conexão</span>
+                <Button onClick={handleAddNew} variant="default" aria-label="Nova conexão" title="Nova conexão" className="px-2.5 sm:px-4">
+                    <Plus size={18} className="sm:mr-2" /><span className="hidden sm:inline">Nova conexão</span>
                 </Button>,
                 portalContainer
             )}
@@ -117,7 +129,24 @@ export const UnnichatConnections: React.FC = () => {
                 </div>
             </div>
 
-            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
+            {displayConnections.length === 0 ? (
+                searchTerm.trim() || sectorFilter !== 'all' ? (
+                    <EmptyState
+                        icons={[SearchX]}
+                        title="Nenhuma conexão com esses filtros"
+                        description={searchTerm.trim() ? `Nada encontrado para "${searchTerm}". Busque pelo nome ou por parte do link.` : 'Nenhuma conexão neste setor. Escolha outro setor.'}
+                        action={{ label: 'Limpar filtros', onClick: () => { setSearchTerm(''); setSectorFilter('all'); } }}
+                    />
+                ) : (
+                    <EmptyState
+                        icons={[Webhook]}
+                        title="Nenhuma conexão ainda"
+                        description="Cada conexão gera um webhook: os leads que o Unnichat envia para ele viram agendamentos automaticamente."
+                        action={canManageConnections ? { label: 'Nova conexão', icon: Plus, onClick: handleAddNew } : undefined}
+                    />
+                )
+            ) : (
+            <div style={staggerStyle(0, 80)} className="animate-fade-up bg-surface rounded-lg border border-border overflow-hidden shadow-sm">
                 {/* Rolagem horizontal em telas pequenas para não cortar colunas */}
                 <div className="overflow-x-auto">
                 <table className="w-full text-left min-w-[760px]">
@@ -131,14 +160,7 @@ export const UnnichatConnections: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {displayConnections.length === 0 ? (
-                            <tr>
-                                <td colSpan={canManageConnections ? 5 : 4} className="px-6 py-8 text-center text-muted-foreground">
-                                    Nenhuma conexão encontrada.
-                                </td>
-                            </tr>
-                        ) : (
-                            displayConnections.map((conn, i) => (
+                        {displayConnections.map((conn, i) => (
                                 <tr style={staggerStyle(i, 30)} key={conn.id} className="animate-fade-up hover:bg-background/50 transition-colors">
                                     <td className="px-6 py-4 text-foreground font-medium">
                                         {conn.name}
@@ -153,12 +175,18 @@ export const UnnichatConnections: React.FC = () => {
                                             {/* Link longo fica truncado; o title e o botão de copiar dão acesso ao valor completo */}
                                             <span className="truncate" title={conn.unnichat_url}>{conn.unnichat_url}</span>
                                             <button
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(conn.unnichat_url);
-                                                    alert('Link copiado com sucesso!');
+                                                type="button"
+                                                onClick={async () => {
+                                                    try {
+                                                        await navigator.clipboard.writeText(conn.unnichat_url);
+                                                        notify.success('Link copiado', `Webhook de ${conn.name}.`);
+                                                    } catch {
+                                                        notify.error('Não foi possível copiar o link.', 'Permita o acesso à área de transferência no navegador e tente de novo.');
+                                                    }
                                                 }}
-                                                className="p-1.5 text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
-                                                title="Copiar Link"
+                                                className="p-1.5 rounded-md text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
+                                                title="Copiar link"
+                                                aria-label={`Copiar link do webhook de ${conn.name}`}
                                             >
                                                 <Copy size={16} />
                                             </button>
@@ -170,28 +198,32 @@ export const UnnichatConnections: React.FC = () => {
                                     {canManageConnections && (
                                         <td className="px-6 py-4 text-center whitespace-nowrap space-x-1">
                                             <button
+                                                type="button"
                                                 onClick={() => handleEdit(conn)}
-                                                className="p-1.5 text-foreground hover:text-primary transition-colors inline-block"
-                                                title="Editar"
+                                                className="p-1.5 rounded-md text-foreground hover:text-primary transition-colors inline-block"
+                                                title="Editar conexão"
+                                                aria-label={`Editar conexão ${conn.name}`}
                                             >
                                                 <Edit size={18} />
                                             </button>
                                             <button
+                                                type="button"
                                                 onClick={() => handleDelete(conn)}
-                                                className="p-1.5 text-destructive hover:text-red-400 transition-colors inline-block"
-                                                title="Excluir"
+                                                className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors inline-block"
+                                                title="Excluir conexão"
+                                                aria-label={`Excluir conexão ${conn.name}`}
                                             >
                                                 <Trash2 size={18} />
                                             </button>
                                         </td>
                                     )}
                                 </tr>
-                            ))
-                        )}
+                            ))}
                     </tbody>
                 </table>
                 </div>
             </div>
+            )}
 
             <UnnichatConnectionModal
                 isOpen={isModalOpen}

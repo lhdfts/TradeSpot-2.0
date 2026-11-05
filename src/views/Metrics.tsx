@@ -21,11 +21,14 @@ import {
     LabelList
 } from 'recharts';
 import { cn } from '../lib/utils';
+import { Skeleton } from '../components/ui/skeleton';
+import { STATUS_COLORS, STATUS_TOTAL_CHART } from '../lib/appointmentStatus';
+import type { AppointmentStatus } from '../types';
 import { RankingModal } from '../components/RankingModal';
 import { computeMetrics, computeOwnerStats, filterAppointments, filterForExport, responsibleOf, RESPONSIBLE_SECTORS, type DirectionFilter, type RankingScope } from '../utils/metricsCalc';
 import { FloatingMultiSelect } from '../components/FloatingMultiSelect';
 import { api } from '../services/api';
-import { isPreVendas, normalizeSector } from '../constants/sectors';
+import { isCustomerSuccess, isPreVendas, normalizeSector } from '../constants/sectors';
 import {
     Tooltip,
     TooltipTrigger,
@@ -33,6 +36,16 @@ import {
     TooltipProvider
 } from '../components/ui/tooltip';
 
+
+// Ordem dos status no gráfico e nos filtros; as cores vêm de STATUS_COLORS.
+const CHART_STATUSES: AppointmentStatus[] = ['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'];
+
+// Selo de posição do pódio (1º/2º/3º) no lugar da borda colorida.
+const PODIUM_BADGE = [
+    'bg-status-iniciando/15 text-status-iniciando',
+    'bg-status-pendente/15 text-status-pendente',
+    'bg-status-noshow/15 text-status-noshow',
+];
 
 export const Metrics: React.FC = () => {
     const { appointments: loadedAppointments, refresh, loading: loadingAppointments, truncated } = useAppointments();
@@ -213,7 +226,8 @@ export const Metrics: React.FC = () => {
     // Get allowed types for current sector
     const getAllowedTypesForSector = () => {
         const displaySector = sectorFilter === 'all' && user?.sector ? user.sector : sectorFilter;
-        const allTypes = ['Ligação SDR', 'Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento', 'Direcionar Closer'];
+        // "Ligação Equipe Aldeia" está oculto (sem uso desde jul/26); se aparecer nos dados do período, entra pela lista abaixo.
+        const allTypes = ['Ligação SDR', 'Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Onboarding', 'Fechamento', 'Direcionar Closer'];
         
         if (displaySector === 'all' || !displaySector) {
             return allTypes.map(t => ({ value: t, label: t }));
@@ -224,10 +238,8 @@ export const Metrics: React.FC = () => {
         if (displaySector === 'SDR' || displaySector === 'Leads') {
             allowed = ['Ligação SDR', 'Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call', 'Fechamento'];
         } else if (displaySector === 'Closer') {
-            allowed = ['Ligação Closer', 'Ligação Equipe Aldeia', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'];
-        } else if (displaySector === 'Tribo') {
-            allowed = ['Agendamento Pessoal', 'Onboarding'];
-        } else if (displaySector === 'Aldeia') {
+            allowed = ['Ligação Closer', 'Agendamento Pessoal', 'Reagendamento Closer', 'Upgrade', 'Fora da agenda', 'Gold Call'];
+        } else if (isCustomerSuccess(displaySector)) {
             allowed = ['Agendamento Pessoal', 'Onboarding', 'Reagendamento Closer', 'Ligação Closer'];
         } else if (displaySector === 'Social Seller') {
             allowed = ['Ligação Closer', 'Reagendamento Closer', 'Upgrade', 'Gold Call'];
@@ -251,7 +263,7 @@ export const Metrics: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-4">
                     {/* No celular as datas dividem a linha inteira; a partir de sm voltam à largura fixa */}
                     <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <Filter size={18} className="text-secondary shrink-0" />
+                        <Filter size={18} className="text-muted-foreground shrink-0" />
                         <FloatingDateInput
                             label="Data Inicial"
                             value={startDate}
@@ -355,40 +367,42 @@ export const Metrics: React.FC = () => {
                         className={cn(
                             "h-11 px-3 flex items-center gap-2 rounded-md border text-sm shadow-sm transition-colors",
                             uniqueClients
-                                ? "border-[#070707] dark:border-gray-400 text-foreground"
+                                ? "border-foreground/60 text-foreground"
                                 : "border-border text-muted-foreground hover:text-foreground"
                         )}
                     >
                         <span
                             className={cn(
                                 "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
-                                uniqueClients ? "bg-[#070707] dark:bg-white" : "bg-gray-300 dark:bg-gray-600"
+                                uniqueClients ? "bg-foreground" : "bg-muted-foreground/30"
                             )}
                         >
                             <span
                                 className={cn(
-                                    "inline-block h-4 w-4 rounded-full bg-white dark:bg-[#070707] shadow transition-transform",
+                                    "inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform",
                                     uniqueClients ? "translate-x-4" : "translate-x-0.5"
                                 )}
                             />
                         </span>
                         Alunos únicos
                     </button>
-                    <div
-                        className={cn(
-                            "ml-auto transition-colors p-2",
-                            loadingAppointments ? "opacity-40 cursor-wait" : "cursor-pointer hover:text-blue-500"
-                        )}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="ml-auto"
                         onClick={handleExport}
+                        disabled={loadingAppointments || !exportAppointments.length}
+                        aria-label={loadingAppointments ? "Exportar CSV (carregando agendamentos do período)" : `Exportar CSV com ${exportAppointments.length} agendamentos`}
                         title={loadingAppointments ? "Carregando agendamentos do período..." : `Exportar CSV (${exportAppointments.length} agendamentos com os filtros atuais)`}
                     >
                         <ExportIcon />
-                    </div>
+                    </Button>
                 </div>
             </div>
 
             {truncated && !loadingAppointments && (
-                <div className="p-3 rounded-lg border border-[#FF9100]/40 bg-[#FF9100]/10 text-sm text-foreground">
+                <div className="p-3 rounded-lg border border-status-noshow/40 bg-status-noshow/10 text-sm text-foreground">
                     O período selecionado tem mais agendamentos do que o limite de carregamento. Os números e a exportação estão incompletos — reduza o período.
                 </div>
             )}
@@ -405,14 +419,16 @@ export const Metrics: React.FC = () => {
                 return (
                     <div className="bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
                         <h3 className="text-lg font-bold text-foreground">Meus números</h3>
-                        <p className="text-xs text-secondary mt-1">
-                            Agendamentos em que você é o atendente ou o responsável. Taxa de realização: {total ? Math.round(done / total * 100) : 0}%
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Agendamentos em que você é o atendente ou o responsável. Taxa de realização: {loadingAppointments ? '…' : `${total ? Math.round(done / total * 100) : 0}%`}
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
                             {tiles.map(([label, value], i) => (
                                 <FadeIn key={label} index={i} className="rounded-lg bg-background p-3 transition-transform duration-200 hover:-translate-y-0.5">
-                                    <CountUp value={value} className="block text-2xl font-bold text-foreground tabular-nums" />
-                                    <div className="text-xs text-secondary">{label}</div>
+                                    {loadingAppointments
+                                        ? <Skeleton className="h-8 w-12 mb-0.5" />
+                                        : <CountUp value={value} className="block text-2xl font-bold text-foreground tabular-nums" />}
+                                    <div className="text-xs text-muted-foreground">{label}</div>
                                 </FadeIn>
                             ))}
                         </div>
@@ -460,24 +476,40 @@ export const Metrics: React.FC = () => {
                         </div>
                     );
 
+                    // Enquanto carrega: esqueleto no lugar de "Sem dados"/zeros.
+                    if (loadingAppointments && displaySector) {
+                        return (
+                            <div style={staggerStyle(1, 80)} className="animate-fade-up bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm" aria-busy="true">
+                                <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
+                                    <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
+                                    <Skeleton className="h-7 w-24" />
+                                </div>
+                                <div className="space-y-2">
+                                    {Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-[52px] w-full rounded-lg" />)}
+                                </div>
+                                <span className="sr-only">Carregando ranking…</span>
+                            </div>
+                        );
+                    }
+
                     if (ranking.length === 0 && displaySector) {
                         return (
-                            <div style={staggerStyle(1, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
+                            <div style={staggerStyle(1, 80)} className="animate-fade-up bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
                                 <div className="flex flex-wrap justify-between items-start gap-3">
                                     <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
                                     {scopeSwitch}
                                 </div>
-                                <p className="text-secondary text-sm text-center py-8">Sem dados para o período</p>
+                                <p className="text-muted-foreground text-sm text-center py-8">Nenhum agendamento no período. Ajuste as datas ou os filtros acima.</p>
                             </div>
                         );
                     }
 
                     return (
-                        <div style={staggerStyle(2, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
+                        <div style={staggerStyle(2, 80)} className="animate-fade-up bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm">
                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
                                 <div className="min-w-0">
                                     <h3 className="text-lg font-bold text-foreground">Agendamentos por {displaySector}</h3>
-                                    <p className="text-xs text-secondary mt-1">
+                                    <p className="text-xs text-muted-foreground mt-1">
                                         {hasScopeSwitch
                                             ? (rankingScope === 'other'
                                                 ? 'Agendamentos marcados como responsável para outros setores (ex.: Closer)'
@@ -504,9 +536,9 @@ export const Metrics: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
+                            <div className="grid grid-cols-12 text-xs font-semibold text-muted-foreground mb-3 px-3 uppercase">
                                     <div className="col-span-6">Nome</div>
-                                    <div className="col-span-3 text-center text-emerald-500">Realizados</div>
+                                    <div className="col-span-3 text-center text-status-realizado">Realizados</div>
                                     <div className="col-span-3 text-center">
                                         <TooltipProvider>
                                             <Tooltip>
@@ -525,18 +557,20 @@ export const Metrics: React.FC = () => {
 
                             <div className="space-y-2">
                                 {ranking.slice(0, 5).map((item, idx) => {
-                                    let rowStyle = 'bg-background border-l-4 border-transparent';
-                                    if (item.originalRank === 0) rowStyle = 'bg-yellow-500/5 border-l-4 border-yellow-500';
-                                    else if (item.originalRank === 1) rowStyle = 'bg-blue-500/5 border-l-4 border-[#3D719D]';
-                                    else if (item.originalRank === 2) rowStyle = 'bg-orange-500/5 border-l-4 border-[#C68E63]';
+                                    const podium = PODIUM_BADGE[item.originalRank as number];
 
                                     return (
-                                        <div key={idx} className={`grid grid-cols-12 items-center p-3 rounded-r-lg ${rowStyle} transition-colors min-h-[52px]`}>
+                                        <div key={idx} className="grid grid-cols-12 items-center p-3 rounded-lg bg-background transition-colors min-h-[52px]">
                                             {/* No celular o nome quebra linha em vez de ser cortado */}
-                                            <div className="col-span-6 font-medium text-foreground text-[13px] min-w-0 break-words sm:truncate" title={item.name}>
-                                                {item.name}
+                                            <div className="col-span-6 flex items-center gap-2 font-medium text-foreground text-sm min-w-0" title={item.name}>
+                                                {podium && (
+                                                    <span className={cn('shrink-0 inline-flex items-center justify-center min-w-7 h-5 px-1.5 rounded-full text-xs font-bold tabular-nums', podium)}>
+                                                        {(item.originalRank as number) + 1}º
+                                                    </span>
+                                                )}
+                                                <span className="min-w-0 break-words sm:truncate">{item.name}</span>
                                             </div>
-                                            <div className="col-span-3 text-center font-bold text-emerald-500 text-xs">
+                                            <div className="col-span-3 text-center font-bold text-status-realizado text-xs">
                                                 {item['Realizado']}
                                             </div>
                                             <div className="col-span-3 text-center font-bold text-foreground text-xs">
@@ -545,7 +579,7 @@ export const Metrics: React.FC = () => {
                                         </div>
                                     );
                                 })}
-                                {ranking.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
+                                {ranking.length === 0 && <p className="text-muted-foreground text-sm text-center py-4">Sem dados para o período</p>}
                             </div>
                         </div>
                     );
@@ -554,33 +588,34 @@ export const Metrics: React.FC = () => {
 
             {/* Responsáveis (comissão) x criadores */}
             {ownerStats && !isCollaborator && (
-                <div style={staggerStyle(3, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border mt-6 shadow-sm">
+                <div style={staggerStyle(3, 80)} className="animate-fade-up bg-surface p-4 sm:p-6 rounded-xl border border-border mt-6 shadow-sm">
                     <div className="mb-6">
                         <h3 className="text-lg font-bold text-foreground">Responsáveis — {ownerDisplaySector}</h3>
-                        <p className="text-xs text-secondary mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                             O responsável recebe a comissão. "Repassou" conta os agendamentos que a pessoa criou e o Líder passou para outro responsável. Conta todos os agendamentos, mesmo com o switch de alunos únicos ligado.
                         </p>
                     </div>
                     <div className="overflow-x-auto">
                         <div className="min-w-[520px]">
-                            <div className="grid grid-cols-12 text-[10px] font-semibold text-secondary mb-3 px-3 uppercase">
+                            <div className="grid grid-cols-12 text-xs font-semibold text-muted-foreground mb-3 px-3 uppercase">
                                 <div className="col-span-4">Nome</div>
                                 <div className="col-span-2 text-center">Como responsável</div>
-                                <div className="col-span-2 text-center text-emerald-500">Realizados</div>
+                                <div className="col-span-2 text-center text-status-realizado">Realizados</div>
                                 <div className="col-span-2 text-center">Assumiu</div>
-                                <div className="col-span-2 text-center text-[#FF9100]">Repassou</div>
+                                <div className="col-span-2 text-center text-status-noshow">Repassou</div>
                             </div>
                             <div className="space-y-2">
-                                {ownerStats.map(item => (
+                                {loadingAppointments && Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-11 w-full rounded-lg" />)}
+                                {!loadingAppointments && ownerStats.map(item => (
                                     <div key={item.id} className="grid grid-cols-12 items-center p-3 rounded-lg bg-background min-h-[44px]">
-                                        <div className="col-span-4 font-medium text-foreground text-[13px] truncate" title={item.name}>{item.name}</div>
+                                        <div className="col-span-4 font-medium text-foreground text-sm truncate" title={item.name}>{item.name}</div>
                                         <div className="col-span-2 text-center font-bold text-foreground text-xs">{item.comoOwner}</div>
-                                        <div className="col-span-2 text-center font-bold text-emerald-500 text-xs">{item.realizados}</div>
+                                        <div className="col-span-2 text-center font-bold text-status-realizado text-xs">{item.realizados}</div>
                                         <div className="col-span-2 text-center font-bold text-foreground text-xs">{item.assumidos}</div>
-                                        <div className="col-span-2 text-center font-bold text-[#FF9100] text-xs">{item.repassados}</div>
+                                        <div className="col-span-2 text-center font-bold text-status-noshow text-xs">{item.repassados}</div>
                                     </div>
                                 ))}
-                                {ownerStats.length === 0 && <p className="text-secondary text-sm text-center py-4">Sem dados para o período</p>}
+                                {!loadingAppointments && ownerStats.length === 0 && <p className="text-muted-foreground text-sm text-center py-4">Nenhum agendamento com responsável no período.</p>}
                             </div>
                         </div>
                     </div>
@@ -588,14 +623,24 @@ export const Metrics: React.FC = () => {
             )}
 
             {/* Chart */}
-            <div style={staggerStyle(4, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border mt-6 shadow-sm">
+            <div style={staggerStyle(4, 80)} className="animate-fade-up bg-surface p-4 sm:p-6 rounded-xl border border-border mt-6 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
                     <h3 className="text-lg font-bold text-foreground">
                         Agendamentos por Dia
                     </h3>
-                    <span className="text-lg font-bold text-foreground">Total: {chartTotal}</span>
+                    {loadingAppointments
+                        ? <Skeleton className="h-7 w-24" />
+                        : <span className="text-lg font-bold text-foreground">Total: {chartTotal}</span>}
                 </div>
 
+                {loadingAppointments ? (
+                    <div className="h-64 sm:h-80 w-full mt-4 flex items-end gap-2 sm:gap-3" aria-busy="true">
+                        {[45, 70, 30, 85, 55, 65, 40, 75, 50, 60, 35, 80].map((h, i) => (
+                            <Skeleton key={i} className="flex-1 rounded-sm" style={{ height: `${h}%` }} />
+                        ))}
+                        <span className="sr-only">Carregando gráfico…</span>
+                    </div>
+                ) : (
                 <div className="h-64 sm:h-80 w-full mt-4">
                     <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
@@ -603,11 +648,11 @@ export const Metrics: React.FC = () => {
                                 dataKey="displayDate"
                                 axisLine={false}
                                 tickLine={false}
-                                tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
+                                tick={{ fill: 'rgb(var(--muted-foreground))', fontSize: 12 }}
                                 dy={10}
                             />
                             <RechartsTooltip
-                                cursor={{ fill: 'var(--muted)', opacity: 0.2 }}
+                                cursor={{ fill: 'rgb(var(--muted))', opacity: 0.2 }}
                                 content={({ active, payload, label }: any) => {
                                     if (!active || !payload) return null;
                                     return (
@@ -634,58 +679,48 @@ export const Metrics: React.FC = () => {
                                     );
                                 }}
                             />
-                            {['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'].map((status) => (
+                            {CHART_STATUSES.map((status) => (
                                 selectedStatuses.includes(status) && (
                                     <Bar
                                         key={status}
                                         dataKey={status}
                                         stackId="a"
-                                        fill={
-                                            status === 'Realizado' ? '#00E676' :
-                                                status === 'Pendente' ? '#B2B2B2' :
-                                                status === 'Cancelado' ? '#FF1744' :
-                                                status === 'Reagendado' ? '#2979FF' :
-                                                status === 'Esquecimento' ? '#D500F9' :
-                                                '#FF9100'
-                                        }
+                                        fill={STATUS_COLORS[status].chart}
                                         radius={[0, 0, 0, 0]}
                                         barSize={32}
                                     />
                                 )
                             ))}
-                            <Line type="monotone" dataKey="total" stroke="#333333" strokeWidth={2} dot={{ fill: "#333333", r: 4 }}>
-                                <LabelList dataKey="total" position="top" fill="#333333" fontSize={12} />
+                            <Line type="monotone" dataKey="total" stroke={STATUS_TOTAL_CHART} strokeWidth={2} dot={{ fill: STATUS_TOTAL_CHART, r: 4 }}>
+                                <LabelList dataKey="total" position="top" fill={STATUS_TOTAL_CHART} fontSize={12} />
                             </Line>
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
+                )}
 
-                {/* Status Toggle Buttons */}
+                {/* Filtro de status: fundo neutro com ponto na cor da barra (mesma fonte: STATUS_COLORS) */}
                 <div className="flex flex-wrap gap-2 sm:gap-3 justify-center mt-4">
-                    {['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'].map((status) => (
-                        <button
-                            key={status}
-                            onClick={() => toggleStatus(status)}
-                            className={cn(
-                                "px-4 py-2 rounded-lg text-sm font-medium transition-all border",
-                                selectedStatuses.includes(status)
-                                    ? "border-transparent text-white"
-                                    : "bg-transparent text-muted-foreground border-border hover:bg-muted"
-                            )}
-                            style={{
-                                backgroundColor: selectedStatuses.includes(status)
-                                    ? status === 'Realizado' ? '#00E676' :
-                                      status === 'Pendente' ? '#B2B2B2' :
-                                      status === 'Cancelado' ? '#FF1744' :
-                                      status === 'Reagendado' ? '#2979FF' :
-                                      status === 'No-show' ? '#FF9100' :
-                                      '#666'
-                                    : undefined
-                            }}
-                        >
-                            {status}
-                        </button>
-                    ))}
+                    {CHART_STATUSES.map((status) => {
+                        const active = selectedStatuses.includes(status);
+                        return (
+                            <button
+                                key={status}
+                                type="button"
+                                aria-pressed={active}
+                                onClick={() => toggleStatus(status)}
+                                className={cn(
+                                    "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-[background-color,border-color,color,opacity] duration-150",
+                                    active
+                                        ? "bg-background text-foreground border-border"
+                                        : "bg-transparent text-muted-foreground border-dashed border-border opacity-70 hover:opacity-100 hover:bg-muted"
+                                )}
+                            >
+                                <span className={cn("size-2.5 rounded-full", active ? STATUS_COLORS[status].dot : "bg-muted-foreground/40")} />
+                                {status}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 

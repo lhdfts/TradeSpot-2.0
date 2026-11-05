@@ -1,29 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/modal';
+import { notify } from './ui/notify';
 import { Input as BaseInput } from './ui/input';
 import { CustomSelect } from './CustomSelect';
 import { Button } from './ui/button';
 import type { UnnichatConnection } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { SECTOR_PRE_VENDAS } from '../constants/sectors';
+import { SECTOR_CUSTOMER_SUCCESS, SECTOR_PRE_VENDAS } from '../constants/sectors';
 
-const Input: React.FC<any> = ({ label, ...props }) => (
-    <div className="space-y-1">
-        {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
-        <BaseInput {...props} />
-    </div>
-);
+// O BaseInput já desenha o rótulo ligado ao campo (htmlFor), com o mesmo estilo.
+const Input: React.FC<any> = (props) => <BaseInput {...props} />;
 
 const Select = CustomSelect;
 
 const SECTOR_OPTIONS = [
-    { value: 'Aldeia', label: 'Aldeia' },
     { value: 'Closer', label: 'Closer' },
+    { value: SECTOR_CUSTOMER_SUCCESS, label: SECTOR_CUSTOMER_SUCCESS },
     { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
     { value: 'CEO', label: 'CEO' },
     { value: 'SDR', label: 'SDR' },
-    { value: 'Tribo', label: 'Tribo' },
     { value: 'Social Seller', label: 'Social Seller' }
 ];
 
@@ -66,7 +62,7 @@ export const UnnichatConnectionModal: React.FC<UnnichatConnectionModalProps> = (
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name?.trim() || !formData.unnichat_url?.trim()) {
-            alert('Por favor, preencha o Nome da Conexão e o Link do Webhook.');
+            notify.error('Preencha o nome e o link do webhook.', 'Os dois campos são obrigatórios para salvar a conexão.');
             return;
         }
 
@@ -88,7 +84,7 @@ export const UnnichatConnectionModal: React.FC<UnnichatConnectionModalProps> = (
             onClose();
         } catch (error: any) {
             console.error('Failed to save unnichat connection', error);
-            alert(error.message || 'Erro ao salvar conexão unnichat.');
+            notify.error('Não foi possível salvar a conexão.', 'Confira se o link do webhook está correto e tente de novo.');
         } finally {
             setSaving(false);
         }
@@ -98,7 +94,7 @@ export const UnnichatConnectionModal: React.FC<UnnichatConnectionModalProps> = (
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={connection ? 'Editar Conexão Unnichat' : 'Nova Conexão Unnichat'}
+            title={connection ? 'Editar conexão Unnichat' : 'Nova conexão Unnichat'}
         >
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Input

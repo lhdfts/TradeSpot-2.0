@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAppointments } from '../context/AppointmentContext';
+import { STATUS_COLORS, STATUS_COLOR_FALLBACK } from '../lib/appointmentStatus';
 
 
 interface ExternalHistoryItem {
@@ -63,7 +64,7 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
             <h3 className="font-semibold text-lg text-foreground">Histórico</h3>
             <div className="relative flex flex-col gap-0">
                 {/* Continuous Vertical line */}
-                <div className="absolute left-[11px] top-3 bottom-5 w-[2px] bg-gray-200" />
+                <div className="absolute left-[11px] top-3 bottom-5 w-[2px] bg-border" />
 
                 {combinedHistory.map((item, idx) => {
                     const isExternal = item.source === 'external';
@@ -84,9 +85,9 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                         // Icon logic: if it's a status event (Blocked/Cancelled), use Red bg. 
                         // Otherwise (Comprou), use Green.
                         if (prefix === 'Bloqueado' || prefix === 'Cancelado') {
-                            bgColor = 'bg-red-500'; // Red for blocked/cancelled status
+                            bgColor = STATUS_COLORS.Cancelado.dot; // Red for blocked/cancelled status
                         } else {
-                            bgColor = 'bg-emerald-500'; // Greenish for component
+                            bgColor = STATUS_COLORS.Realizado.dot; // Greenish for component
                         }
                     } else {
                         // Internal Appointment Status Logic
@@ -96,7 +97,7 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                     <polyline points="20 6 9 17 4 12" />
                                 </svg>
                             );
-                            bgColor = 'bg-[#00E676]';
+                            bgColor = STATUS_COLORS.Realizado.dot;
                         } else if (status === 'Cancelado') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
@@ -104,14 +105,14 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                     <line x1="6" y1="6" x2="18" y2="18"></line>
                                 </svg>
                             );
-                            bgColor = 'bg-[#FF1744]';
+                            bgColor = STATUS_COLORS.Cancelado.dot;
                         } else if (status === 'Reagendado' || (item.type as any) === 'Reschedule') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
                                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                                 </svg>
                             );
-                            bgColor = 'bg-[#2979FF]';
+                            bgColor = STATUS_COLORS.Reagendado.dot;
                         } else if (status === 'Esquecimento') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
@@ -119,7 +120,7 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                     <line x1="6" y1="6" x2="18" y2="18"></line>
                                 </svg>
                             );
-                            bgColor = 'bg-[#D500F9]';
+                            bgColor = STATUS_COLORS.Esquecimento.dot;
                         } else if (status === 'No-show') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
@@ -127,14 +128,14 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                     <line x1="6" y1="6" x2="18" y2="18"></line>
                                 </svg>
                             );
-                            bgColor = 'bg-[#FF9100]';
+                            bgColor = STATUS_COLORS['No-show'].dot;
                         } else if (status === 'Pendente') {
                             Icon = (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
                                     <line x1="5" y1="12" x2="19" y2="12" />
                                 </svg>
                             );
-                            bgColor = 'bg-[#B2B2B2]';
+                            bgColor = STATUS_COLORS.Pendente.dot;
                         } else {
                             // Default fallback
                             Icon = (
@@ -142,7 +143,7 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                     <line x1="5" y1="12" x2="19" y2="12" />
                                 </svg>
                             );
-                            bgColor = 'bg-gray-500';
+                            bgColor = STATUS_COLOR_FALLBACK.dot;
                         }
                     }
 
@@ -183,7 +184,7 @@ export const ClientHistory: React.FC<ClientHistoryProps> = ({ phone, externalHis
                                                 strokeWidth="2"
                                                 strokeLinecap="round"
                                                 strokeLinejoin="round"
-                                                className="text-yellow-500"
+                                                className="text-status-iniciando"
                                             >
                                                 <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
                                                 <path d="M12 9v4" />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/modal';
+import { notify } from './ui/notify';
 import { Input as BaseInput } from './ui/input';
 import { CustomSelect } from './CustomSelect';
 import { Button } from './ui/button';
@@ -7,14 +8,10 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { Attendant } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { SECTOR_PRE_VENDAS } from '../constants/sectors';
+import { SECTOR_CUSTOMER_SUCCESS, SECTOR_PRE_VENDAS } from '../constants/sectors';
 
-const Input: React.FC<any> = ({ label, ...props }) => (
-    <div className="space-y-1">
-        {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
-        <BaseInput {...props} />
-    </div>
-);
+// O BaseInput já desenha o rótulo ligado ao campo (htmlFor), com o mesmo estilo.
+const Input: React.FC<any> = (props) => <BaseInput {...props} />;
 
 const Select = CustomSelect;
 
@@ -28,11 +25,16 @@ interface AttendantModalProps {
 export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose, onSuccess, attendant }) => {
     const { user } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // Igual ao servidor: Admin, Dev e o setor TEI cadastram em qualquer setor; os demais
+    // só no próprio. Antes o cadastro novo vinha com SDR fixo e o servidor recusava (403)
+    // quando um líder de outro setor criava alguém.
+    const canPickAnySector = !!user && (['Admin', 'Dev'].includes(user.role) || user.sector === 'TEI');
+    const defaultSector = canPickAnySector || !user?.sector ? 'SDR' : user.sector;
     const [formData, setFormData] = useState<Partial<Attendant>>({
         name: '',
         email: '',
         role: 'Colaborador',
-        sector: 'SDR',
+        sector: defaultSector,
         schedule: {
             mon: { start: '09:00', end: '18:00' },
             tue: { start: '09:00', end: '18:00' },
@@ -59,7 +61,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                 name: '',
                 email: '',
                 role: 'Colaborador',
-                sector: 'SDR',
+                sector: defaultSector,
                 schedule: {
                     mon: { start: '09:00', end: '18:00' },
                     tue: { start: '09:00', end: '18:00' },
@@ -74,22 +76,38 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                 }
             });
         }
-    }, [attendant, isOpen]);
+    }, [attendant, isOpen, defaultSector]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
+            // Pausa adicionada e não preenchida não vai para o banco: vazia, ela era
+            // lida como 00:00–24:00 e deixava o atendente indisponível o dia todo.
+            const pauses = Object.fromEntries(
+                Object.entries(formData.pauses || {}).map(([day, list]) => [
+                    day,
+                    (list || []).filter(pause => pause.start && pause.end)
+                ])
+            );
+            const payload = { ...formData, pauses };
             if (attendant) {
-                await api.attendants.update(attendant.id, formData);
+                await api.attendants.update(attendant.id, payload);
             } else {
-                await api.attendants.create(formData as Omit<Attendant, 'id'>);
+                await api.attendants.create(payload as Omit<Attendant, 'id'>);
             }
             onSuccess();
             onClose();
         } catch (error: any) {
             console.error('Failed to save attendant', error);
-            alert(error?.message || 'Erro ao salvar atendente');
+            // Mostra o motivo que o servidor devolveu (setor não permitido, email repetido, campo recusado...).
+            const reason = error?.message && !/^Failed to/.test(error.message) && error.message !== 'Erro Interno'
+                ? error.message
+                : 'Tente de novo. Se continuar, avise o time de sistemas.';
+            notify.error(
+                attendant ? `Não foi possível salvar ${attendant.name}.` : 'Não foi possível criar o atendente.',
+                reason
+            );
         } finally {
             setIsSubmitting(false);
         }
@@ -181,8 +199,21 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
         return [];
     };
 
+    const allSectors = [
+        { value: 'SDR', label: 'SDR' },
+        { value: 'Closer', label: 'Closer' },
+        { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
+        { value: SECTOR_CUSTOMER_SUCCESS, label: SECTOR_CUSTOMER_SUCCESS },
+        { value: 'Social Seller', label: 'Social Seller' },
+        { value: 'CEO', label: 'CEO' }
+    ];
+    // No cadastro novo, quem não é Admin/Dev/TEI só vê o próprio setor (o único que o servidor aceita).
+    const sectorOptions = canPickAnySector || attendant || !user?.sector
+        ? allSectors
+        : [{ value: user.sector, label: user.sector }];
+
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={attendant ? 'Editar Atendente' : 'Novo Atendente'}>
+        <Modal isOpen={isOpen} onClose={onClose} title={attendant ? 'Editar atendente' : 'Novo atendente'}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
                     label="Nome"
@@ -208,15 +239,7 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                         label="Setor"
                         value={formData.sector}
                         onChange={(e: any) => setFormData({ ...formData, sector: e.target.value as any })}
-                        options={[
-                            { value: 'SDR', label: 'SDR' },
-                            { value: 'Closer', label: 'Closer' },
-                            { value: SECTOR_PRE_VENDAS, label: SECTOR_PRE_VENDAS },
-                            { value: 'Tribo', label: 'Tribo' },
-                            { value: 'Aldeia', label: 'Aldeia' },
-                            { value: 'Social Seller', label: 'Social Seller' },
-                            { value: 'CEO', label: 'CEO' }
-                        ]}
+                        options={sectorOptions}
                     />
                 </div>
 
@@ -230,17 +253,17 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                             <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-2">
                                 <span className="text-sm font-medium text-foreground uppercase w-12 shrink-0">{day}</span>
                                 <div className="flex gap-2 items-center flex-1 min-w-0 basis-full sm:basis-auto order-last sm:order-none">
-                                    <span className="text-xs text-secondary shrink-0">Trabalho:</span>
+                                    <span className="text-xs text-muted-foreground shrink-0">Trabalho:</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-muted-foreground flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={formData.schedule?.[day]?.start || ''}
                                         onChange={e => updateSchedule(day, 'start', e.target.value)}
                                     />
-                                    <span className="text-secondary">-</span>
+                                    <span className="text-muted-foreground">-</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-sm text-muted-foreground flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={formData.schedule?.[day]?.end || ''}
                                         onChange={e => updateSchedule(day, 'end', e.target.value)}
                                     />
@@ -261,17 +284,17 @@ export const AttendantModal: React.FC<AttendantModalProps> = ({ isOpen, onClose,
                             {/* Pauses List */}
                             {formData.pauses?.[day]?.map((pause, index) => (
                                 <div key={index} className="flex flex-wrap sm:flex-nowrap gap-2 items-center sm:pl-16">
-                                    <span className="text-xs text-secondary w-full sm:w-[52px] sm:shrink-0">Pausa {index + 1}:</span>
+                                    <span className="text-xs text-muted-foreground w-full sm:w-[52px] sm:shrink-0">Pausa {index + 1}:</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-muted-foreground flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={pause.start}
                                         onChange={e => updatePause(day, index, 'start', e.target.value)}
                                     />
-                                    <span className="text-xs text-secondary">-</span>
+                                    <span className="text-xs text-muted-foreground">-</span>
                                     <input
                                         type="time"
-                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-secondary flex-1 min-w-0 sm:flex-none sm:w-24"
+                                        className="bg-background border border-border rounded px-2 py-2 sm:py-1 text-base sm:text-xs text-muted-foreground flex-1 min-w-0 sm:flex-none sm:w-24"
                                         value={pause.end}
                                         onChange={e => updatePause(day, index, 'end', e.target.value)}
                                     />

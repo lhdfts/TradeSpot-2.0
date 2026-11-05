@@ -77,6 +77,12 @@ export interface Appointment {
     knowledge_level?: KnowledgeLevel;
     financial_currency?: string;
     financial_amount?: number;
+    // Perfil do lead (preenchido por Pré-vendas e Closer)
+    profession?: string | null;
+    pain?: string | null;
+    interestProduct?: 'Aldeia' | 'Tribo' | null;
+    // Produto que o aluno tem (preenchido pelo Customer Success)
+    acquiredProduct?: 'Aldeia' | 'Tribo' | null;
     // Status tracking
     oldStatus?: AppointmentStatus;
     updatedBy?: string;
