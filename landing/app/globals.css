@@ -21,6 +21,13 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
   --animate-marquee: marquee 38s linear infinite;
+
+  /* Logo: o ponto cai na grade e assenta no lugar. */
+  @keyframes spot-drop {
+    0% { transform: translateY(-14px) scale(0.6); opacity: 0; }
+    60% { transform: translateY(1.5px) scale(1.06); opacity: 1; }
+    100% { transform: translateY(0) scale(1); }
+  }
   @keyframes marquee {
     from { transform: translateX(0); }
     to { transform: translateX(-50%); }
@@ -28,6 +35,7 @@
 }
 
 @layer base {
+  .spot-dot { transform-box: fill-box; transform-origin: center; }
   html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   body {
     background: var(--color-paper);
