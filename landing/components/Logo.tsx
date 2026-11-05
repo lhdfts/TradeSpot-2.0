@@ -1,60 +1,44 @@
 /**
  * Marca do Spot (uso exclusivo da LP).
  *
- * Símbolo: uma grade 3×3 de horários (a escala do time) em que um dos horários
- * virou o ponto azul, maior que os outros e saltando da grade: o "spot", o lugar
- * certo que o sistema escolhe para cada lead.
- * Nome: "spot" em caixa baixa, com o "o" substituído pelo mesmo ponto azul.
+ * Símbolo: uma grade 3×3 de horários (a escala do time) em que um dos horários virou
+ * o ponto azul, maior que os outros: o "spot", o lugar certo que o sistema escolhe
+ * para cada lead. Nome: "spot" em caixa baixa, com o "o" trocado pelo mesmo ponto.
  *
- * A grade usa currentColor (funciona sobre preto, branco e azul); o ponto é sempre
- * azul, exceto na versão "mono", para fundos azuis.
+ * Tudo num SVG só, com o nome em contorno (Schibsted Grotesk Black), para não depender
+ * de como cada navegador desenha a fonte:
+ *  - espaço de tinta igual entre todas as letras (s→p = p→● = ●→t);
+ *  - caixa simétrica em torno do miolo das minúsculas, então centralizar a caixa
+ *    centraliza o desenho (a perna do "p" é compensada por espaço igual em cima).
+ * Gerado a partir da fonte; para mudar proporções, regenere em vez de editar à mão.
  */
 
 const BLUE = '#1d4bff';
-
-// Grade 3×3: células de 10 com 5 de espaço. O ponto ocupa a linha do meio, à direita.
+const VIEWBOX = '-1 -21 147.78 42';
 const CELLS: [number, number][] = [
-  [0, 0], [15, 0], [30, 0],
-  [0, 15], [15, 15],
-  [0, 30], [15, 30], [30, 30],
+  [0, -20],
+  [15, -20],
+  [30, -20],
+  [0, -5],
+  [15, -5],
+  [0, 10],
+  [15, 10],
+  [30, 10],
 ];
+const LETTERS = 'M69.43 11.37L69.43 11.37Q66.91 11.37 64.55 10.71Q62.18 10.05 60.54 8.60Q58.90 7.15 58.50 4.74L58.50 4.74L65.45 3.36Q65.61 4.62 66.41 5.31Q67.21 5.99 69.07 5.99L69.07 5.99Q70.83 5.99 71.50 5.48Q72.17 4.96 72.17 4.34L72.17 4.34Q72.17 3.78 71.57 3.20Q70.97 2.62 69.13 2.40L69.13 2.40L67.67 2.22Q66.45 2.06 65.00 1.78Q63.54 1.50 62.24 0.88Q60.94 0.26 60.11-0.91Q59.28-2.08 59.28-4.00L59.28-4.00Q59.28-6.17 60.45-7.83Q61.62-9.49 63.83-10.43Q66.03-11.37 69.07-11.37L69.07-11.37Q71.57-11.37 73.79-10.67Q76.02-9.97 77.57-8.57Q79.12-7.17 79.56-5.04L79.56-5.04L72.75-3.62Q72.61-4.14 72.31-4.72Q72.01-5.31 71.35-5.72Q70.69-6.13 69.45-6.13L69.45-6.13Q68.17-6.13 67.60-5.67Q67.03-5.21 67.03-4.60L67.03-4.60Q67.03-3.94 67.59-3.56Q68.15-3.18 69.02-2.98Q69.89-2.78 70.81-2.66L70.81-2.66L72.73-2.42Q74.48-2.20 76.13-1.50Q77.78-0.80 78.85 0.56Q79.92 1.92 79.92 4.12L79.92 4.12Q79.92 6.55 78.53 8.16Q77.14 9.77 74.76 10.57Q72.37 11.37 69.43 11.37ZM89.42 18.62L81.41 18.62L81.41-10.81L89.02-10.81L89.02-6.99Q90.30-9.31 92.02-10.33L92.02-10.33Q93.75-11.37 96.09-11.37L96.09-11.37Q98.89-11.37 100.87-10.04Q102.86-8.71 103.91-6.16Q104.96-3.60 104.96 0.06L104.96 0.06Q104.96 3.68 103.90 6.22Q102.84 8.75 100.81 10.06Q98.79 11.37 95.91 11.37L95.91 11.37Q93.31 11.37 91.60 10.21L91.60 10.21Q90.40 9.41 89.42 7.91L89.42 7.91L89.42 18.62ZM92.85 5.51L92.85 5.51Q94.63 5.51 95.60 3.98Q96.57 2.46 96.57-0.10Q96.57-2.66 95.62-4.09Q94.67-5.53 92.89-5.53L92.89-5.53Q91.74-5.53 90.86-4.89Q89.98-4.26 89.49-3.03Q89.00-1.80 89.00-0.02L89.00-0.02Q89.00 2.66 90.09 4.08Q91.18 5.51 92.85 5.51ZM145.78 10.81L139.86 10.81Q136.55 10.81 135.01 9.39Q133.47 7.97 133.47 5.06L133.47 5.06L133.47-5.21L130.69-5.21L130.69-10.81L133.47-10.81L133.47-14.83L141.48-16.84L141.48-10.81L145.24-10.81L145.24-5.21L141.48-5.21L141.48 4.08Q141.48 4.76 141.67 4.98Q141.86 5.21 142.48 5.21L142.48 5.21L145.78 5.21L145.78 10.81Z';
 
-export function SpotMark({ className = 'size-7', mono = false, animate = true }: { className?: string; mono?: boolean; animate?: boolean }) {
-  return (
-    <svg viewBox="-2 -2 46 44" className={className} aria-hidden="true" focusable="false">
-      {CELLS.map(([x, y]) => (
-        <rect key={`${x}-${y}`} x={x} y={y} width="10" height="10" rx="3" fill="currentColor" />
-      ))}
-      <circle
-        cx="35.5"
-        cy="20"
-        r="7"
-        fill={mono ? 'currentColor' : BLUE}
-        className={animate ? 'spot-dot motion-safe:animate-[spot-drop_0.9s_cubic-bezier(0.16,1,0.3,1)_0.2s_both]' : undefined}
-      />
-    </svg>
-  );
-}
-
-export function SpotWordmark({ className = '', mono = false }: { className?: string; mono?: boolean }) {
-  return (
-    <span aria-hidden="true" className={`inline-flex items-baseline font-display font-black lowercase leading-none tracking-[-0.05em] ${className}`}>
-      sp
-      <span
-        className="mx-[0.02em] inline-block size-[0.56em] translate-y-[0.02em] rounded-full"
-        style={{ background: mono ? 'currentColor' : BLUE }}
-      />
-      t
-    </span>
-  );
-}
-
-/** Símbolo + nome. O nome acessível é "Spot". */
 export function Logo({ className = '', mono = false }: { className?: string; mono?: boolean }) {
+  const dot = mono ? 'currentColor' : BLUE;
   return (
-    <span role="img" aria-label="Spot" className={`group/logo inline-flex items-center gap-2.5 ${className}`}>
-      <SpotMark mono={mono} className="size-7 transition-transform duration-500 ease-out-expo group-hover/logo:rotate-[-6deg]" />
-      <SpotWordmark mono={mono} className="text-[26px]" />
-    </span>
+    <svg viewBox={VIEWBOX} role="img" aria-label="Spot" className={`group/logo h-[27px] w-auto overflow-visible ${className}`}>
+      <g className="origin-center transition-transform duration-500 ease-out-expo [transform-box:fill-box] group-hover/logo:rotate-[-6deg]">
+        {CELLS.map(([x, y]) => (
+          <rect key={`${x}-${y}`} x={x} y={y} width="10" height="10" rx="3" fill="currentColor" />
+        ))}
+        <circle cx={35.5} cy={0} r={7} fill={dot} className="spot-dot motion-safe:animate-[spot-drop_0.9s_cubic-bezier(0.16,1,0.3,1)_0.2s_both]" />
+      </g>
+      <path d={LETTERS} fill="currentColor" />
+      <circle cx={117.82} cy={0} r={11.37} fill={dot} />
+    </svg>
   );
 }
