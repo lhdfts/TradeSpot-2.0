@@ -12,13 +12,17 @@ import {
     Coffee,
     Clock,
     ShieldAlert,
-    RefreshCw
+    RefreshCw,
+    SearchX,
+    ScrollText
 } from 'lucide-react';
 import { cn } from '../components/ui/button';
 import { Button } from '../components/ui/button';
 import { FloatingInput } from '../components/FloatingInput';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { Pagination } from '../components/ui/pagination';
+import { Skeleton } from '../components/ui/skeleton';
+import { EmptyState } from '../components/ui/empty-state';
 
 export interface CheckLogItem {
     name: string;
@@ -191,7 +195,7 @@ export const Logs: React.FC = () => {
     const getExecutionTypeBadge = (type: string) => {
         const styles: Record<string, string> = {
             'Distribuição Automática': 'bg-primary/10 text-primary border-primary/20',
-            'Atribuição Manual': 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+            'Atribuição Manual': 'bg-status-realizado/10 text-status-realizado border-status-realizado/25',
             'Alteração de Status': 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
             'Alteração de Atendente': 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
             'Alteração de Owner': 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
@@ -215,7 +219,7 @@ export const Logs: React.FC = () => {
         const lower = reason.toLowerCase();
         if (selected || lower.includes('recebeu') || lower.includes('selecionado')) {
             return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-status-realizado/15 text-status-realizado border border-status-realizado/30">
                     <CheckCircle2 size={13} className="shrink-0" />
                     {reason}
                 </span>
@@ -231,7 +235,7 @@ export const Logs: React.FC = () => {
         }
         if (lower.includes('escala') || lower.includes('horário')) {
             return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-status-noshow/15 text-status-noshow border border-status-noshow/30">
                     <Clock size={13} className="shrink-0" />
                     {reason}
                 </span>
@@ -253,13 +257,115 @@ export const Logs: React.FC = () => {
         );
     };
 
+    // checks_log pode ter sido gravado como string ou null
+    const parseChecks = (log: ExecutionLog): CheckLogItem[] => {
+        if (Array.isArray(log.checks_log)) return log.checks_log;
+        if (typeof log.checks_log === 'string') {
+            try {
+                const parsed = JSON.parse(log.checks_log);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        }
+        return [];
+    };
+
+    const hasFilters = !!searchTerm || !!dateFilter || executionTypeFilter !== 'all';
+    const clearFilters = () => {
+        setSearchTerm('');
+        setDateFilter('');
+        setExecutionTypeFilter('all');
+    };
+
+    // Botão que abre/fecha as verificações da distribuição (tabela e cartões)
+    const checksToggle = (log: ExecutionLog, isExpanded: boolean, className?: string) => (
+        <Button
+            variant="ghost"
+            size="sm"
+            aria-expanded={isExpanded}
+            aria-controls={`checks-${log.id}`}
+            onClick={(e) => {
+                e.stopPropagation();
+                toggleRow(log.id);
+            }}
+            className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors duration-150",
+                isExpanded
+                    ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground"
+                    : "bg-background/50 text-foreground hover:bg-background border-border/80",
+                className
+            )}
+        >
+            <span>{isExpanded ? 'Ocultar verificações' : 'Ver verificações'}</span>
+            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </Button>
+    );
+
+    // Sanfona (Accordion) de Verificações
+    const checksPanel = (log: ExecutionLog, checks: CheckLogItem[]) => (
+        <div id={`checks-${log.id}`} className="bg-surface rounded-lg p-4 sm:p-5 border border-border shadow-inner space-y-3 animate-in fade-in slide-in-from-top-2 duration-150 motion-reduce:animate-none">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex flex-wrap items-center gap-1.5">
+                    <span>Verificações Feitas no Algoritmo para Esta Distribuição</span>
+                    <span className="px-2 py-0.5 rounded-full bg-background text-foreground font-normal border border-border/60">
+                        {checks.length} atendentes analisados
+                    </span>
+                </h4>
+                <span className="text-xs text-muted-foreground font-mono">
+                    ID: {log.id.slice(0, 8)}...
+                </span>
+            </div>
+
+            {checks.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic py-2">
+                    Nenhum detalhe de verificação foi gravado para esta execução.
+                </p>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                    {checks.map((check, index) => {
+                        const isSelected = check.selected || check.name === log.selected_attendant_name;
+                        return (
+                            <div
+                                key={index}
+                                className={cn(
+                                    "flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border text-sm transition-colors",
+                                    isSelected
+                                        ? "bg-status-realizado/10 border-status-realizado/30"
+                                        : "bg-background/50 border-border/80 hover:bg-background"
+                                )}
+                            >
+                                <span className="font-semibold text-foreground flex items-center gap-2 min-w-0 break-words">
+                                    {isSelected && (
+                                        <span className="w-2 h-2 rounded-full bg-status-realizado shrink-0" />
+                                    )}
+                                    {check.name}
+                                </span>
+
+                                <div>
+                                    {getReasonBadge(check.reason, check.selected)}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+
+    const typeBadge = (log: ExecutionLog) => (
+        <span className={cn("px-2.5 py-1 rounded-md text-xs font-semibold border whitespace-nowrap", getExecutionTypeBadge(log.execution_type))}>
+            {executionTypeLabel(log.execution_type)}
+        </span>
+    );
+
     return (
         <div className="space-y-6">
             {portalContainer && createPortal(
                 // No celular só o ícone, para caber ao lado do título
-                <Button onClick={fetchLogs} variant="outline" size="sm" disabled={loading} className="mr-2 h-9 px-2.5 sm:h-8 sm:px-3" aria-label="Atualizar Logs" title="Atualizar Logs">
-                    <RefreshCw size={16} className={cn("sm:mr-2", loading && "animate-spin")} />
-                    <span className="hidden sm:inline">Atualizar Logs</span>
+                <Button onClick={fetchLogs} variant="outline" size="sm" disabled={loading} className="mr-2 h-9 px-2.5 sm:h-8 sm:px-3" aria-label="Atualizar logs" title="Atualizar logs">
+                    <RefreshCw size={16} className={cn("sm:mr-2", loading && "animate-spin motion-reduce:animate-none")} />
+                    <span className="hidden sm:inline">Atualizar logs</span>
                 </Button>,
                 portalContainer
             )}
@@ -294,9 +400,41 @@ export const Logs: React.FC = () => {
                 </div>
             </div>
 
-            <div style={staggerStyle(0, 80)} className="animate-blur-fade bg-surface rounded-lg border border-border overflow-hidden shadow-lg">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[900px]">
+            {loading ? (
+                <div className="bg-surface rounded-lg border border-border p-4 space-y-3" aria-busy="true">
+                    {Array.from({ length: 5 }, (_, i) => (
+                        <Skeleton key={i} className="h-14 w-full rounded-md" />
+                    ))}
+                    <span className="sr-only">Carregando logs de execução…</span>
+                </div>
+            ) : error ? (
+                <EmptyState
+                    icons={[AlertCircle]}
+                    title="Não foi possível carregar os logs"
+                    description="Verifique a conexão e tente de novo."
+                    action={{ label: 'Tentar de novo', icon: RefreshCw, onClick: fetchLogs }}
+                />
+            ) : filteredLogs.length === 0 ? (
+                hasFilters ? (
+                    <EmptyState
+                        icons={[SearchX]}
+                        title="Nenhum registro com esses filtros"
+                        description="Tente outra data, outro tipo de execução ou limpe a pesquisa."
+                        action={{ label: 'Limpar filtros', onClick: clearFilters }}
+                    />
+                ) : (
+                    <EmptyState
+                        icons={[ScrollText]}
+                        title="Nenhum log ainda"
+                        description="Cada distribuição automática, atribuição manual e mudança de status ou atendente aparece aqui, com quem fez e o motivo."
+                        action={{ label: 'Atualizar logs', icon: RefreshCw, onClick: fetchLogs }}
+                    />
+                )
+            ) : (
+            <div style={staggerStyle(0, 80)} className="animate-fade-up bg-surface rounded-lg border border-border overflow-hidden shadow-sm">
+                {/* Tabela (desktop) */}
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left">
                         <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                             <tr>
                                 <th className="px-6 py-4">Data/Hora</th>
@@ -308,165 +446,93 @@ export const Logs: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
-                                        Carregando logs de execução...
-                                    </td>
-                                </tr>
-                            ) : error ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-destructive">
-                                        {error}
-                                    </td>
-                                </tr>
-                            ) : filteredLogs.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
-                                        {searchTerm || dateFilter || executionTypeFilter !== 'all'
-                                            ? 'Nenhum registro corresponde aos filtros selecionados.'
-                                            : 'Nenhum log encontrado.'}
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedLogs.map(log => {
-                                    const isExpanded = expandedRowId === log.id;
-                                    const isDistribution = log.execution_type === 'Distribuição Automática';
+                            {paginatedLogs.map(log => {
+                                const isExpanded = expandedRowId === log.id;
+                                const isDistribution = log.execution_type === 'Distribuição Automática';
 
-                                    // Safely handle checks_log if it was stored as a string or null
-                                    let safeChecksLog: CheckLogItem[] = [];
-                                    if (Array.isArray(log.checks_log)) {
-                                        safeChecksLog = log.checks_log;
-                                    } else if (typeof log.checks_log === 'string') {
-                                        try {
-                                            safeChecksLog = JSON.parse(log.checks_log);
-                                            if (!Array.isArray(safeChecksLog)) safeChecksLog = [];
-                                        } catch {
-                                            safeChecksLog = [];
-                                        }
-                                    }
+                                return (
+                                    <React.Fragment key={log.id}>
+                                        <tr
+                                            onClick={isDistribution ? () => toggleRow(log.id) : undefined}
+                                            className={cn(
+                                                "transition-colors",
+                                                isDistribution ? "hover:bg-background/50 cursor-pointer select-none" : "hover:bg-background/50",
+                                                isExpanded && "bg-background/80 font-medium"
+                                            )}
+                                        >
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-foreground font-medium">{formatDatePart(log.created_at)}</div>
+                                                <div className="text-sm text-muted-foreground">{formatTimePart(log.created_at)}</div>
+                                            </td>
 
-                                    return (
-                                        <React.Fragment key={log.id}>
-                                            <tr
-                                                onClick={isDistribution ? () => toggleRow(log.id) : undefined}
-                                                className={cn(
-                                                    "transition-colors",
-                                                    isDistribution ? "hover:bg-background/50 cursor-pointer select-none" : "hover:bg-background/50",
-                                                    isExpanded && "bg-background/80 font-medium"
+                                            <td className="px-6 py-4">
+                                                <div className="text-foreground font-medium">{log.client?.name || 'Aluno Desconhecido'}</div>
+                                                <div className="text-sm text-muted-foreground">{formatPhone(log.client?.phone)}</div>
+                                            </td>
+
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                {typeBadge(log)}
+                                            </td>
+
+                                            <td className="px-6 py-4 text-sm text-foreground whitespace-nowrap">
+                                                {log.changed_by_name || 'Sistema'}
+                                            </td>
+
+                                            <td className="px-6 py-4 text-sm text-foreground">
+                                                {getActionText(log)}
+                                            </td>
+
+                                            <td className="px-6 py-4 text-right whitespace-nowrap">
+                                                {isDistribution ? checksToggle(log, isExpanded) : (
+                                                    <span className="text-muted-foreground">—</span>
                                                 )}
-                                            >
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-foreground font-medium">{formatDatePart(log.created_at)}</div>
-                                                    <div className="text-sm text-secondary">{formatTimePart(log.created_at)}</div>
-                                                </td>
+                                            </td>
+                                        </tr>
 
-                                                <td className="px-6 py-4">
-                                                    <div className="text-foreground font-medium">{log.client?.name || 'Aluno Desconhecido'}</div>
-                                                    <div className="text-sm text-secondary">{formatPhone(log.client?.phone)}</div>
-                                                </td>
-
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={cn("px-2.5 py-1 rounded-md text-xs font-semibold border", getExecutionTypeBadge(log.execution_type))}>
-                                                        {executionTypeLabel(log.execution_type)}
-                                                    </span>
-                                                </td>
-
-                                                <td className="px-6 py-4 text-sm text-foreground whitespace-nowrap">
-                                                    {log.changed_by_name || 'Sistema'}
-                                                </td>
-
-                                                <td className="px-6 py-4 text-sm text-foreground">
-                                                    {getActionText(log)}
-                                                </td>
-
-                                                <td className="px-6 py-4 text-right whitespace-nowrap">
-                                                    {isDistribution ? (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                toggleRow(log.id);
-                                                            }}
-                                                            className={cn(
-                                                                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200",
-                                                                isExpanded
-                                                                    ? "bg-primary text-primary-foreground border-primary"
-                                                                    : "bg-background/50 text-foreground hover:bg-background border-border/80"
-                                                            )}
-                                                        >
-                                                            <span>{isExpanded ? 'Minimizar' : 'Verificações'}</span>
-                                                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                                        </Button>
-                                                    ) : (
-                                                        <span className="text-muted-foreground">—</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-
-                                        {/* Sanfona (Accordion) de Verificações */}
                                         {isExpanded && (
                                             <tr className="bg-background/30 border-b border-border">
-                                                <td colSpan={6} className="px-6 py-4 animate-in slide-in-from-top-2 duration-200">
-                                                    <div className="bg-surface rounded-lg p-4 sm:p-5 border border-border shadow-inner space-y-3">
-                                                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
-                                                            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex flex-wrap items-center gap-1.5">
-                                                                <span>Verificações Feitas no Algoritmo para Esta Distribuição</span>
-                                                                <span className="px-2 py-0.5 rounded-full bg-background text-foreground font-normal border border-border/60">
-                                                                    {safeChecksLog.length} atendentes analisados
-                                                                </span>
-                                                            </h4>
-                                                            <span className="text-xs text-muted-foreground font-mono">
-                                                                ID: {log.id.slice(0, 8)}...
-                                                            </span>
-                                                        </div>
-
-                                                        {safeChecksLog.length === 0 ? (
-                                                            <p className="text-xs text-muted-foreground italic py-2">
-                                                                Nenhum detalhe de verificação foi gravado para esta execução.
-                                                            </p>
-                                                        ) : (
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-                                                                {safeChecksLog.map((check, index) => {
-                                                                    const isSelected = check.selected || check.name === log.selected_attendant_name;
-                                                                    return (
-                                                                        <div
-                                                                            key={index}
-                                                                            className={cn(
-                                                                                "flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border text-sm transition-all",
-                                                                                isSelected
-                                                                                    ? "bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-500/5"
-                                                                                    : "bg-background/50 border-border/80 hover:bg-background"
-                                                                            )}
-                                                                        >
-                                                                            <span className="font-semibold text-foreground flex items-center gap-2 min-w-0 break-words">
-                                                                                {isSelected && (
-                                                                                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                                                                                )}
-                                                                                {check.name}
-                                                                            </span>
-
-                                                                            <div>
-                                                                                {getReasonBadge(check.reason, check.selected)}
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                <td colSpan={6} className="px-6 py-4">
+                                                    {checksPanel(log, parseChecks(log))}
                                                 </td>
                                             </tr>
                                         )}
                                     </React.Fragment>
                                 );
-                            })
-                        )}
-                    </tbody>
+                            })}
+                        </tbody>
                     </table>
                 </div>
-                {filteredLogs.length > 0 && totalPages > 1 && (
+
+                {/* Cartões (celular) */}
+                <ul className="md:hidden divide-y divide-border">
+                    {paginatedLogs.map(log => {
+                        const isExpanded = expandedRowId === log.id;
+                        const isDistribution = log.execution_type === 'Distribuição Automática';
+                        return (
+                            <li key={log.id} className={cn("p-4 space-y-3", isExpanded && "bg-background/50")}>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="text-foreground font-semibold break-words">{log.client?.name || 'Aluno Desconhecido'}</div>
+                                        <div className="text-sm text-muted-foreground tabular-nums">{formatPhone(log.client?.phone)}</div>
+                                    </div>
+                                    <div className="shrink-0 text-right text-sm tabular-nums">
+                                        <div className="text-foreground">{formatDatePart(log.created_at)}</div>
+                                        <div className="text-muted-foreground">{formatTimePart(log.created_at)}</div>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {typeBadge(log)}
+                                    <span className="text-xs text-muted-foreground">por {log.changed_by_name || 'Sistema'}</span>
+                                </div>
+                                <p className="text-sm text-foreground break-words">{getActionText(log)}</p>
+                                {isDistribution && checksToggle(log, isExpanded, 'w-full justify-center')}
+                                {isExpanded && checksPanel(log, parseChecks(log))}
+                            </li>
+                        );
+                    })}
+                </ul>
+
+                {totalPages > 1 && (
                     <div className="p-4 border-t border-border">
                         <Pagination
                             currentPage={currentPage}
@@ -476,6 +542,7 @@ export const Logs: React.FC = () => {
                     </div>
                 )}
             </div>
+            )}
         </div>
     );
 };

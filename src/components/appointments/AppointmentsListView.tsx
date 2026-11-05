@@ -191,7 +191,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
         <div className="space-y-6">
             {headerActions && createPortal(
                 <div className="flex flex-col text-right mr-4 min-w-[5.5rem]">
-                    <span className="text-[10px] tracking-wider text-secondary font-bold uppercase">Quantidade</span>
+                    <span className="text-xs tracking-wider text-muted-foreground font-bold uppercase">Quantidade</span>
                     <span className="text-xl font-bold text-foreground leading-none tabular-nums">
                         {showSkeleton ? '–' : appointments.length}
                     </span>
@@ -200,7 +200,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
             )}
 
             {truncated && !loading && (
-                <div className="p-3 rounded-lg border border-[#FF9100]/40 bg-[#FF9100]/10 text-sm text-foreground">
+                <div className="p-3 rounded-lg border border-status-noshow/40 bg-status-noshow/10 text-sm text-foreground">
                     O período selecionado tem mais agendamentos do que o limite de carregamento. A lista está incompleta — reduza o período.
                 </div>
             )}
@@ -237,7 +237,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                         <span className="hidden sm:inline">Filtros avançados</span>
                         {advancedActiveCount > 0 && (
                             <span
-                                className="grid place-items-center min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums animate-in zoom-in-50 duration-200"
+                                className="grid place-items-center min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-xs font-bold tabular-nums animate-in zoom-in-90 duration-150 motion-reduce:animate-none"
                                 aria-label={`${advancedActiveCount} filtro${advancedActiveCount > 1 ? 's' : ''} avançado${advancedActiveCount > 1 ? 's' : ''} ativo${advancedActiveCount > 1 ? 's' : ''}`}
                             >
                                 {advancedActiveCount}
@@ -264,7 +264,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                             <Button
                                 variant="ghost"
                                 onClick={onClearFilters}
-                                className="h-11 px-3 text-secondary hover:text-foreground animate-in fade-in zoom-in-95 duration-200"
+                                className="h-11 px-3 text-muted-foreground hover:text-foreground animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none"
                                 title="Limpar filtros"
                                 aria-label="Limpar filtros"
                             >
@@ -279,7 +279,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                             onClick={() => setViewMode('table')}
                             aria-pressed={viewMode === 'table'}
                             aria-label="Ver em lista"
-                            className={`h-full aspect-square rounded flex items-center justify-center transition-all duration-200 active:scale-90 ${viewMode === 'table' ? 'bg-gray-200 dark:bg-surface shadow text-black dark:text-white' : 'text-secondary hover:text-primary'}`}
+                            className={`h-full aspect-square rounded flex items-center justify-center transition-[background-color,color,transform] duration-150 active:scale-[0.97] ${viewMode === 'table' ? 'bg-muted dark:bg-surface shadow-sm text-foreground' : 'text-muted-foreground hover:text-primary'}`}
                             title="Lista"
                         >
                             <List size={18} />
@@ -288,7 +288,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                             onClick={() => setViewMode('calendar')}
                             aria-pressed={viewMode === 'calendar'}
                             aria-label="Ver em calendário"
-                            className={`h-full aspect-square rounded flex items-center justify-center transition-all duration-200 active:scale-90 ${viewMode === 'calendar' ? 'bg-gray-200 dark:bg-surface shadow text-black dark:text-white' : 'text-secondary hover:text-primary'}`}
+                            className={`h-full aspect-square rounded flex items-center justify-center transition-[background-color,color,transform] duration-150 active:scale-[0.97] ${viewMode === 'calendar' ? 'bg-muted dark:bg-surface shadow-sm text-foreground' : 'text-muted-foreground hover:text-primary'}`}
                             title="Calendário"
                         >
                             <CalendarIcon size={18} />
@@ -411,7 +411,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                     <div className="flex justify-between items-start gap-3">
                                         <div className="min-w-0">
                                             <h3 className="text-foreground font-semibold truncate">{appt.lead}</h3>
-                                            <div className="flex items-center gap-3 text-sm text-secondary mt-1">
+                                            <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
                                                 {appt.phone}
                                                 <CopyPhoneButton phone={appt.phone} size={14} />
                                             </div>
@@ -421,11 +421,11 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
 
                                     <div className="grid grid-cols-2 gap-2 text-sm">
                                         <div>
-                                            <span className="text-secondary block text-xs">Data</span>
+                                            <span className="text-muted-foreground block text-xs">Data</span>
                                             <AppointmentDate date={appt.date} time={appt.time} inline />
                                         </div>
                                         <div className="min-w-0">
-                                            <span className="text-secondary block text-xs">Tipo</span>
+                                            <span className="text-muted-foreground block text-xs">Tipo</span>
                                             <span className="text-foreground block truncate">{appt.type}</span>
                                         </div>
                                     </div>

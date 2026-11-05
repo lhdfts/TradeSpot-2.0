@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ToastProvider } from './components/ui/toast';
+import { ConfirmDialogProvider } from './components/ui/confirm-dialog';
 
 // Dois pacotes separados, baixados sob demanda:
 // - /agendar/*: página pública de agendamento. Leve: sem Firebase, gráficos
@@ -15,15 +17,22 @@ const LoadingScreen = () => (
   </div>
 );
 
+// Toasts (notify / toastManager) e diálogo de confirmação (useConfirm) ficam
+// globais: valem tanto no sistema interno quanto na página pública. O
+// ToastProvider do InternalApp, aninhado, só repassa os filhos.
 function App() {
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <Suspense fallback={<LoadingScreen />}>
-        <Routes>
-          <Route path="/agendar/*" element={<PublicSchedulingApp />} />
-          <Route path="*" element={<InternalApp />} />
-        </Routes>
-      </Suspense>
+      <ToastProvider position="top-right">
+        <ConfirmDialogProvider>
+          <Suspense fallback={<LoadingScreen />}>
+            <Routes>
+              <Route path="/agendar/*" element={<PublicSchedulingApp />} />
+              <Route path="*" element={<InternalApp />} />
+            </Routes>
+          </Suspense>
+        </ConfirmDialogProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

@@ -16,6 +16,7 @@ import { cn } from '../components/ui/button';
 import { User, Mail, Clock, Coffee, BarChart3, Building2 } from 'lucide-react';
 import { APPOINTMENT_STATUSES, type AppointmentStatus } from '../types';
 import { FloatingSelect } from '../components/FloatingSelect';
+import { STATUS_COLORS, STATUS_TOTAL_CHART } from '../lib/appointmentStatus';
 import { aberturaLigada, salvarAberturaLigada } from '../components/abertura/controleAbertura';
 
 const DAYS_OF_WEEK = [
@@ -27,6 +28,9 @@ const DAYS_OF_WEEK = [
     { key: 'sat', label: 'Sábado', short: 'Sáb' },
     { key: 'sun', label: 'Domingo', short: 'Dom' }
 ];
+
+// Ordem dos status no gráfico e nos filtros; as cores vêm de STATUS_COLORS.
+const CHART_STATUSES: AppointmentStatus[] = ['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'];
 
 export const Profile: React.FC = () => {
     const { user } = useAuth();
@@ -166,7 +170,7 @@ export const Profile: React.FC = () => {
                         </div>
                         <div className="min-w-0">
                             <h2 className="text-xl sm:text-2xl font-bold text-foreground break-words">{displayName}</h2>
-                            <div className="flex items-center gap-2 text-secondary text-sm mt-1">
+                            <div className="flex items-center gap-2 text-muted-foreground text-sm mt-1">
                                 <Mail size={16} className="text-muted-foreground shrink-0" />
                                 <span className="min-w-0 break-all">{displayEmail}</span>
                             </div>
@@ -175,7 +179,7 @@ export const Profile: React.FC = () => {
 
                     <div className="flex flex-wrap items-center gap-3">
                         <div className="flex items-center gap-2 bg-background px-4 py-2 rounded-lg border border-border">
-                            <Building2 size={16} className="text-[#3D719D]" />
+                            <Building2 size={16} className="text-primary" />
                             <div className="text-xs">
                                 <span className="text-muted-foreground block">Setor</span>
                                 <span className="font-semibold text-foreground">{displaySector}</span>
@@ -203,7 +207,7 @@ export const Profile: React.FC = () => {
                                 <div key={day.key} className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-background border border-border/60">
                                     <span className="text-sm font-medium text-foreground">{day.label}</span>
                                     {hasSchedule ? (
-                                        <span className="text-sm font-semibold text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-md border border-emerald-500/20">
+                                        <span className="text-sm font-semibold text-status-realizado bg-status-realizado/10 px-3 py-1 rounded-md border border-status-realizado/25">
                                             {sched.start} às {sched.end}
                                         </span>
                                     ) : (
@@ -220,7 +224,7 @@ export const Profile: React.FC = () => {
                 {/* Pausas Registradas */}
                 <div style={staggerStyle(2, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm flex flex-col">
                     <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
-                        <Coffee size={20} className="text-orange-500" />
+                        <Coffee size={20} className="text-status-noshow" />
                         <h3 className="text-lg font-bold text-foreground">Pausas Registradas</h3>
                     </div>
 
@@ -236,7 +240,7 @@ export const Profile: React.FC = () => {
                                     <div className="flex flex-wrap items-center gap-2">
                                         {hasPauses ? (
                                             dayPauses.map((pause, idx) => (
-                                                <span key={idx} className="text-xs font-semibold text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-md border border-orange-500/20">
+                                                <span key={idx} className="text-xs font-semibold text-status-noshow bg-status-noshow/10 px-2.5 py-1 rounded-md border border-status-noshow/25">
                                                     {pause.start} - {pause.end}
                                                 </span>
                                             ))
@@ -294,11 +298,11 @@ export const Profile: React.FC = () => {
                                 dataKey="displayDate"
                                 axisLine={false}
                                 tickLine={false}
-                                tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
+                                tick={{ fill: 'rgb(var(--muted-foreground))', fontSize: 12 }}
                                 dy={10}
                             />
                             <RechartsTooltip
-                                cursor={{ fill: 'var(--muted)', opacity: 0.2 }}
+                                cursor={{ fill: 'rgb(var(--muted))', opacity: 0.2 }}
                                 content={({ active, payload, label }: any) => {
                                     if (!active || !payload) return null;
                                     return (
@@ -325,58 +329,47 @@ export const Profile: React.FC = () => {
                                     );
                                 }}
                             />
-                            {['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'].map((status) => (
-                                selectedStatuses.includes(status as AppointmentStatus) && (
+                            {CHART_STATUSES.map((status) => (
+                                selectedStatuses.includes(status) && (
                                     <Bar
                                         key={status}
                                         dataKey={status}
                                         stackId="a"
-                                        fill={
-                                            status === 'Realizado' ? '#00E676' :
-                                                status === 'Pendente' ? '#B2B2B2' :
-                                                status === 'Cancelado' ? '#FF1744' :
-                                                status === 'Reagendado' ? '#2979FF' :
-                                                status === 'Esquecimento' ? '#D500F9' :
-                                                '#FF9100'
-                                        }
+                                        fill={STATUS_COLORS[status].chart}
                                         radius={[0, 0, 0, 0]}
                                         barSize={32}
                                     />
                                 )
                             ))}
-                            <Line type="monotone" dataKey="total" stroke="#333333" strokeWidth={2} dot={{ fill: "#333333", r: 4 }}>
-                                <LabelList dataKey="total" position="top" fill="#333333" fontSize={12} />
+                            <Line type="monotone" dataKey="total" stroke={STATUS_TOTAL_CHART} strokeWidth={2} dot={{ fill: STATUS_TOTAL_CHART, r: 4 }}>
+                                <LabelList dataKey="total" position="top" fill={STATUS_TOTAL_CHART} fontSize={12} />
                             </Line>
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
 
-                {/* Status Toggle Buttons */}
+                {/* Filtro de status: fundo neutro com ponto na cor da barra (mesma fonte: STATUS_COLORS) */}
                 <div className="flex flex-wrap gap-2 sm:gap-3 justify-center mt-6">
-                    {['Realizado', 'Pendente', 'Cancelado', 'Reagendado', 'Esquecimento', 'No-show'].map((status) => (
-                        <button
-                            key={status}
-                            onClick={() => toggleStatus(status as AppointmentStatus)}
-                            className={cn(
-                                "px-4 py-2 rounded-lg text-sm font-medium transition-all border",
-                                selectedStatuses.includes(status as AppointmentStatus)
-                                    ? "border-transparent text-white shadow-sm"
-                                    : "bg-transparent text-muted-foreground border-border hover:bg-muted"
-                            )}
-                            style={{
-                                backgroundColor: selectedStatuses.includes(status as AppointmentStatus)
-                                    ? status === 'Realizado' ? '#00E676' :
-                                        status === 'Pendente' ? '#B2B2B2' :
-                                        status === 'Cancelado' ? '#FF1744' :
-                                        status === 'Reagendado' ? '#2979FF' :
-                                        status === 'Esquecimento' ? '#D500F9' :
-                                        '#FF9100'
-                                    : undefined
-                            }}
-                        >
-                            {status}
-                        </button>
-                    ))}
+                    {CHART_STATUSES.map((status) => {
+                        const active = selectedStatuses.includes(status);
+                        return (
+                            <button
+                                key={status}
+                                type="button"
+                                aria-pressed={active}
+                                onClick={() => toggleStatus(status)}
+                                className={cn(
+                                    "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-[background-color,border-color,color,opacity] duration-150",
+                                    active
+                                        ? "bg-background text-foreground border-border"
+                                        : "bg-transparent text-muted-foreground border-dashed border-border opacity-70 hover:opacity-100 hover:bg-muted"
+                                )}
+                            >
+                                <span className={cn("size-2.5 rounded-full", active ? STATUS_COLORS[status].dot : "bg-muted-foreground/40")} />
+                                {status}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -384,7 +377,7 @@ export const Profile: React.FC = () => {
             <div style={staggerStyle(4, 80)} className="animate-blur-fade bg-surface p-4 sm:p-6 rounded-xl border border-border shadow-sm flex items-center justify-between gap-4">
                 <div className="min-w-0">
                     <h3 className="text-lg font-bold text-foreground">Vinheta de abertura</h3>
-                    <p className="text-sm text-secondary mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                         Animação de alguns segundos ao entrar no sistema. Vale para este navegador.{' '}
                         <a href="/abertura" target="_blank" rel="noreferrer" className="underline hover:text-foreground">Assistir</a>
                     </p>
@@ -401,12 +394,12 @@ export const Profile: React.FC = () => {
                     }}
                     className={cn(
                         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
-                        vinhetaLigada ? "bg-[#070707] dark:bg-white" : "bg-gray-300 dark:bg-gray-600"
+                        vinhetaLigada ? "bg-foreground" : "bg-muted-foreground/30"
                     )}
                 >
                     <span
                         className={cn(
-                            "inline-block h-5 w-5 rounded-full bg-white dark:bg-[#070707] shadow transition-transform",
+                            "inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform",
                             vinhetaLigada ? "translate-x-5" : "translate-x-0.5"
                         )}
                     />

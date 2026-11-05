@@ -51,15 +51,15 @@ export const ArchiveAttendantModal: React.FC<ArchiveAttendantModalProps> = ({ at
     const canConfirm = pendingCount === 0 && !isArchiving;
 
     return (
-        <Modal isOpen={!!attendant} onClose={onClose} title="Arquivar Colaborador" maxWidthClass="max-w-md">
+        <Modal isOpen={!!attendant} onClose={onClose} title="Arquivar atendente" maxWidthClass="max-w-md">
             {attendant && (
                 <div className="space-y-4">
                     {pendingCount === null && !error && (
-                        <p className="text-secondary text-sm">Verificando atendimentos pendentes...</p>
+                        <p className="text-muted-foreground text-sm">Verificando atendimentos pendentes...</p>
                     )}
 
                     {hasPending && (
-                        <div className="flex gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-400">
+                        <div className="flex gap-3 rounded-lg border border-status-iniciando/30 bg-status-iniciando/10 p-3 text-sm text-status-iniciando">
                             <AlertTriangle size={18} className="shrink-0 mt-0.5" />
                             <div className="space-y-2">
                                 <p>
@@ -69,7 +69,7 @@ export const ArchiveAttendantModal: React.FC<ArchiveAttendantModalProps> = ({ at
                                 <button
                                     type="button"
                                     onClick={() => onViewAppointments(attendant.name)}
-                                    className="underline hover:text-yellow-300 transition-colors"
+                                    className="underline underline-offset-4 hover:opacity-80 transition-opacity"
                                 >
                                     Ver agendamentos
                                 </button>
@@ -80,7 +80,7 @@ export const ArchiveAttendantModal: React.FC<ArchiveAttendantModalProps> = ({ at
                     {pendingCount === 0 && (
                         <div className="space-y-2 text-sm text-foreground">
                             <p>Tem certeza que deseja arquivar <strong>{attendant.name}</strong>?</p>
-                            <p className="text-secondary">
+                            <p className="text-muted-foreground">
                                 O colaborador deixará de receber agendamentos e perderá o acesso ao sistema.
                                 O setor passará a ser "Desativado" e o e-mail será alterado para{' '}
                                 <span className="break-all">{attendant.email}.desativado</span>.
@@ -95,7 +95,7 @@ export const ArchiveAttendantModal: React.FC<ArchiveAttendantModalProps> = ({ at
                             Cancelar
                         </Button>
                         <Button type="button" variant="destructive" onClick={handleConfirm} disabled={!canConfirm} className="w-full sm:w-auto h-11 sm:h-9">
-                            {isArchiving ? 'Arquivando...' : 'Arquivar'}
+                            {isArchiving ? 'Arquivando...' : 'Arquivar atendente'}
                         </Button>
                     </div>
                 </div>

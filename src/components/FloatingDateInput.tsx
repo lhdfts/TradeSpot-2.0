@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useId } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -37,6 +37,10 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
     const inputRef = useRef<HTMLInputElement>(null);
 
     const containerRef = useRef<HTMLDivElement>(null);
+    // Liga o rótulo e o erro ao campo (o id pode vir de fora)
+    const autoId = useId();
+    const inputId = id ?? autoId;
+    const errorId = `${inputId}-erro`;
 
     // Formata a data para exibição (DD/MM/YYYY)
     const formatDateForDisplay = (dateStr: string) => {
@@ -215,6 +219,30 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
         setIsOpen(true);
     };
 
+    // Pelo botão do calendário, o foco entra no calendário (dia escolhido, hoje ou o
+    // primeiro dia disponível) para dar para escolher a data pelo teclado.
+    const calendarRef = useRef<HTMLDivElement>(null);
+    const calendarButtonRef = useRef<HTMLButtonElement>(null);
+    // Ao fechar com o foco dentro do calendário, devolve o foco ao botão (e não ao
+    // campo de texto, que reabriria o calendário ao receber foco).
+    const restoreFocusFromCalendar = () => {
+        if (calendarRef.current?.contains(document.activeElement)) {
+            calendarButtonRef.current?.focus();
+        }
+    };
+    const openCalendarWithFocus = () => {
+        openDatePicker();
+        setTimeout(() => {
+            const root = calendarRef.current;
+            if (!root) return;
+            const target =
+                root.querySelector<HTMLButtonElement>('button[aria-pressed="true"]:not(:disabled)') ??
+                root.querySelector<HTMLButtonElement>('button[aria-current="date"]:not(:disabled)') ??
+                root.querySelector<HTMLButtonElement>('button[aria-pressed]:not(:disabled)');
+            target?.focus();
+        }, 0);
+    };
+
     // Gera os dias do calendário
     const getDaysInMonth = (date: Date) => {
         return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -253,10 +281,10 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
         return days;
     };
 
-    const handleDateSelect = (day: number) => {
+    const handleDateSelect = (day: number, base: Date = currentMonth) => {
         const selected = new Date(
-            currentMonth.getFullYear(),
-            currentMonth.getMonth(),
+            base.getFullYear(),
+            base.getMonth(),
             day
         );
 
@@ -280,6 +308,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
 
         if (converted && onChange) {
             onChange({ target: { id, name, value: converted } });
+            restoreFocusFromCalendar();
             setIsOpen(false);
         }
     };
@@ -316,6 +345,18 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
         );
     };
 
+    // Nome completo do dia para leitores de tela, ex.: "27 de outubro de 2026"
+    const getDayLabel = (day: number) =>
+        new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day)
+            .toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const isToday = (day: number) => {
+        const today = new Date();
+        return today.getFullYear() === currentMonth.getFullYear() &&
+            today.getMonth() === currentMonth.getMonth() &&
+            today.getDate() === day;
+    };
+
     const isDateDisabled = (day: number) => {
         const date = new Date(
             currentMonth.getFullYear(),
@@ -344,6 +385,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
 
     const calendarContent = (
         <div
+            ref={calendarRef}
             className={cn(
                 "bg-surface border border-border rounded-lg shadow-lg p-4 absolute z-[9999] w-80 datepicker-portal"
             )}
@@ -354,25 +396,36 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                 transform: coords.above ? 'translateY(-100%)' : undefined
             }}
             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+            role="dialog"
+            aria-label={`Calendário: ${label}`}
+            onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    restoreFocusFromCalendar();
+                    setIsOpen(false);
+                }
+            }}
         >
             {/* Header com navegação */}
             <div className="flex items-center justify-between mb-4">
                 <button
                     type="button"
                     onClick={handlePrevMonth}
-                    className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
+                    aria-label="Mês anterior"
+                    className="p-1 hover:bg-accent rounded-md transition-colors text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                    <ChevronLeft size={16} />
+                    <ChevronLeft size={16} aria-hidden="true" />
                 </button>
-                <span className="text-sm font-bold capitalize text-foreground">
+                <span aria-live="polite" className="text-sm font-bold capitalize text-foreground">
                     {formattedMonthName}
                 </span>
                 <button
                     type="button"
                     onClick={handleNextMonth}
-                    className="p-1 hover:bg-accent rounded-md transition-colors text-foreground"
+                    aria-label="Próximo mês"
+                    className="p-1 hover:bg-accent rounded-md transition-colors text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                    <ChevronRight size={16} />
+                    <ChevronRight size={16} aria-hidden="true" />
                 </button>
             </div>
 
@@ -390,28 +443,37 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
 
             {/* Grid de dias */}
             <div className="grid grid-cols-7 gap-1 mb-4">
-                {calendarDays.map((dayObj, index) => (
-                    <button
-                        key={index}
-                        type="button"
-                        onClick={() =>
-                            !dayObj.isOtherMonth && !isDateDisabled(dayObj.day) && handleDateSelect(dayObj.day)
-                        }
-                        disabled={dayObj.isOtherMonth || isDateDisabled(dayObj.day)}
-                        className={cn(
-                            "h-8 rounded text-sm transition-colors",
-                            dayObj.isOtherMonth
-                                ? "text-muted-foreground font-normal cursor-default"
-                                : isDateDisabled(dayObj.day)
-                                    ? "text-muted-foreground/50 cursor-not-allowed font-medium"
-                                    : isDateSelected(dayObj.day)
-                                        ? "bg-[#070707] text-white font-bold cursor-pointer hover:bg-[#070707]/90"
-                                        : "text-foreground font-bold hover:bg-accent cursor-pointer"
-                        )}
-                    >
-                        {dayObj.day}
-                    </button>
-                ))}
+                {calendarDays.map((dayObj, index) => {
+                    const selected = !dayObj.isOtherMonth && isDateSelected(dayObj.day);
+                    return (
+                        <button
+                            key={index}
+                            type="button"
+                            onClick={() =>
+                                !dayObj.isOtherMonth && !isDateDisabled(dayObj.day) && handleDateSelect(dayObj.day)
+                            }
+                            disabled={dayObj.isOtherMonth || isDateDisabled(dayObj.day)}
+                            // Dias de outro mês são só preenchimento visual
+                            aria-hidden={dayObj.isOtherMonth ? true : undefined}
+                            aria-label={dayObj.isOtherMonth ? undefined : getDayLabel(dayObj.day)}
+                            aria-pressed={dayObj.isOtherMonth ? undefined : selected}
+                            aria-current={!dayObj.isOtherMonth && isToday(dayObj.day) ? 'date' : undefined}
+                            className={cn(
+                                "h-8 rounded text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                dayObj.isOtherMonth
+                                    ? "text-muted-foreground font-normal cursor-default"
+                                    : isDateDisabled(dayObj.day)
+                                        ? "text-muted-foreground/50 cursor-not-allowed font-medium"
+                                        : selected
+                                            // Token primário: antes #070707 sumia sobre o fundo escuro
+                                            ? "bg-primary text-primary-foreground font-bold cursor-pointer hover:bg-primary/90"
+                                            : "text-foreground font-bold hover:bg-accent cursor-pointer"
+                            )}
+                        >
+                            {dayObj.day}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Footer com botões */}
@@ -423,9 +485,10 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                         if (onChange) {
                             onChange({ target: { id, name, value: "" } });
                         }
+                        restoreFocusFromCalendar();
                         setIsOpen(false);
                     }}
-                    className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
+                    className="px-3 py-1 text-xs font-bold text-foreground hover:bg-primary/10 rounded transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                     Limpar
                 </button>
@@ -434,9 +497,10 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                     onClick={() => {
                         const today = new Date();
                         setCurrentMonth(today);
-                        handleDateSelect(today.getDate());
+                        // Passa o mês de hoje: o estado currentMonth só muda no próximo render
+                        handleDateSelect(today.getDate(), today);
                     }}
-                    className="px-3 py-1 text-xs font-bold text-black dark:text-white hover:bg-primary/10 rounded transition-colors"
+                    className="px-3 py-1 text-xs font-bold text-foreground hover:bg-primary/10 rounded transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                     Hoje
                 </button>
@@ -453,7 +517,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
             <div className={cn("relative", className)}>
                 <input
                     type="date"
-                    id={id}
+                    id={inputId}
                     name={name}
                     value={value}
                     min={toISO(minDate)}
@@ -461,22 +525,20 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                     disabled={disabled}
                     onChange={(e) => onChange?.({ target: { id, name, value: e.target.value } })}
                     aria-invalid={error ? true : undefined}
-                    aria-label={label}
+                    aria-describedby={error ? errorId : undefined}
                     className={cn(
-                        "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-base bg-surface text-foreground appearance-none text-left",
+                        "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-[border-color,box-shadow] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring text-base bg-surface text-foreground appearance-none text-left",
                         // iOS centraliza a data e encolhe o campo vazio
                         "[&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:min-h-[1.5em]",
                         // Indicador nativo (Android) invisível sobre o campo todo: tocar em qualquer ponto abre o calendário
                         "relative [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0",
-                        error
-                            ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"
-                            : "border-border focus:border-[#070707] dark:focus:border-gray-400 focus:ring-1 focus:ring-[#070707] dark:focus:ring-gray-400",
+                        error ? "border-destructive" : "border-input",
                         disabled && "opacity-50 cursor-not-allowed"
                     )}
                 />
                 {/* Rótulo sempre no alto: o campo nativo mostra o próprio formato (dd/mm/aaaa) quando vazio */}
                 <label
-                    htmlFor={id}
+                    htmlFor={inputId}
                     className={cn(
                         "absolute left-2 -top-2 bg-surface px-1 text-xs pointer-events-none z-10",
                         error ? "text-destructive" : "text-muted-foreground"
@@ -484,8 +546,8 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
                 >
                     {label}
                 </label>
-                <CalendarIcon size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                {error && <p className="mt-1 text-xs text-destructive">{error.message}</p>}
+                <CalendarIcon size={18} aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                {error && <p id={errorId} className="mt-1 text-xs text-destructive">{error.message}</p>}
             </div>
         );
     }
@@ -494,50 +556,64 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
         <div className={cn("relative", className)} ref={containerRef}>
             <input
                 type="text"
-                id={id}
+                id={inputId}
                 ref={inputRef}
                 value={displayValue}
                 onChange={handleChange}
                 onClick={openDatePicker} // Ensure click opens it
                 onFocus={openDatePicker}
                 onBlur={handleBlur}
+                onKeyDown={(e) => {
+                    // Esc fecha o calendário sem fechar o modal em volta
+                    if (e.key === 'Escape' && isOpen) {
+                        e.stopPropagation();
+                        setIsOpen(false);
+                    } else if (e.key === 'Tab') {
+                        setIsOpen(false);
+                    }
+                }}
                 placeholder=" "
+                inputMode="numeric"
                 disabled={disabled}
                 maxLength={10}
                 aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
                 className={cn(
                     // text-base no celular: com menos de 16px o Safari do iPhone dá zoom ao focar o campo
-                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-base sm:text-sm bg-surface text-foreground",
+                    "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-[border-color,box-shadow] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring text-base sm:text-sm bg-surface text-foreground",
                     error
-                        ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"
+                        ? "border-destructive"
                         : isOpen
-                            ? "border-[#070707] dark:border-gray-400 focus:border-[#070707] dark:focus:border-gray-400 ring-1 ring-[#070707] dark:ring-gray-400"
-                            : "border-border focus:border-[#070707] dark:focus:border-gray-400 focus:ring-1 focus:ring-[#070707] dark:focus:ring-gray-400",
+                            ? "border-ring ring-1 ring-ring"
+                            : "border-input",
                     disabled && "opacity-50 cursor-not-allowed"
                 )}
             />
 
             <label
+                htmlFor={inputId}
                 className={cn(
-                    "absolute left-2 bg-surface px-1 transition-all duration-200 pointer-events-none z-10",
+                    "absolute left-2 bg-surface px-1 transition-[top,font-size,color] duration-200 motion-reduce:transition-none pointer-events-none z-10",
                     hasValue || isOpen
-                        ? "-top-2 text-xs text-[#070707] dark:text-gray-400"
-                        : "top-3 text-sm text-muted-foreground",
-                    error && "text-destructive",
-                    isOpen && !error && "text-[#070707] dark:text-gray-400"
+                        ? "-top-2 text-xs"
+                        : "top-3 text-sm",
+                    error ? "text-destructive" : isOpen ? "text-foreground" : "text-muted-foreground"
                 )}
             >
                 {label}
             </label>
 
             <button
+                ref={calendarButtonRef}
                 type="button"
-                onClick={openDatePicker}
+                onClick={openCalendarWithFocus}
                 disabled={disabled}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center w-6 h-6"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center w-6 h-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Abrir calendário"
+                aria-haspopup="dialog"
+                aria-expanded={isOpen}
             >
-                <CalendarIcon size={18} />
+                <CalendarIcon size={18} aria-hidden="true" />
             </button>
 
             {/* Datepicker customizado */}
@@ -546,7 +622,7 @@ export const FloatingDateInput: React.FC<FloatingDateInputProps> = ({
             {/* Mensagem de erro */}
             {
                 error && (
-                    <p className="mt-1 text-xs text-destructive">{error.message}</p>
+                    <p id={errorId} className="mt-1 text-xs text-destructive">{error.message}</p>
                 )
             }
         </div >

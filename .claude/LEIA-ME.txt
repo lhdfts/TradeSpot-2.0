@@ -1,0 +1,24 @@
+﻿SKILLS DA ESTEIRA DE REVISAO DE DESIGN
+
+Como instalar:
+1. Copie a pasta ".claude" deste zip para a raiz do seu projeto
+   (fica: seu-projeto/.claude/skills/<nome-da-skill>/SKILL.md).
+   Para usar em todos os seus projetos, copie o conteudo de "skills" para
+   C:\Users\<voce>\.claude\skills\ (ou ~/.claude/skills no Mac/Linux).
+2. Reabra o Claude Code. Digite "/" para ver as skills.
+
+Ordem da esteira (so revisao, sem mexer no codigo; no fim, lista por prioridade):
+1. Emil:      /emil-design-eng, /mobile-native, /improve-animations
+2. Garden:    /web-design-engineer
+3. AI design: /landing-page-design
+4. Awwwards:  /awwwards
+5. Review:    /interface-review
+
+Pedido sugerido ao Claude:
+"Use as skills nesta ordem para revisar o sistema: 1. emil (emil-design-eng,
+mobile-native, improve-animations) 2. web-design-engineer 3. landing-page-design
+4. awwwards 5. interface-review. So revisao; no fim junte tudo numa lista por prioridade."
+
+As skills better-* vao junto porque a interface-review depende delas.
+Licencas: todas MIT; o LICENSE de cada autor esta dentro da pasta da skill.
+Origem de cada uma: SOURCES.md.

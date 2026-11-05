@@ -1,0 +1,125 @@
+/* Pilha de toasts (Base UI Toast).
+   Em CSS puro de propósito: são muitos estados combinados (posição, empilhado,
+   expandido, swipe, entrada/saída) e a ordem da cascata precisa ser previsível.
+   Variáveis definidas pelo Base UI no Root: --toast-index, --toast-height,
+   --toast-frontmost-height, --toast-offset-y, --toast-swipe-movement-x/y. */
+
+.toast-viewport {
+  position: fixed;
+  z-index: 9999;
+  width: min(22rem, calc(100vw - 2rem));
+  --toast-inset: 1rem;
+}
+.toast-viewport[data-position*="top"] { top: var(--toast-inset); }
+.toast-viewport[data-position*="bottom"] { bottom: var(--toast-inset); }
+.toast-viewport[data-position*="right"] { right: var(--toast-inset); }
+.toast-viewport[data-position*="left"] { left: var(--toast-inset); }
+.toast-viewport[data-position*="center"] { left: 50%; transform: translateX(-50%); }
+
+.toast-root {
+  --toast-gap: 0.75rem;
+  --toast-peek: 0.75rem;
+  --toast-scale: calc(max(0, 1 - (var(--toast-index) * 0.1)));
+  --toast-shrink: calc(1 - var(--toast-scale));
+  --toast-calc-height: var(--toast-frontmost-height, var(--toast-height));
+  /* +1 ou -1: direção em que a pilha cresce */
+  --toast-dir: 1;
+
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: calc(9999 - var(--toast-index));
+  height: var(--toast-calc-height);
+  user-select: none;
+  cursor: default;
+  transition:
+    transform 250ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    height 150ms cubic-bezier(0.23, 1, 0.32, 1);
+  /* Posição de repouso (empilhada); reaproveitada no movimento reduzido */
+  --toast-rest-transform:
+    translateX(var(--toast-swipe-movement-x))
+    translateY(calc(var(--toast-swipe-movement-y) + var(--toast-dir) * ((var(--toast-index) * var(--toast-peek)) + (var(--toast-shrink) * var(--toast-calc-height)))))
+    scale(var(--toast-scale));
+  transform: var(--toast-rest-transform);
+}
+.toast-root[data-position*="top"] {
+  top: 0;
+  transform-origin: top center;
+  --toast-calc-offset-y: calc(var(--toast-offset-y) + var(--toast-index) * var(--toast-gap) + var(--toast-swipe-movement-y));
+}
+.toast-root[data-position*="bottom"] {
+  bottom: 0;
+  transform-origin: bottom center;
+  --toast-dir: -1;
+  --toast-calc-offset-y: calc(var(--toast-offset-y) * -1 - var(--toast-index) * var(--toast-gap) + var(--toast-swipe-movement-y));
+}
+
+/* Preenche o vão entre toasts expandidos, para o hover não "cair" no espaço */
+.toast-root::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: calc(var(--toast-gap) + 1px);
+}
+.toast-root[data-position*="top"]::after { top: 100%; }
+.toast-root[data-position*="bottom"]::after { bottom: 100%; }
+
+/* Expandida (hover/foco): cada toast na sua altura real, sem escala */
+.toast-root[data-expanded] {
+  height: var(--toast-height);
+  --toast-rest-transform: translateX(var(--toast-swipe-movement-x)) translateY(var(--toast-calc-offset-y));
+  transform: var(--toast-rest-transform);
+}
+
+/* Além do limite visível */
+.toast-root[data-limited] { opacity: 0; }
+
+/* Entrada: desliza da borda da tela */
+.toast-root[data-starting-style] {
+  opacity: 0;
+  transform: translateX(calc(100% + var(--toast-inset)));
+}
+.toast-root[data-position*="left"][data-starting-style] {
+  transform: translateX(calc(-100% - var(--toast-inset)));
+}
+.toast-root[data-position*="center"][data-starting-style] {
+  transform: translateY(calc(var(--toast-dir) * -1 * (100% + var(--toast-inset))));
+}
+
+/* Saída */
+.toast-root[data-ending-style] { opacity: 0; }
+.toast-root[data-ending-style]:not([data-limited]):not([data-swipe-direction]) {
+  transform: translateX(calc(100% + var(--toast-inset)));
+}
+.toast-root[data-position*="left"][data-ending-style]:not([data-limited]):not([data-swipe-direction]) {
+  transform: translateX(calc(-100% - var(--toast-inset)));
+}
+.toast-root[data-ending-style][data-swipe-direction="left"] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) - 100% - var(--toast-inset))) translateY(var(--toast-calc-offset-y));
+}
+.toast-root[data-ending-style][data-swipe-direction="right"] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) + 100% + var(--toast-inset))) translateY(var(--toast-calc-offset-y));
+}
+.toast-root[data-ending-style][data-swipe-direction="up"] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) - 100% - var(--toast-inset)));
+}
+.toast-root[data-ending-style][data-swipe-direction="down"] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) + 100% + var(--toast-inset)));
+}
+
+/* Movimento reduzido: só opacidade, sem deslizar nem escalar a pilha */
+@media (prefers-reduced-motion: reduce) {
+  .toast-root {
+    transition: opacity 200ms linear;
+  }
+  .toast-root[data-starting-style],
+  .toast-root[data-ending-style]:not([data-limited]):not([data-swipe-direction]),
+  .toast-root[data-position*="left"][data-starting-style],
+  .toast-root[data-position*="left"][data-ending-style]:not([data-limited]):not([data-swipe-direction]),
+  .toast-root[data-position*="center"][data-starting-style] {
+    transform: var(--toast-rest-transform);
+  }
+}

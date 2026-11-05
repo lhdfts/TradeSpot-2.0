@@ -10,7 +10,7 @@ function RelativeDayChip({ date }: { date: string }) {
   return (
     <span
       className={cn(
-        'px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide leading-none',
+        'px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide leading-none',
         relative === 'Hoje' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
       )}
     >
@@ -33,7 +33,7 @@ export function AppointmentDate({ date, time, inline }: { date: string; time: st
     // O selo ocupa o lugar do dia da semana: a célula mantém a mesma largura e altura.
     <div>
       <div className="text-foreground font-medium tabular-nums">{formatDateBR(date)}</div>
-      <div className="h-5 flex items-center gap-1.5 text-sm text-secondary tabular-nums">
+      <div className="h-5 flex items-center gap-1.5 text-sm text-muted-foreground tabular-nums">
         {relativeDayLabel(date) ? <RelativeDayChip date={date} /> : <span className="capitalize">{weekdayShort(date)}</span>}
         <span>· {time}</span>
       </div>
@@ -67,14 +67,14 @@ export function CopyPhoneButton({ phone, size = 12 }: { phone: number | string; 
       type="button"
       onClick={copy}
       className={cn(
-        'inline-flex items-center justify-center rounded p-1 -m-1 transition-all',
+        'inline-flex items-center justify-center rounded p-1 -m-1 transition-[color,background-color,opacity] duration-150',
         'hover:bg-foreground/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-        copied ? 'text-green-500 opacity-100' : 'text-foreground opacity-50 group-hover:opacity-100'
+        copied ? 'text-status-realizado opacity-100' : 'text-foreground opacity-50 group-hover:opacity-100'
       )}
       title="Copiar telefone"
       aria-label={copied ? 'Telefone copiado' : 'Copiar telefone'}
     >
-      {copied ? <Check size={size} className="animate-in zoom-in-50 duration-200" /> : <Copy size={size} />}
+      {copied ? <Check size={size} className="animate-in zoom-in-90 duration-150 motion-reduce:animate-none" /> : <Copy size={size} />}
     </button>
   );
 }
@@ -86,7 +86,7 @@ export function LeadCell({ lead, phone }: { lead: string; phone: number | string
       <div className="text-foreground font-medium truncate" title={lead}>
         {lead}
       </div>
-      <div className="flex items-center gap-2 text-sm text-secondary tabular-nums">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground tabular-nums">
         {phone}
         <CopyPhoneButton phone={phone} />
       </div>

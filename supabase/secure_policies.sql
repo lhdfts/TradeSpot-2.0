@@ -1,3 +1,6 @@
+-- ⚠️ OBSOLETO / INSEGURO: NÃO EXECUTE. Este script concede ou não remove acesso de anon/authenticated.
+-- Use supabase/lockdown_anon_access.sql (todo acesso a dados passa pelo backend com a secret key).
+
 -- ====================================================================
 -- SCRIPT DE POLÍTICAS RLS SEGURAS - TRADESPOT 2.0
 -- Este script revoga as permissões de desenvolvimento ("Enable all access for everyone")

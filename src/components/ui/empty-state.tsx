@@ -23,7 +23,7 @@ interface EmptyStateProps {
 }
 
 const iconCard =
-  'bg-surface size-12 grid place-items-center rounded-xl ring-1 ring-border transition duration-500 group-hover:duration-200';
+  'bg-surface size-12 grid place-items-center rounded-xl ring-1 ring-border transition-transform duration-200 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none';
 
 export function EmptyState({ title, description, icons = [], action, secondaryAction, className }: EmptyStateProps) {
   const iconClass = 'w-6 h-6 text-muted-foreground';
@@ -31,7 +31,7 @@ export function EmptyState({ title, description, icons = [], action, secondaryAc
     <div
       className={cn(
         'group w-full text-center rounded-xl border-2 border-dashed border-border bg-surface/60 px-6 py-14',
-        'hover:bg-surface transition duration-500 hover:duration-200 animate-blur-fade',
+        'hover:bg-surface transition-colors duration-200 animate-blur-fade',
         className
       )}
     >

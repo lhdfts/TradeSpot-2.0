@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/utils';
 import { ChevronDown, Check, Search } from 'lucide-react';
@@ -59,6 +59,13 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
     const dropdownRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    // Liga rótulo, valor, erro e opção ativa aos controles para leitores de tela
+    const labelId = useId();
+    const valueId = useId();
+    const errorId = useId();
+    const listboxId = useId();
+    const optionId = (index: number) => `${listboxId}-opcao-${index}`;
     const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
 
     const selectedOption = options.find(opt => opt.value === value);
@@ -183,6 +190,8 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
         setOtherMode(false);
         onChange(item.value);
         setIsOpen(false);
+        // A busca some ao fechar: devolve o foco ao gatilho em vez de perdê-lo
+        triggerRef.current?.focus();
     };
 
     const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -197,7 +206,12 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
             const item = items[highlighted];
             if (item) handleSelect(item);
         } else if (e.key === 'Escape') {
+            // Não deixa o Esc fechar também o modal em volta
             e.preventDefault();
+            e.stopPropagation();
+            setIsOpen(false);
+            triggerRef.current?.focus();
+        } else if (e.key === 'Tab') {
             setIsOpen(false);
         }
     };
@@ -209,16 +223,22 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
         <div
             ref={dropdownRef}
             style={dropdownStyle}
-            className="bg-surface border border-border rounded-lg shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
+            className="bg-surface border border-border rounded-lg shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 motion-reduce:animate-none flex flex-col"
         >
             <div className="p-2 border-b border-border bg-surface">
                 <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Search aria-hidden="true" className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <input
                         ref={searchInputRef}
                         type="text"
+                        role="combobox"
+                        aria-label={searchPlaceholder.replace(/\.+$/, '')}
+                        aria-autocomplete="list"
+                        aria-expanded={isOpen}
+                        aria-controls={listboxId}
+                        aria-activedescendant={!loading && items[highlighted] ? optionId(highlighted) : undefined}
                         placeholder={searchPlaceholder}
-                        className="w-full bg-muted/50 border border-border rounded-md pl-8 pr-3 py-1.5 text-base sm:text-sm outline-none focus:ring-1 focus:ring-ring"
+                        className="w-full bg-muted/50 border border-input rounded-md pl-8 pr-3 py-1.5 text-base sm:text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         value={searchTerm}
                         maxLength={50}
                         onChange={(e) => setSearchTerm(sanitizeInput.search(e.target.value))}
@@ -227,12 +247,12 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
                     />
                 </div>
             </div>
-            <ul role="listbox" className="overflow-auto py-1 max-h-[250px] scrollbar-thin">
+            <ul id={listboxId} role="listbox" aria-labelledby={labelId} className="overflow-auto py-1 max-h-[250px] scrollbar-thin">
                 {loading && (
-                    <li className="px-3 py-4 text-center text-sm text-muted-foreground">Carregando...</li>
+                    <li role="presentation" className="px-3 py-4 text-center text-sm text-muted-foreground">Carregando...</li>
                 )}
                 {!loading && filteredOptions.length === 0 && (
-                    <li className="px-3 py-3 text-center text-sm text-muted-foreground">{emptyMessage}</li>
+                    <li role="presentation" className="px-3 py-3 text-center text-sm text-muted-foreground">{emptyMessage}</li>
                 )}
                 {!loading && items.map((item, index) => {
                     const selected = isItemSelected(item);
@@ -240,6 +260,7 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
                     return (
                         <li
                             key={item.value}
+                            id={optionId(index)}
                             ref={el => { itemRefs.current[index] = el; }}
                             role="option"
                             aria-selected={selected}
@@ -252,7 +273,8 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
                                 "px-3 py-2 cursor-pointer flex items-center justify-between transition-colors",
                                 index === highlighted && "bg-accent",
                                 isOtherItem && filteredOptions.length > 0 && "border-t border-border",
-                                selected ? "text-[#070707] dark:text-white font-bold" : "text-foreground"
+                                "text-foreground",
+                                selected && "font-bold"
                             )}
                         >
                             <span className="block">
@@ -261,7 +283,7 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
                                     <span className="font-normal text-muted-foreground"> — usar "{searchTerm.trim()}"</span>
                                 )}
                             </span>
-                            {selected && <Check size={14} className="text-[#070707] dark:text-white ml-2 shrink-0" />}
+                            {selected && <Check size={14} aria-hidden="true" className="text-primary ml-2 shrink-0" />}
                         </li>
                     );
                 })}
@@ -273,38 +295,53 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
         <div className={cn("space-y-4", className)}>
             <div className="relative" ref={containerRef}>
                 <button
+                    ref={triggerRef}
                     type="button"
                     onClick={() => !disabled && setIsOpen(!isOpen)}
+                    onKeyDown={(e) => {
+                        // Seta para baixo/cima abre a lista (a busca recebe o foco)
+                        if (!isOpen && !disabled && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                            e.preventDefault();
+                            setIsOpen(true);
+                        }
+                    }}
+                    role="combobox"
                     aria-haspopup="listbox"
                     aria-expanded={isOpen}
+                    aria-controls={isOpen ? listboxId : undefined}
+                    aria-labelledby={`${labelId} ${valueId}`}
+                    aria-invalid={error && !showOther ? true : undefined}
+                    aria-describedby={error && !showOther ? errorId : undefined}
                     className={cn(
-                        "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-colors duration-200 outline-none text-sm bg-surface text-foreground text-left flex items-center justify-between",
+                        "w-full h-11 px-3 py-0 border rounded-md shadow-sm transition-[border-color,box-shadow] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring text-sm bg-surface text-foreground text-left flex items-center justify-between",
                         error
-                            ? "border-destructive focus:border-destructive focus:ring-1 focus:ring-destructive"
+                            ? "border-destructive"
                             : isOpen
-                                ? "border-[#070707] dark:border-gray-400 ring-1 ring-[#070707] dark:ring-gray-400"
-                                : "border-border focus:border-[#070707] dark:focus:border-gray-400 focus:ring-1 focus:ring-[#070707] dark:focus:ring-gray-400",
+                                ? "border-ring ring-1 ring-ring"
+                                : "border-input",
                         disabled && "opacity-50 cursor-not-allowed"
                     )}
                     disabled={disabled}
                 >
-                    <span className="block truncate pt-1">
+                    <span id={valueId} className="block truncate pt-1">
                         {showOther ? otherLabel : selectedOption?.label ?? ''}
                     </span>
                     <ChevronDown
                         size={16}
+                        aria-hidden="true"
                         className={cn(
-                            "shrink-0 text-muted-foreground transition-transform duration-200",
+                            "shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
                             isOpen && "transform rotate-180"
                         )}
                     />
                 </button>
 
                 <label
+                    id={labelId}
                     className={cn(
-                        "absolute left-2 bg-surface px-1 transition-all duration-200 pointer-events-none z-10",
+                        "absolute left-2 bg-surface px-1 transition-[top,font-size,color] duration-200 motion-reduce:transition-none pointer-events-none z-10",
                         hasValue || isOpen
-                            ? `-top-2 text-xs ${error ? "text-destructive" : isOpen ? "text-[#070707] dark:text-gray-400" : "text-muted-foreground"}`
+                            ? `-top-2 text-xs ${error ? "text-destructive" : isOpen ? "text-foreground" : "text-muted-foreground"}`
                             : `top-3 text-sm ${error ? "text-destructive" : "text-muted-foreground"}`
                     )}
                 >
@@ -313,7 +350,7 @@ export const FloatingSearchSelect: React.FC<FloatingSearchSelectProps> = ({
 
                 {isOpen && !disabled && createPortal(dropdown, document.body)}
 
-                {error && !showOther && <p className="mt-1 text-xs text-destructive">{error}</p>}
+                {error && !showOther && <p id={errorId} className="mt-1 text-xs text-destructive">{error}</p>}
             </div>
 
             {showOther && (

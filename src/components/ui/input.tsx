@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useId } from 'react';
 import { cn } from "@/lib/utils"
-// import { Button } from "./button" // Check if used
-import { ChevronDown, Check } from 'lucide-react';
+import { CustomSelect } from '../CustomSelect';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -9,10 +8,17 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   unstyled?: boolean;
 }
 
-export const Input: React.FC<InputProps> = ({ label, error, className, unstyled, ...props }) => {
+export const Input: React.FC<InputProps> = ({ label, error, className, unstyled, id, 'aria-describedby': ariaDescribedBy, ...props }) => {
+  // Liga o rótulo e o erro ao campo para leitores de tela
+  const autoId = useId();
+  const inputId = id ?? autoId;
+  const errorId = `${inputId}-erro`;
+
   if (unstyled) {
     return (
       <input
+        id={id}
+        aria-describedby={ariaDescribedBy}
         className={cn(
           'w-full bg-transparent border-0 p-0 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0',
           className
@@ -22,19 +28,25 @@ export const Input: React.FC<InputProps> = ({ label, error, className, unstyled,
     );
   }
 
+  const describedBy = [ariaDescribedBy, error ? errorId : undefined].filter(Boolean).join(' ') || undefined;
+
   return (
     <div className="space-y-1">
-      {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
+      {label && <label htmlFor={inputId} className="block text-sm font-medium text-muted-foreground">{label}</label>}
       <input
+        id={inputId}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
         className={cn(
-          // max-sm:text-base: abaixo de 16px o Safari do iPhone dá zoom ao focar; no desktop o tamanho não muda
-          'w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors max-sm:text-base',
-          error && 'border-danger focus:border-danger focus:ring-danger',
+          // Mesmo visual dos campos Floating*: h-11, rounded-md, bg-surface, borda border-input e anel de foco ring.
+          // text-base no celular: abaixo de 16px o Safari do iPhone dá zoom ao focar; no desktop text-sm
+          'w-full h-11 px-3 bg-surface border border-input rounded-md text-base sm:text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring transition-[border-color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50',
+          error && 'border-destructive',
           className
         )}
         {...props}
       />
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p id={errorId} className="text-xs text-destructive">{error}</p>}
     </div>
   );
 };
@@ -47,79 +59,5 @@ interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>
   onChange?: (e: { target: { value: string; name?: string } }) => void;
 }
 
-export const Select: React.FC<SelectProps> = ({ label, options, className, value, onChange, disabled, name }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const selectedOption = options.find(opt => opt.value === value);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleSelect = (newValue: string) => {
-    if (onChange) {
-      onChange({ target: { value: newValue, name } });
-    }
-    setIsOpen(false);
-  };
-
-  return (
-    <div className="space-y-1" ref={containerRef}>
-      {label && <label className="block text-sm font-medium text-secondary">{label}</label>}
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          className={cn(
-            'w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground text-left flex items-center justify-between focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200',
-            disabled && 'opacity-50 cursor-not-allowed',
-            className
-          )}
-          disabled={disabled}
-        >
-          <span className="block truncate">
-            {selectedOption ? selectedOption.label : 'Selecione...'}
-          </span>
-          <ChevronDown
-            size={16}
-            className={cn(
-              "text-secondary transition-transform duration-200",
-              isOpen && "transform rotate-180"
-            )}
-          />
-        </button>
-
-        <div
-          className={cn(
-            "absolute z-50 w-full mt-1 bg-surface border border-border rounded-lg shadow-lg overflow-hidden origin-top",
-            isOpen ? "animate-in fade-in zoom-in-95 duration-200" : "hidden"
-          )}
-        >
-          <ul className="max-h-60 overflow-auto py-1">
-            {options.map(opt => (
-              <li
-                key={opt.value}
-                onClick={() => handleSelect(opt.value)}
-                className={cn(
-                  "px-3 py-2 cursor-pointer flex items-center justify-between hover:bg-primary/10 transition-colors",
-                  value === opt.value ? "text-foreground font-medium bg-primary/5" : "text-secondary"
-                )}
-              >
-                <span className="block truncate">{opt.label}</span>
-                {value === opt.value && <Check size={14} className="text-primary" />}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-};
+// Reaproveita o CustomSelect (teclado, ARIA e visual iguais aos demais selects)
+export const Select: React.FC<SelectProps> = (props) => <CustomSelect {...props} />;

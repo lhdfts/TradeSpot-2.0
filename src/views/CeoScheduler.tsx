@@ -5,6 +5,7 @@ import { Calendar } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { FloatingDateInput } from '../components/FloatingDateInput';
 import { api } from '../services/api';
+import { notify } from '../components/ui/notify';
 
 export const CeoScheduler = () => {
     const { user } = useAuth();
@@ -89,10 +90,10 @@ export const CeoScheduler = () => {
             // Update local state to reflect successful save without re-fetching everything
             setUserData({ ...userData, schedule: newSchedule });
             
-            alert('Horários salvos com sucesso!');
+            notify.success('Horários salvos', 'Sua página pública de agendamento já mostra os novos horários.');
         } catch (error) {
             console.error("Error saving schedule:", error);
-            alert('Erro ao salvar os horários.');
+            notify.error('Não foi possível salvar os horários.', 'Verifique a conexão e tente de novo.');
         } finally {
             setSaving(false);
         }
@@ -110,7 +111,7 @@ export const CeoScheduler = () => {
         return (
             <div className="p-8 text-center">
                 <h2 className="text-xl font-semibold mb-2">Acesso Restrito</h2>
-                <p className="text-secondary">Você não tem permissão para acessar o gerenciamento de agenda avulsa.</p>
+                <p className="text-muted-foreground">Você não tem permissão para acessar o gerenciamento de agenda avulsa.</p>
             </div>
         );
     }
@@ -120,7 +121,7 @@ export const CeoScheduler = () => {
         <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Minha Agenda</h1>
+                    <h1 className="text-2xl font-bold text-foreground">Minha Agenda</h1>
                     <p className="text-muted-foreground">Gerencie seus horários de atendimento avulsos.</p>
                 </div>
             </div>
@@ -142,7 +143,7 @@ export const CeoScheduler = () => {
                     </div>
                     
                     {selectedDate && (
-                        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-sm text-secondary">
+                        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-sm text-muted-foreground">
                             <p>As alterações feitas nesta data afetarão imediatamente sua página pública de agendamento.</p>
                         </div>
                     )}
@@ -154,7 +155,7 @@ export const CeoScheduler = () => {
                             <div className="flex items-center justify-between gap-3 mb-6 pb-4 border-b border-border/50">
                                 <div className="min-w-0">
                                     <h3 className="font-semibold text-lg">Horários Disponíveis</h3>
-                                    <p className="text-sm text-secondary">Para o dia {selectedDate.split('-').reverse().join('/')}</p>
+                                    <p className="text-sm text-muted-foreground">Para o dia {selectedDate.split('-').reverse().join('/')}</p>
                                 </div>
                                 <span className="shrink-0 whitespace-nowrap text-xs font-semibold px-2 py-1 bg-primary/10 text-primary rounded-full">
                                     {times.length} Horários
@@ -166,7 +167,7 @@ export const CeoScheduler = () => {
                                     <h4 className="text-sm font-medium text-foreground mb-3">Horários Adicionados</h4>
                                     {times.length === 0 ? (
                                         <div className="text-center py-8 rounded-lg border-2 border-dashed border-border/50 bg-background/50">
-                                            <p className="text-sm text-secondary">Nenhum horário marcado para este dia.</p>
+                                            <p className="text-sm text-muted-foreground">Nenhum horário marcado para este dia.</p>
                                         </div>
                                     ) : (
                                         <div className="flex flex-wrap gap-2">
@@ -199,7 +200,7 @@ export const CeoScheduler = () => {
                                                 type="button"
                                                 disabled={times.includes(hour)}
                                                 onClick={() => handleAddTime(hour)}
-                                                className={`py-2 text-sm rounded-md border font-medium transition-all ${
+                                                className={`py-2 text-sm rounded-md border font-medium transition-colors ${
                                                     times.includes(hour) 
                                                         ? 'bg-muted border-transparent text-muted-foreground opacity-50 cursor-not-allowed'
                                                         : 'bg-background border-border hover:border-primary hover:text-primary'
@@ -212,7 +213,7 @@ export const CeoScheduler = () => {
                                     
                                     <div className="mt-4 flex gap-2 items-end">
                                         <div className="flex-1 min-w-0">
-                                            <label className="text-xs font-medium text-secondary mb-1 block">Outro horário:</label>
+                                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Outro horário:</label>
                                             <input 
                                                 type="time" 
                                                 id="custom-time-input"
@@ -246,7 +247,7 @@ export const CeoScheduler = () => {
                             <div className="max-w-xs space-y-3">
                                 <Calendar size={48} className="mx-auto text-primary/20" />
                                 <h3 className="font-medium text-lg">Selecione uma Data</h3>
-                                <p className="text-sm text-secondary">Escolha um dia no calendário ao lado para visualizar e gerenciar seus horários de atendimento.</p>
+                                <p className="text-sm text-muted-foreground">Escolha um dia no calendário ao lado para visualizar e gerenciar seus horários de atendimento.</p>
                             </div>
                         </div>
                     )}

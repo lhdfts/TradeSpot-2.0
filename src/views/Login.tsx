@@ -4,10 +4,36 @@ import { auth } from '../lib/firebase';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, SAMLAuthProvider } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
 import { marcarAberturaPendente, limparAberturaPendente } from '../components/abertura/controleAbertura';
+import { ESTRELA_SPOT } from '../components/abertura/estrela';
+
+// Códigos do Firebase Auth em mensagens que dizem o que fazer. A mensagem
+// técnica do erro (error.message) nunca vai para a tela, só para o console.
+function mensagemDeErro(error: unknown): string {
+    const code = (error as { code?: string } | null)?.code;
+    switch (code) {
+        case 'auth/popup-blocked':
+            return 'O navegador bloqueou a janela de login. Permita pop-ups para este site ou entre por redirecionamento.';
+        case 'auth/popup-closed-by-user':
+        case 'auth/cancelled-popup-request':
+        case 'auth/user-cancelled':
+            return 'A janela de login foi fechada antes de terminar. Tente de novo.';
+        case 'auth/network-request-failed':
+            return 'Sem conexão com o servidor de login. Confira sua internet e tente de novo.';
+        case 'auth/unauthorized-domain':
+        case 'auth/operation-not-allowed':
+        case 'auth/unauthorized-continue-uri':
+            return 'Este endereço não está autorizado a fazer login. Avise o suporte.';
+        default:
+            return 'Não foi possível entrar. Tente de novo.';
+    }
+}
 
 export const Login: React.FC = () => {
     const [loading, setLoading] = useState(false);
+    const [erroLogin, setErroLogin] = useState<string | null>(null);
     const { authError, clearAuthError } = useAuth();
+    // Recusa do sistema (ex.: e-mail sem cadastro) tem prioridade sobre erro do provedor.
+    const erro = authError ?? erroLogin;
 
     // Login recusado pelo sistema (ex.: e-mail sem cadastro): sem vinheta.
     React.useEffect(() => {
@@ -18,7 +44,7 @@ export const Login: React.FC = () => {
         getRedirectResult(auth).catch((error) => {
             limparAberturaPendente();
             console.error('Error from redirect login:', error);
-            alert(`Erro no login por redirecionamento: ${error.message}`);
+            setErroLogin(mensagemDeErro(error));
         });
     }, []);
 
@@ -26,15 +52,17 @@ export const Login: React.FC = () => {
         // Antes do primeiro await: o som da vinheta só pode ser criado dentro do clique.
         marcarAberturaPendente();
         setLoading(true);
+        setErroLogin(null);
         clearAuthError();
         const provider = new SAMLAuthProvider(
             "saml.sistema-depositos-google-workspace"
         );
-        console.log("Firebase Config:", {
-            apiKey: auth.app.options.apiKey ? '***' : 'MISSING',
-            authDomain: auth.app.options.authDomain,
-            projectId: auth.app.options.projectId
-        });
+
+        const falhou = (error: unknown) => {
+            limparAberturaPendente();
+            setErroLogin(mensagemDeErro(error));
+            setLoading(false);
+        };
 
         try {
             if (method === 'popup') {
@@ -43,60 +71,70 @@ export const Login: React.FC = () => {
                 await signInWithRedirect(auth, provider);
             }
             // AuthContext will handle state change
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.warn(`${method} login failed...`, error);
+            const code = (error as { code?: string } | null)?.code;
 
-            if (method === 'popup' && (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/web-storage-unsupported' || error.message.includes('popup'))) {
+            // Pop-up bloqueado ou sem armazenamento: tenta o redirecionamento sozinho.
+            // Fechar a janela foi escolha do usuário: só avisa.
+            if (method === 'popup' && (code === 'auth/popup-blocked' || code === 'auth/web-storage-unsupported')) {
                 try {
                     await signInWithRedirect(auth, provider);
-                } catch (redirectError: any) {
+                } catch (redirectError: unknown) {
                     console.error('Error starting redirect login:', redirectError);
-                    limparAberturaPendente();
-                    alert(`Erro ao iniciar login: ${redirectError.message}`);
-                    setLoading(false);
+                    falhou(redirectError);
                 }
             } else {
                 console.error('Error logging in with Google:', error);
-                limparAberturaPendente();
-                alert(`Erro ao fazer login com Google: ${error.message}`);
-                setLoading(false);
+                falhou(error);
             }
         }
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
-            <div className="w-full max-w-md space-y-8">
+        <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
+            <div className="w-full max-w-md space-y-8 animate-fade-up">
                 <div className="flex flex-col items-center justify-center">
-                    <Logo className="h-12 w-auto text-foreground" />
+                    {/* A estrela do logo ganha um brilho lento, eco da vinheta de abertura.
+                        Fica por cima da estrela do próprio logo, nas mesmas medidas. */}
+                    <div className="relative">
+                        <Logo className="h-12 w-auto text-foreground" />
+                        <svg
+                            viewBox="0 0 1114 208"
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-0 h-full w-full overflow-visible text-foreground animate-estrela-brilho"
+                        >
+                            <path d={ESTRELA_SPOT} fill="currentColor" />
+                        </svg>
+                    </div>
                 </div>
 
                 <div className="mt-8 space-y-6">
-                    {authError && (
-                        <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-lg">
-                            <p className="text-sm">{authError}</p>
+                    {erro && (
+                        <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive p-4 rounded-lg">
+                            <p className="text-sm">{erro}</p>
                         </div>
                     )}
                     <div className="text-center">
-                        <h2 className="mt-6 text-3xl font-extrabold text-foreground">
+                        <h2 className="mt-6 text-3xl font-bold text-foreground">
                             Bem-vindo de volta
                         </h2>
-                        <p className="mt-2 text-sm text-secondary">
+                        <p className="mt-2 text-sm text-muted-foreground">
                             Faça login para acessar sua conta
                         </p>
                     </div>
 
-                    <div className="mt-8 flex flex-col justify-center gap-4">
+                    <div className="mt-8 flex flex-col items-center justify-center gap-4">
                         <button
                             onClick={() => handleGoogleLogin('popup')}
                             disabled={loading}
                             type="button"
-                            className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface px-8 py-4 text-sm font-medium text-foreground shadow-sm hover:bg-white/5 disabled:opacity-50 transition-colors"
+                            className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface px-8 py-4 text-sm font-medium text-foreground shadow-sm hover:bg-accent disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         >
                             {loading ? (
-                                <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                                <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
                             ) : (
-                                <svg className="h-5 w-5" viewBox="0 0 24 24">
+                                <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
                                     <path
                                         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                                         fill="#4285F4"
@@ -115,16 +153,17 @@ export const Login: React.FC = () => {
                                     />
                                 </svg>
                             )}
-                            <span>Entrar com Google</span>
+                            <span>{loading ? 'Entrando…' : 'Entrar com Google'}</span>
                         </button>
 
+                        {/* Alternativa discreta para quando o pop-up abre em branco. */}
                         <button
                             onClick={() => handleGoogleLogin('redirect')}
                             disabled={loading}
                             type="button"
-                            className="flex w-full items-center justify-center gap-3 rounded-lg border border-border px-8 py-4 text-sm font-medium text-secondary hover:text-foreground hover:bg-white/5 disabled:opacity-50 transition-colors"
+                            className="rounded-md px-2 py-1 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                            <span>Problemas com o painel em branco? Tente o acesso alternativo</span>
+                            A tela ficou em branco? Entrar por redirecionamento
                         </button>
                     </div>
                 </div>

@@ -23,3 +23,26 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Skills do Claude Code instaladas localmente (não versionar)
+.claude/skills/
+.claude/settings.local.json
+
+# Segredos e variáveis de ambiente
+.env*
+!.env.example
+*.pem
+server/src/scripts/refresh_token.txt
+server/src/scripts/auth_url.txt
+
+# Dumps de dados reais, debug e artefatos internos (podem conter PII/segredos - LGPD)
+appointments.json
+agendamento duplicados.json
+JSON to document/
+2026-01-15.txt
+debug_output.txt
+diff.txt
+vercel build log.txt
+tmp/
+src/views/vulnerabilidade*.txt
+src/debug_pipedrive_script.ts

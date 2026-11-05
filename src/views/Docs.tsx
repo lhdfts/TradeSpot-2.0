@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { getStatusColor as getStatusColorTokens } from '../lib/appointmentStatus';
 import { BookOpen, AlertCircle, Sun, Moon, Search } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
@@ -532,16 +533,9 @@ const FaqItem = ({ question, answer }: { question: string, answer: string }) => 
     </div>
 );
 
+// Mesma cor dos selos de status (fonte única em lib/appointmentStatus.ts)
 function getStatusColor(status: string) {
-    switch (status) {
-        case 'Cancelado': return 'bg-[#FF1744]';
-        case 'Esquecimento': return 'bg-[#D500F9]';
-        case 'No-show': return 'bg-[#FF9100]';
-        case 'Pendente': return 'bg-[#B2B2B2]';
-        case 'Realizado': return 'bg-[#00E676]';
-        case 'Reagendado': return 'bg-[#2979FF]';
-        default: return 'bg-gray-400';
-    }
+    return getStatusColorTokens(status).dot;
 }
 
 export default Docs;

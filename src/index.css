@@ -4,83 +4,103 @@
 
 @layer base {
   :root {
-    --background: #ffffff;
-    --foreground: #0f172a;
+    --background: 255 255 255;
+    --foreground: 15 23 42;
 
-    --bg-surface: #ffffff;
-    --bg-sidebar: #f8fafc;
+    --bg-surface: 255 255 255;
+    --bg-sidebar: 248 250 252;
 
-    --card: #ffffff;
-    --card-foreground: #0f172a;
+    --card: 255 255 255;
+    --card-foreground: 15 23 42;
 
-    --popover: #ffffff;
-    --popover-foreground: #0f172a;
+    --popover: 255 255 255;
+    --popover-foreground: 15 23 42;
 
-    --primary: #000AFF;
-    --primary-foreground: #ffffff;
+    --primary: 0 10 255;
+    --primary-foreground: 255 255 255;
 
-    --secondary: #64748b;
-    --secondary-foreground: #f8fafc;
+    --secondary: 100 116 139;
+    --secondary-foreground: 248 250 252;
 
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
+    --muted: 241 245 249;
+    --muted-foreground: 71 85 105;
 
-    --accent: #f1f5f9;
-    --accent-foreground: #0f172a;
+    --accent: 241 245 249;
+    --accent-foreground: 15 23 42;
 
-    --destructive: #ef4444;
-    --destructive-foreground: #ffffff;
+    --destructive: 220 38 38;
+    --destructive-foreground: 255 255 255;
 
-    --border: #e2e8f0;
-    --input: #e2e8f0;
-    --ring: #000AFF;
+    --border: 226 232 240;
+    --input: 131 145 167;
+    --ring: 0 10 255;
 
     --radius: 0.5rem;
 
-    --chart-1: #000AFF;
-    --chart-2: #10b981;
-    --chart-3: #f59e0b;
-    --chart-4: #ef4444;
-    --chart-5: #8b5cf6;
+    --chart-1: 0 10 255;
+    --chart-2: 16 185 129;
+    --chart-3: 245 158 11;
+    --chart-4: 239 68 68;
+    --chart-5: 139 92 246;
+
+    /* Status de agendamento: tons 700 no claro (texto legível sobre fundo branco). */
+    --status-realizado: 21 128 61;
+    --status-pendente: 71 85 105;
+    --status-cancelado: 185 28 28;
+    --status-reagendado: 29 78 216;
+    --status-esquecimento: 162 28 175;
+    --status-noshow: 194 65 12;
+    --status-iniciando: 161 98 7;
+    --status-total: 15 23 42;
   }
 
   .dark {
-    --background: #121212;
-    --foreground: #f8fafc;
+    --background: 10 10 10;
+    --foreground: 248 250 252;
 
-    --bg-surface: #060606;
-    --bg-sidebar: #000000;
+    --bg-surface: 20 20 20;
+    --bg-sidebar: 13 13 13;
 
-    --card: #060606;
-    --card-foreground: #f8fafc;
+    --card: 20 20 20;
+    --card-foreground: 248 250 252;
 
-    --popover: #060606;
-    --popover-foreground: #f8fafc;
+    --popover: 26 26 26;
+    --popover-foreground: 248 250 252;
 
-    --primary: #000AFF;
-    --primary-foreground: #ffffff;
+    --primary: 74 88 255;
+    --primary-foreground: 255 255 255;
 
-    --secondary: #64748b;
-    --secondary-foreground: #f8fafc;
+    --secondary: 100 116 139;
+    --secondary-foreground: 248 250 252;
 
-    --muted: #334155;
-    --muted-foreground: #94a3b8;
+    --muted: 38 38 38;
+    --muted-foreground: 163 163 163;
 
-    --accent: #060606;
-    --accent-foreground: #f8fafc;
+    --accent: 31 31 31;
+    --accent-foreground: 248 250 252;
 
-    --destructive: #ef4444;
-    --destructive-foreground: #ffffff;
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
 
-    --border: #334155;
-    --input: #334155;
-    --ring: #000AFF;
+    --border: 38 38 38;
+    --input: 102 102 102;
+    --ring: 129 140 248;
 
-    --chart-1: #000AFF;
-    --chart-2: #10b981;
-    --chart-3: #f59e0b;
-    --chart-4: #ef4444;
-    --chart-5: #8b5cf6;
+    --chart-1: 0 10 255;
+    --chart-2: 16 185 129;
+    --chart-3: 245 158 11;
+    --chart-4: 239 68 68;
+    --chart-5: 139 92 246;
+
+    /* Status no escuro: os tons originais (neon), legíveis sobre preto. */
+    --status-realizado: 0 230 118;
+    --status-pendente: 178 178 178;
+    --status-cancelado: 255 23 68;
+    --status-reagendado: 41 121 255;
+    --status-esquecimento: 213 0 249;
+    --status-noshow: 255 145 0;
+    --status-iniciando: 255 196 0;
+    --status-total: 248 250 252;
   }
 }
 
@@ -97,84 +117,139 @@
 /* ------------------------------------------------------------
    Movimento — entradas suaves usadas em páginas, cards e listas.
    O atraso vem de --delay (ver lib/motion.ts) para montar cascatas.
+   Curva única (--ease-out): sai rápido e assenta devagar.
    ------------------------------------------------------------ */
+@layer base {
+  :root {
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    /* Gavetas e painéis que deslizam (curva no estilo iOS). */
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+
 @layer utilities {
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
   @keyframes fade-up {
-    from { opacity: 0; transform: translateY(14px); }
+    from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+  /* Usado em containers grandes: desfoque pequeno (filtro em área grande custa caro). */
   @keyframes blur-fade {
-    from { opacity: 0; transform: translateY(10px) scale(0.98); filter: blur(6px); }
-    to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    from { opacity: 0; transform: translateY(6px); filter: blur(2px); }
+    to   { opacity: 1; transform: translateY(0); filter: blur(0); }
   }
   @keyframes slide-in-left {
-    from { opacity: 0; transform: translateX(-12px); }
+    from { opacity: 0; transform: translateX(-8px); }
     to   { opacity: 1; transform: translateX(0); }
   }
 
+  /* Troca de página: só opacidade, curta, sem deslocar o conteúdo. */
+  .animate-fade-in {
+    animation: fade-in 150ms var(--ease-out) both;
+    animation-delay: var(--delay, 0ms);
+  }
   .animate-fade-up {
-    animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: fade-up 250ms var(--ease-out) both;
     animation-delay: var(--delay, 0ms);
   }
   .animate-blur-fade {
-    animation: blur-fade 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: blur-fade 300ms var(--ease-out) both;
     animation-delay: var(--delay, 0ms);
   }
   .animate-slide-in-left {
-    animation: slide-in-left 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: slide-in-left 250ms var(--ease-out) both;
     animation-delay: var(--delay, 0ms);
   }
 
-  /* Filhos diretos entram em cascata (até 12 itens). */
+  /* Filhos diretos entram em cascata de 35ms. Do 8º em diante entram todos
+     juntos, para lista longa não ficar esperando. */
   .stagger-children > * {
-    animation: slide-in-left 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: slide-in-left 250ms var(--ease-out) both;
+    animation-delay: 245ms;
   }
-  .stagger-children > *:nth-child(1)  { animation-delay: 60ms; }
-  .stagger-children > *:nth-child(2)  { animation-delay: 110ms; }
-  .stagger-children > *:nth-child(3)  { animation-delay: 160ms; }
-  .stagger-children > *:nth-child(4)  { animation-delay: 210ms; }
-  .stagger-children > *:nth-child(5)  { animation-delay: 260ms; }
-  .stagger-children > *:nth-child(6)  { animation-delay: 310ms; }
-  .stagger-children > *:nth-child(7)  { animation-delay: 360ms; }
-  .stagger-children > *:nth-child(8)  { animation-delay: 410ms; }
-  .stagger-children > *:nth-child(9)  { animation-delay: 460ms; }
-  .stagger-children > *:nth-child(10) { animation-delay: 510ms; }
-  .stagger-children > *:nth-child(11) { animation-delay: 560ms; }
-  .stagger-children > *:nth-child(12) { animation-delay: 610ms; }
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 35ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 70ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 105ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 140ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 175ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 210ms; }
 
+  /* Menos movimento: troca deslize e desfoque por um fade curto, sem cascata. */
   @media (prefers-reduced-motion: reduce) {
     .animate-fade-up,
     .animate-blur-fade,
     .animate-slide-in-left,
-    .stagger-children > * {
-      animation: none;
+    .stagger-children > *,
+    .stagger-children > *:nth-child(n) {
+      animation: fade-in 150ms var(--ease-out) both;
+      animation-delay: 0ms;
     }
   }
 }
 
 @layer utilities {
-  @keyframes shimmer {
-    from { background-position: 200% 0; }
-    to   { background-position: -200% 0; }
+  @keyframes skeleton-pulse {
+    from { opacity: 1; }
+    to   { opacity: 0.45; }
   }
-  /* Brilho que corre sobre blocos de carregamento. */
+  /* Bloco de carregamento: pulsa a opacidade. A camada na cor do texto por
+     cima do fundo dá contraste nos dois temas (escura no claro, clara no escuro). */
   .animate-shimmer {
-    background-image: linear-gradient(90deg, transparent 25%, rgb(255 255 255 / 0.08) 50%, transparent 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.6s linear infinite;
+    background-image: linear-gradient(rgb(var(--foreground) / 0.07), rgb(var(--foreground) / 0.07));
+    animation: skeleton-pulse 1s var(--ease-out) infinite alternate;
+  }
+
+  /* Brilho lento da estrela da marca (tela de login). */
+  @keyframes estrela-brilho {
+    from { filter: drop-shadow(0 0 0 rgb(var(--primary) / 0)); }
+    to   { filter: drop-shadow(0 0 6px rgb(var(--primary) / 0.75)); }
+  }
+  .animate-estrela-brilho {
+    animation: estrela-brilho 2.4s ease-in-out infinite alternate;
   }
   @media (prefers-reduced-motion: reduce) {
-    .animate-shimmer { animation: none; }
+    .animate-estrela-brilho {
+      animation: none;
+      filter: drop-shadow(0 0 4px rgb(var(--primary) / 0.5));
+    }
   }
 }
 
 @layer base {
+  /* Celular: sem o flash cinza no toque, sem a espera do duplo toque e sem o
+     "puxar para atualizar" do navegador por cima do app. */
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+  button,
+  a,
+  [role='button'] {
+    touch-action: manipulation;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  /* Horários em <time> não mudam de largura quando o valor muda. */
+  time {
+    font-variant-numeric: tabular-nums;
+  }
+
   /* Barra de rolagem fina, na cor da borda do tema. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: rgb(var(--border)) transparent;
   }
   ::selection {
-    background: color-mix(in srgb, var(--primary) 35%, transparent);
+    background: rgb(var(--primary) / 0.35);
   }
 }

@@ -1097,7 +1097,7 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                 label="Google Meet"
                                 value={formData.meetLink}
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, meetLink: e.target.value })}
-                                className="text-blue-500"
+                                className="text-primary"
                                 disabled={isEditing}
                             />
                         )}
