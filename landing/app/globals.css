@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* Paleta: azul vibrante, branco e preto. Contraste medido:
+   blue sobre paper 6.0:1 · paper sobre blue 6.0:1 · ink sobre paper 19.4:1 · smoke sobre ink 7.9:1 */
+@theme {
+  --color-ink: #0a0a0b;
+  --color-ink-2: #141418;
+  --color-ink-3: #22232a;
+  --color-paper: #ffffff;
+  --color-mist: #f3f5fa;
+  --color-blue: #1d4bff;
+  --color-blue-deep: #0f2bd6;
+  --color-blue-soft: #e6ebff;
+  --color-smoke: #a6a9b6;
+  --color-graphite: #4b4e5a;
+
+  --font-display: var(--font-schibsted), ui-sans-serif, sans-serif;
+  --font-sans: var(--font-manrope), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-plex), ui-monospace, monospace;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-marquee: marquee 38s linear infinite;
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+}
+
+@layer base {
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
+  p { text-wrap: pretty; }
+  ::selection { background: var(--color-blue); color: var(--color-paper); }
+  :focus-visible { outline: 3px solid var(--color-blue); outline-offset: 3px; border-radius: 6px; }
+  .on-blue :focus-visible { outline-color: var(--color-paper); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* Rolagem suave (Lenis): o CSS smooth sairia em conflito com ela. */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+[data-lenis-prevent] { overscroll-behavior: contain; }
+
+/* Textura: grão de filme em SVG (feTurbulence), sem imagem externa. */
+@utility grain {
+  position: relative;
+  isolation: isolate;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.09;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+@utility grain-light {
+  &::after { opacity: 0.16; mix-blend-mode: soft-light; }
+}
+
+/* Grade fina de agenda como fundo. */
+@utility grid-lines {
+  background-image:
+    linear-gradient(to right, rgb(10 10 11 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(10 10 11 / 0.06) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+@utility grid-lines-dark {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+/* Numeral vazado para os capítulos. */
+@utility text-outline {
+  color: transparent;
+  -webkit-text-stroke: 2px var(--color-blue);
+}
+
+@utility hatch {
+  background-image: repeating-linear-gradient(135deg, rgb(10 10 11 / 0.08) 0 6px, transparent 6px 12px);
+}
