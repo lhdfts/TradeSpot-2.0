@@ -7,6 +7,8 @@ const body = Manrope({ subsets: ['latin'], weight: ['400', '500', '600', '700'],
 const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-plex', display: 'swap' });
 
 export const metadata: Metadata = {
+  // Rota de teste: fora dos buscadores até a LP ser oficial.
+  robots: { index: false, follow: false },
   title: 'Spot · Agenda comercial que se distribui sozinha',
   description:
     'Escala, distribuição automática, no show e reagendamento numa agenda só. Seu lead escolhe o horário, o Spot escolhe quem atende.',

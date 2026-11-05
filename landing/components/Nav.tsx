@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-
 import { useEffect, useState } from 'react';
 import { useStore } from './StoreContext';
 import { lockScroll } from '@/lib/scroll';
+import { Logo } from './Logo';
 
 const LINKS = [
   { href: '#historia', label: 'Como funciona' },
@@ -12,19 +13,7 @@ const LINKS = [
   { href: '#perguntas', label: 'Perguntas' },
 ];
 
-export function Logo({ className = '' }: { className?: string }) {
-  return (
-    <span className={`inline-flex items-center gap-2 font-display text-lg font-extrabold tracking-tight ${className}`}>
-      <svg aria-hidden="true" viewBox="0 0 24 24" className="size-6">
-        <rect x="2" y="4" width="20" height="18" rx="5" fill="#1d4bff" />
-        <rect x="6" y="1.5" width="2.6" height="5" rx="1.3" fill="currentColor" />
-        <rect x="15.4" y="1.5" width="2.6" height="5" rx="1.3" fill="currentColor" />
-        <rect x="6" y="11" width="5" height="4" rx="1.2" fill="#fff" />
-      </svg>
-      Spot
-    </span>
-  );
-}
+export { Logo };
 
 export function Nav() {
   const { item, setOpen, pulse } = useStore();

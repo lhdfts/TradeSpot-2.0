@@ -5,6 +5,14 @@
             "destination": "/api/index.ts"
         },
         {
+            "source": "/testedelpdasilva",
+            "destination": "/testedelpdasilva/index.html"
+        },
+        {
+            "source": "/testedelpdasilva/",
+            "destination": "/testedelpdasilva/index.html"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }
