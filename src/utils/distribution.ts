@@ -1,8 +1,24 @@
 import type { Attendant, Appointment } from '../types';
 import { isCustomerSuccess } from '../constants/sectors';
 
-// Limite de agendamentos simultâneos do Customer Success (igual ao do servidor).
-const CUSTOMER_SUCCESS_CONCURRENT_LIMIT = 4;
+// Limite de agendamentos simultâneos do Customer Success (igual ao do servidor,
+// server/src/constants/sectors.ts): o time todo, qualquer tipo ou evento.
+// 4 em dias úteis, 1 aos sábados e domingos.
+const CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKDAY = 4;
+const CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKEND = 1;
+
+const customerSuccessConcurrentLimit = (dateStr: string): number => {
+    let year: number, month: number, day: number;
+    if (dateStr.includes('/')) {
+        [day, month, year] = dateStr.split('/').map(Number);
+    } else {
+        [year, month, day] = dateStr.split('-').map(Number);
+    }
+    const weekDay = new Date(year, month - 1, day).getDay();
+    return weekDay === 0 || weekDay === 6
+        ? CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKEND
+        : CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKDAY;
+};
 
 // Map JS day index (0-6) to our type's schedule keys
 const DAY_MAP: Record<number, string> = {
@@ -224,7 +240,7 @@ export const hasSectorTimeLimit = (
         }
     }
 
-    return concurrentCount >= CUSTOMER_SUCCESS_CONCURRENT_LIMIT;
+    return concurrentCount >= customerSuccessConcurrentLimit(dateStr);
 };
 
 export interface CheckLogItem {

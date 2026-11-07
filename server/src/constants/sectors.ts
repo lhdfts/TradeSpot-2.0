@@ -20,8 +20,26 @@ export const CUSTOMER_SUCCESS_ALIASES = [SECTOR_CUSTOMER_SUCCESS, 'Aldeia', 'Tri
 export const isCustomerSuccess = (sector?: string | null): boolean =>
     !!sector && CUSTOMER_SUCCESS_ALIASES.includes(sector);
 
-/** Limite de agendamentos simultâneos do Customer Success (o time todo, não por pessoa). */
-export const CUSTOMER_SUCCESS_CONCURRENT_LIMIT = 4;
+/**
+ * Limite de agendamentos simultâneos do Customer Success (o time todo, não por
+ * pessoa, qualquer tipo ou evento): 4 em dias úteis, 1 aos sábados e domingos.
+ */
+export const CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKDAY = 4;
+export const CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKEND = 1;
+
+/** Limite do CS para a data (YYYY-MM-DD ou DD/MM/YYYY). */
+export const customerSuccessConcurrentLimit = (dateStr: string): number => {
+    let year: number, month: number, day: number;
+    if (dateStr.includes('/')) {
+        [day, month, year] = dateStr.split('/').map(Number);
+    } else {
+        [year, month, day] = dateStr.split('-').map(Number);
+    }
+    const weekDay = new Date(year, month - 1, day).getDay();
+    return weekDay === 0 || weekDay === 6
+        ? CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKEND
+        : CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKDAY;
+};
 
 /**
  * Para consultas `.in('sector', ...)`: devolve todos os nomes equivalentes a um
