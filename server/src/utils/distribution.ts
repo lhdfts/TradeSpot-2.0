@@ -1,6 +1,6 @@
 
 import { supabase } from './supabaseClient.js';
-import { PRE_VENDAS_ALIASES, isPreVendas, CUSTOMER_SUCCESS_ALIASES, CUSTOMER_SUCCESS_CONCURRENT_LIMIT, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess } from '../constants/sectors.js';
+import { PRE_VENDAS_ALIASES, isPreVendas, CUSTOMER_SUCCESS_ALIASES, customerSuccessConcurrentLimit, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess } from '../constants/sectors.js';
 
 // Types (simplified for backend)
 interface Attendant {
@@ -264,7 +264,7 @@ export const hasSectorTimeLimit = (
         }
     }
 
-    return concurrentCount >= CUSTOMER_SUCCESS_CONCURRENT_LIMIT;
+    return concurrentCount >= customerSuccessConcurrentLimit(dateStr);
 };
 
 export interface CheckLogItem {
