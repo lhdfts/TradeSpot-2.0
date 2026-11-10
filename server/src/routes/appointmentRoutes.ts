@@ -226,6 +226,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             profession: app.profession,
             pain: app.pain,
             interestProduct: app.interest_product,
+            contactChannel: app.contact_channel,
             acquiredProduct: app.acquired_product,
             oldStatus: app.oldStatus,
             updatedBy: app.updatedBy,
@@ -1225,11 +1226,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         const profession = data.profession || null;
         const pain = data.pain || null;
         const interestProduct = data.interestProduct || null;
+        // Meio de Contato: só Pré-vendas grava (e é obrigatório para o setor).
+        const contactChannel = requiresLeadProfile(req.user?.sector) ? (data.contactChannel || null) : null;
         if (requiresLeadProfile(req.user?.sector)) {
             const missing = [
                 !profession && 'Profissão',
                 !pain && 'Dor',
-                !interestProduct && 'Produto de interesse'
+                !interestProduct && 'Produto de interesse',
+                !contactChannel && 'Meio de Contato'
             ].filter(Boolean);
             if (missing.length > 0) {
                 return res.status(400).json({ error: `Campos obrigatórios: ${missing.join(', ')}.` });
@@ -1531,6 +1535,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             profession,
             pain,
             interest_product: interestProduct,
+            contact_channel: contactChannel,
             acquired_product: acquiredProduct,
             created_at: new Date().toISOString(),
             // Criador = usuário autenticado (vem do token, nunca do corpo da requisição).

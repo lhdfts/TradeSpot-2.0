@@ -10,6 +10,8 @@ const VALID_CURRENCIES = ['BRL', 'USD', 'EUR', 'JPY', 'AOA'] as const;
 const VALID_INTEREST_LEVELS = ['Alto', 'Mediano', 'Desconhecido'] as const;
 const VALID_KNOWLEDGE_LEVELS = ['Iniciante', 'Intermediário', 'Avançado'] as const;
 export const VALID_INTEREST_PRODUCTS = ['Aldeia', 'Tribo'] as const;
+// Meio de Contato do lead (Pré-vendas). Mesma lista no check da coluna contact_channel.
+export const VALID_CONTACT_CHANNELS = ['Unnichat', '3C Plus', 'Whatsapp Comercial'] as const;
 
 // Profissão vem da tabela professions (ex.: "Ator/Atriz", "Médico(a)") ou do texto
 // livre de "Outra". Vazio é aceito: a obrigatoriedade depende do setor (ver rota).
@@ -79,6 +81,9 @@ const appointmentBaseSchema = z.object({
         message: 'Produto de interesse inválido'
     }).optional(),
     // Produto que o aluno tem (Customer Success). Vai no webhook como acquired_product.
+    contactChannel: z.union([z.enum(VALID_CONTACT_CHANNELS), z.literal('')], {
+        message: 'Meio de Contato inválido'
+    }).optional(),
     acquiredProduct: z.union([z.enum(VALID_INTEREST_PRODUCTS), z.literal('')], {
         message: 'Produto adquirido inválido'
     }).optional(),

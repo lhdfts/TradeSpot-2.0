@@ -94,6 +94,8 @@ export interface Appointment {
     interestProduct?: 'Aldeia' | 'Tribo' | null;
     // Produto que o aluno tem (preenchido pelo Customer Success)
     acquiredProduct?: 'Aldeia' | 'Tribo' | null;
+    // Meio de Contato do lead (preenchido por Pré-vendas na criação)
+    contactChannel?: 'Unnichat' | '3C Plus' | 'Whatsapp Comercial' | null;
     // Status tracking
     oldStatus?: AppointmentStatus;
     updatedBy?: string;

@@ -7,7 +7,7 @@ import { formatCreatedAtBR } from '../../lib/dates';
 
 export type AppointmentColumnId =
     | 'createdAt' | 'type' | 'owner' | 'creator' | 'attendant' | 'sector' | 'event' | 'email'
-    | 'profession' | 'pain' | 'interestProduct' | 'acquiredProduct' | 'knowledge' | 'interest' | 'additionalInfo';
+    | 'profession' | 'pain' | 'interestProduct' | 'contactChannel' | 'acquiredProduct' | 'knowledge' | 'interest' | 'additionalInfo';
 
 /** Nomes que a lista sozinha não tem (vêm de atendentes e eventos já carregados pela página). */
 export interface ColumnLookups {
@@ -57,6 +57,7 @@ export const OPTIONAL_COLUMNS: OptionalColumn[] = [
     { id: 'profession', header: 'Profissão', width: 170, value: a => a.profession },
     { id: 'pain', header: 'Dor', width: 190, value: a => a.pain },
     { id: 'interestProduct', header: 'Produto de Interesse', width: 150, value: a => a.interestProduct },
+    { id: 'contactChannel', header: 'Meio de Contato', width: 160, value: a => a.contactChannel },
     { id: 'acquiredProduct', header: 'Produto Adquirido', width: 150, value: a => a.acquiredProduct },
     { id: 'knowledge', header: 'Perfil de Conhecimento', width: 160, value: a => a.studentProfile?.knowledge },
     { id: 'interest', header: 'Perfil de Interesse', width: 140, value: a => a.studentProfile?.interest },

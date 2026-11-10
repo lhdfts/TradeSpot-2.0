@@ -144,6 +144,7 @@ export class SupabaseApiService implements ApiService {
                 profession: createdAppointment.profession,
                 pain: createdAppointment.pain,
                 interestProduct: createdAppointment.interest_product,
+                contactChannel: createdAppointment.contact_channel,
                 acquiredProduct: createdAppointment.acquired_product
             } as Appointment;
         },
@@ -197,6 +198,7 @@ export class SupabaseApiService implements ApiService {
                 profession: updatedAppointment.profession,
                 pain: updatedAppointment.pain,
                 interestProduct: updatedAppointment.interest_product,
+                contactChannel: updatedAppointment.contact_channel,
                 acquiredProduct: updatedAppointment.acquired_product
             } as Appointment;
         }
