@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { useFormData } from '../hooks/useFormData';
 import { getDisplayStatus } from '../lib/appointmentStatus';
 import { useNow } from '../hooks/useNow';
-import type { Appointment } from '../types';
+import type { Appointment, AppointmentDateField } from '../types';
+import { metricDay } from '../utils/metricsCalc';
 import { FloatingSelect } from '../components/FloatingSelect';
 import { FloatingDateInput } from '../components/FloatingDateInput';
 import { AppointmentsListView } from '../components/appointments/AppointmentsListView';
@@ -56,6 +57,10 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const [eventFilter, setEventFilter] = useState('all');
     const [sectorFilter, setSectorFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: getBrazilTodayISO(), end: '' });
+    // Período pela data do agendamento ou pela data de criação (GMT-3), como nas Métricas.
+    const [dateBasis, setDateBasis] = useState<AppointmentDateField>('date');
+    // Dia que conta para o período; sem data de criação, fica fora no modo por criação.
+    const dayOf = (a: Appointment) => metricDay(a, dateBasis) ?? '';
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
@@ -64,9 +69,10 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     useEffect(() => {
         refresh({
             startDate: dateRange.start || undefined,
-            endDate: dateRange.end || undefined
+            endDate: dateRange.end || undefined,
+            dateField: dateBasis
         });
-    }, [dateRange.start, dateRange.end]);
+    }, [dateRange.start, dateRange.end, dateBasis]);
 
     const filteredAttendants = (user?.sector === 'TEI' || user?.role === 'Admin' || user?.role === 'Dev' || user?.role === 'Qualidade'
         ? attendants
@@ -99,7 +105,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     // Reset pagination when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, statusFilter, attendantFilter, creatorFilter, ownerFilter, eventFilter, sectorFilter, dateRange]);
+    }, [search, statusFilter, attendantFilter, creatorFilter, ownerFilter, eventFilter, sectorFilter, dateRange, dateBasis]);
 
     // Events that had at least 1 appointment within the selected period (Data Inicial/Data Final),
     // used to restrict the options shown in the "Evento" filter.
@@ -113,11 +119,11 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                     const mm = String(today.getMonth() + 1).padStart(2, '0');
                     const dd = String(today.getDate()).padStart(2, '0');
                     const safeTodayStr = `${yyyy}-${mm}-${dd}`;
-                    matchesDateForEvent = a.date >= safeTodayStr;
+                    matchesDateForEvent = dayOf(a) >= safeTodayStr;
                 } else {
                     matchesDateForEvent =
-                        (!dateRange.start || a.date >= dateRange.start) &&
-                        (!dateRange.end || a.date <= dateRange.end);
+                        (!dateRange.start || dayOf(a) >= dateRange.start) &&
+                        (!dateRange.end || dayOf(a) <= dateRange.end);
                 }
 
                 if (!matchesDateForEvent) return false;
@@ -180,11 +186,11 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                 const dd = String(today.getDate()).padStart(2, '0');
                 const safeTodayStr = `${yyyy}-${mm}-${dd}`;
 
-                matchesDate = a.date >= safeTodayStr;
+                matchesDate = dayOf(a) >= safeTodayStr;
             } else {
                 matchesDate =
-                    (!dateRange.start || a.date >= dateRange.start) &&
-                    (!dateRange.end || a.date <= dateRange.end);
+                    (!dateRange.start || dayOf(a) >= dateRange.start) &&
+                    (!dateRange.end || dayOf(a) <= dateRange.end);
             }
         }
 
@@ -206,6 +212,10 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
         return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesOwner && matchesEvent && matchesSectorFilter && matchesDate && matchesSector;
     }).sort((a, b) => {
+        // Por criação: na ordem em que foram criados. Senão, os mais próximos primeiro.
+        if (dateBasis === 'created') {
+            return (Date.parse(a.createdAt ?? '') || 0) - (Date.parse(b.createdAt ?? '') || 0);
+        }
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
         return dateA.getTime() - dateB.getTime(); // Ascending for closest appointments first
@@ -214,7 +224,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const hasActiveFilters =
         search !== '' || statusFilter !== 'all' || attendantFilter !== 'all' || creatorFilter !== 'all' ||
         ownerFilter !== 'all' || eventFilter !== 'all' || sectorFilter !== 'all' ||
-        dateRange.start !== getBrazilTodayISO() || dateRange.end !== '';
+        dateRange.start !== getBrazilTodayISO() || dateRange.end !== '' || dateBasis !== 'date';
 
     const advancedActiveCount = [
         creatorFilter !== 'all', ownerFilter !== 'all', sectorFilter !== 'all',
@@ -230,6 +240,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         setEventFilter('all');
         setSectorFilter('all');
         setDateRange({ start: getBrazilTodayISO(), end: '' });
+        setDateBasis('date');
     };
 
     if (user?.role === 'Colaborador' && user?.sector === 'Closer') {
@@ -270,6 +281,16 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                         value={statusFilter}
                         onChange={e => setStatusFilter(e.target.value)}
                         options={STATUS_FILTER_OPTIONS}
+                    />
+                    <FloatingSelect
+                        label="Período por"
+                        className={FILTER_WIDTH}
+                        value={dateBasis}
+                        onChange={e => setDateBasis(e.target.value as AppointmentDateField)}
+                        options={[
+                            { value: 'date', label: 'Data do agendamento' },
+                            { value: 'created', label: 'Data de criação' }
+                        ]}
                     />
                     <FloatingDateInput
                         label="Data Inicial"
