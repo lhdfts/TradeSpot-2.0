@@ -3,9 +3,10 @@
 // que a pessoa pode ligar e desligar pelo botão "Colunas".
 import { useCallback, useMemo, useState } from 'react';
 import type { Appointment, Attendant, Event } from '../../types';
+import { formatCreatedAtBR } from '../../lib/dates';
 
 export type AppointmentColumnId =
-    | 'type' | 'owner' | 'creator' | 'attendant' | 'sector' | 'event' | 'email'
+    | 'createdAt' | 'type' | 'owner' | 'creator' | 'attendant' | 'sector' | 'event' | 'email'
     | 'profession' | 'pain' | 'interestProduct' | 'acquiredProduct' | 'knowledge' | 'interest' | 'additionalInfo';
 
 /** Nomes que a lista sozinha não tem (vêm de atendentes e eventos já carregados pela página). */
@@ -35,6 +36,8 @@ export interface OptionalColumn {
     header: string;
     /** Largura em px; a tabela cresce e ganha rolagem horizontal em vez de espremer o texto. */
     width: number;
+    /** Fica antes de todas as colunas fixas, antes de Data/Hora. */
+    first?: boolean;
     /** Fica antes da coluna fixa Status (como o Tipo sempre esteve). */
     beforeStatus?: boolean;
     value: (appt: Appointment, lookups: ColumnLookups) => string | null | undefined;
@@ -42,6 +45,8 @@ export interface OptionalColumn {
 
 // A ordem aqui é a ordem na tabela.
 export const OPTIONAL_COLUMNS: OptionalColumn[] = [
+    // Sempre em GMT-3 (Brasília), independente do fuso do navegador.
+    { id: 'createdAt', header: 'Criado em', width: 150, first: true, value: a => formatCreatedAtBR(a.createdAt) },
     { id: 'type', header: 'Tipo', width: 150, beforeStatus: true, value: a => a.type },
     { id: 'owner', header: 'Responsável', width: 170, value: (a, l) => a.ownerName || l.userName(a.ownerId ?? a.createdBy) },
     { id: 'creator', header: 'Criado Por', width: 170, value: (a, l) => l.userName(a.createdBy) },
@@ -64,13 +69,26 @@ const VALID_IDS = new Set<string>(OPTIONAL_COLUMNS.map(c => c.id));
  * Colunas escolhidas, guardadas no navegador (por tela e por usuário). Sem
  * permissão de escolher, valem sempre as colunas padrão da tela.
  */
-const readSaved = (key: string): AppointmentColumnId[] | null => {
+// Colunas criadas depois que a pessoa já tinha salvo uma escolha. Quem salvou no
+// formato antigo (lista simples) ainda não as conhecia: entram ligadas se forem
+// padrão da tela. Desligadas depois disso, ficam desligadas (formato novo).
+const COLUMNS_ADDED_LATER: AppointmentColumnId[] = ['createdAt'];
+
+const onlyValid = (ids: unknown[]) =>
+    ids.filter((id): id is AppointmentColumnId => typeof id === 'string' && VALID_IDS.has(id));
+
+export const readSaved = (key: string, defaults: AppointmentColumnId[]): AppointmentColumnId[] | null => {
     try {
         const raw = window.localStorage.getItem(key);
         if (!raw) return null;
         const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray((parsed as { cols?: unknown }).cols)) {
+            return onlyValid((parsed as { cols: unknown[] }).cols);
+        }
         if (!Array.isArray(parsed)) return null;
-        return parsed.filter((id): id is AppointmentColumnId => typeof id === 'string' && VALID_IDS.has(id));
+        const legacy = onlyValid(parsed);
+        const added = COLUMNS_ADDED_LATER.filter(id => defaults.includes(id) && !legacy.includes(id));
+        return [...added, ...legacy];
     } catch {
         return null; // sem localStorage (aba anônima, bloqueio): fica o padrão
     }
@@ -81,8 +99,8 @@ export const useColumnPreferences = (storageKey: string, defaults: AppointmentCo
 
     // A chave leva o id do usuário, que pode chegar depois da 1ª renderização:
     // quando ela muda, relê o que estava salvo para a chave nova.
-    const [state, setState] = useState(() => ({ key, saved: readSaved(key) }));
-    if (state.key !== key) setState({ key, saved: readSaved(key) });
+    const [state, setState] = useState(() => ({ key, saved: readSaved(key, defaults) }));
+    if (state.key !== key) setState({ key, saved: readSaved(key, defaults) });
     const saved = state.key === key ? state.saved : null;
 
     const visible = enabled && saved ? saved : defaults;
@@ -90,7 +108,8 @@ export const useColumnPreferences = (storageKey: string, defaults: AppointmentCo
     const persist = useCallback((next: AppointmentColumnId[] | null) => {
         setState({ key, saved: next });
         try {
-            if (next) window.localStorage.setItem(key, JSON.stringify(next));
+            // Formato { cols }: diferencia de uma lista antiga, salva antes de COLUMNS_ADDED_LATER.
+            if (next) window.localStorage.setItem(key, JSON.stringify({ cols: next }));
             else window.localStorage.removeItem(key);
         } catch {
             // a escolha vale até recarregar a página

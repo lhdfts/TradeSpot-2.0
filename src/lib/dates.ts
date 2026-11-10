@@ -22,6 +22,20 @@ export function brazilTimeHHmm(ms: number): string {
   return new Date(ms - 3 * 3_600_000).toISOString().slice(11, 16);
 }
 
+/** Dia "YYYY-MM-DD" (GMT-3) em que o agendamento foi criado; undefined sem data válida. */
+export function createdDayBR(createdAt?: string | null): string | undefined {
+  const ms = createdAt ? Date.parse(createdAt) : NaN;
+  return Number.isNaN(ms) ? undefined : brazilDateISO(ms);
+}
+
+/** Data de criação para exibir: "05/11/2026 14:32", sempre em GMT-3. */
+export function formatCreatedAtBR(createdAt?: string | null): string | undefined {
+  const ms = createdAt ? Date.parse(createdAt) : NaN;
+  if (Number.isNaN(ms)) return undefined;
+  const [y, m, d] = brazilDateISO(ms).split('-');
+  return `${d}/${m}/${y} ${brazilTimeHHmm(ms)}`;
+}
+
 /** Instante (ms) em que o agendamento começa; data e hora são gravadas em Brasília. */
 export function appointmentStart(date: string, time: string): number {
   return Date.parse(`${date}T${time}:00-03:00`);

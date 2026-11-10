@@ -119,8 +119,9 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
 
     const columnPrefs = useColumnPreferences(columnsStorageKey, defaultColumns, canChooseColumns);
     const shownColumns = OPTIONAL_COLUMNS.filter(col => columnPrefs.visible.includes(col.id));
-    const columnsBeforeStatus = shownColumns.filter(col => col.beforeStatus);
-    const columnsAfterStatus = shownColumns.filter(col => !col.beforeStatus);
+    const columnsFirst = shownColumns.filter(col => col.first);
+    const columnsBeforeStatus = shownColumns.filter(col => !col.first && col.beforeStatus);
+    const columnsAfterStatus = shownColumns.filter(col => !col.first && !col.beforeStatus);
     const tableMinWidth = DATE_COL_WIDTH + LEAD_COL_MIN_WIDTH + STATUS_COL_WIDTH + ACTION_COL_WIDTH +
         shownColumns.reduce((sum, col) => sum + col.width, 0);
 
@@ -333,6 +334,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                 colunas a largura mínima passa da tela e a tabela rola na horizontal. */}
                             <table className="w-full table-fixed text-left" style={{ minWidth: tableMinWidth }}>
                                 <colgroup>
+                                    {columnsFirst.map(col => <col key={col.id} style={{ width: col.width }} />)}
                                     <col style={{ width: DATE_COL_WIDTH }} />
                                     <col />
                                     {columnsBeforeStatus.map(col => <col key={col.id} style={{ width: col.width }} />)}
@@ -342,6 +344,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                 </colgroup>
                                 <thead className="bg-[#141414] text-white text-xs uppercase tracking-wider font-bold" style={{ backgroundColor: '#141414' }}>
                                     <tr>
+                                        {columnsFirst.map(col => <th key={col.id} className="px-4 py-4 truncate" title={col.header}>{col.header}</th>)}
                                         <th className="px-4 py-4">Data/Hora</th>
                                         <th className="px-4 py-4">Aluno(a)</th>
                                         {columnsBeforeStatus.map(col => <th key={col.id} className="px-4 py-4 truncate" title={col.header}>{col.header}</th>)}
@@ -354,6 +357,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                     {showSkeleton
                                         ? Array.from({ length: pageSize }, (_, i) => (
                                             <tr key={i} aria-hidden>
+                                                {columnsFirst.map(col => <SkeletonCell key={col.id} first="w-24" />)}
                                                 <SkeletonCell first="w-20" second="w-14" />
                                                 <SkeletonCell first="w-40" second="w-28" />
                                                 {columnsBeforeStatus.map(col => <SkeletonCell key={col.id} first="w-20" />)}
@@ -369,6 +373,7 @@ export const AppointmentsListView: React.FC<AppointmentsListViewProps> = ({
                                                 onClick={openRow(appt)}
                                                 className="animate-fade-up hover:bg-background/50 transition-colors group cursor-pointer"
                                             >
+                                                {columnsFirst.map(col => optionalCell(col, appt))}
                                                 <td className="px-4 py-4">
                                                     <AppointmentDate date={appt.date} time={appt.time} />
                                                 </td>

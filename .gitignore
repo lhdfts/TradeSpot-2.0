@@ -46,3 +46,8 @@ vercel build log.txt
 tmp/
 src/views/vulnerabilidade*.txt
 src/debug_pipedrive_script.ts
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
