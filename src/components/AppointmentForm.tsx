@@ -17,7 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { toastManager } from './ui/toast';
 import { sanitizeInput, canViewAllSectors } from '../utils/security';
 import { getPurchasesByEmail } from '../services/pipedriveService';
-import { SECTOR_PRE_VENDAS, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess, isPreVendas, usesLeadProfile, requiresLeadProfile, INTEREST_PRODUCTS, PRODUCTS, type InterestProduct, type Product } from '../constants/sectors';
+import { SECTOR_PRE_VENDAS, SECTOR_CUSTOMER_SUCCESS, isCustomerSuccess, isPreVendas, usesLeadProfile, requiresLeadProfile, INTEREST_PRODUCTS, PRODUCTS, CONTACT_CHANNELS, type InterestProduct, type Product, type ContactChannel } from '../constants/sectors';
 import { ProfessionSelect } from './ProfessionSelect';
 import { isAldeiaToCloser, isAldeiaToCloserEvent } from '../constants/events';
 
@@ -83,6 +83,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
         profession: '',
         pain: '',
         interestProduct: '' as InterestProduct | '',
+        contactChannel: '' as ContactChannel | '',
         acquiredProduct: '' as Product | '',
         studentProfile: {
             interest: '' as ProfileLevel,
@@ -355,6 +356,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 profession: initialData.profession || '',
                 pain: initialData.pain || '',
                 interestProduct: initialData.interestProduct || '',
+                contactChannel: initialData.contactChannel || '',
                 acquiredProduct: initialData.acquiredProduct || '',
                 studentProfile: {
                     interest: (incomingProfile?.interest || '') as ProfileLevel,
@@ -590,6 +592,7 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             profession: '',
             pain: '',
             interestProduct: '',
+            contactChannel: '',
             acquiredProduct: '',
             studentProfile: {
                 interest: '' as ProfileLevel,
@@ -622,6 +625,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
             if (!formData.profession.trim()) leadProfileErrors.profession = 'Profissão é obrigatória';
             if (!formData.pain.trim()) leadProfileErrors.pain = 'Dor é obrigatória';
             if (!formData.interestProduct) leadProfileErrors.interestProduct = 'Produto de interesse é obrigatório';
+            // Só na criação: agendamentos antigos de Pré-vendas não têm o campo.
+            if (!initialData && !formData.contactChannel) leadProfileErrors.contactChannel = 'Meio de Contato é obrigatório';
             if (Object.keys(leadProfileErrors).length > 0) {
                 setErrors(prev => ({ ...prev, ...leadProfileErrors }));
                 toastManager.add({ title: "Erro", description: Object.values(leadProfileErrors)[0], type: 'error' });
@@ -800,6 +805,8 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 ...(showLeadProfile
                     ? { profession: formData.profession.trim(), pain: formData.pain.trim(), interestProduct: formData.interestProduct }
                     : { profession: undefined, pain: undefined, interestProduct: undefined }),
+                // Só Pré-vendas envia o Meio de Contato.
+                contactChannel: leadProfileRequired ? formData.contactChannel : undefined,
                 // Só o Customer Success envia o Produto Adquirido.
                 acquiredProduct: showAcquiredProduct ? formData.acquiredProduct : undefined
             };
@@ -1294,6 +1301,19 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                                     error={errors.interestProduct}
                                     disabled={isEditing}
                                 />
+                                {leadProfileRequired && (
+                                    <FloatingSelect
+                                        label="Meio de Contato"
+                                        value={formData.contactChannel}
+                                        onChange={(e: { target: { value: string } }) => {
+                                            setFormData(prev => ({ ...prev, contactChannel: e.target.value as ContactChannel }));
+                                            if (errors.contactChannel) setErrors(prev => ({ ...prev, contactChannel: '' }));
+                                        }}
+                                        options={CONTACT_CHANNELS.map(c => ({ value: c, label: c }))}
+                                        error={errors.contactChannel}
+                                        disabled={isEditing}
+                                    />
+                                )}
                             </>
                         ) : (
                         <>

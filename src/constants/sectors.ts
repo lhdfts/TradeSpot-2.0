@@ -50,6 +50,11 @@ export const requiresLeadProfile = (sector?: string | null): boolean =>
 export const PRODUCTS = ['Aldeia', 'Tribo'] as const;
 export type Product = typeof PRODUCTS[number];
 export const INTEREST_PRODUCTS = PRODUCTS;
+
+// Meio de Contato do lead, obrigatório na criação para Pré-vendas.
+// Mesma lista em server/src/schemas/appointmentSchema.ts e no check da coluna contact_channel.
+export const CONTACT_CHANNELS = ['Unnichat', '3C Plus', 'Whatsapp Comercial'] as const;
+export type ContactChannel = typeof CONTACT_CHANNELS[number];
 export type InterestProduct = Product;
 
 /**
