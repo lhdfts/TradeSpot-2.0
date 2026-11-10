@@ -23,7 +23,8 @@ import {
 import { cn } from '../lib/utils';
 import { Skeleton } from '../components/ui/skeleton';
 import { STATUS_COLORS, STATUS_TOTAL_CHART } from '../lib/appointmentStatus';
-import type { AppointmentStatus } from '../types';
+import type { AppointmentDateField, AppointmentStatus } from '../types';
+import { formatCreatedAtBR } from '../lib/dates';
 import { RankingModal } from '../components/RankingModal';
 import { computeMetrics, computeOwnerStats, filterAppointments, filterForExport, responsibleOf, RESPONSIBLE_SECTORS, type DirectionFilter, type RankingScope } from '../utils/metricsCalc';
 import { FloatingMultiSelect } from '../components/FloatingMultiSelect';
@@ -59,6 +60,8 @@ export const Metrics: React.FC = () => {
     const toLocalISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const [startDate, setStartDate] = useState(toLocalISO(firstDay));
     const [endDate, setEndDate] = useState(toLocalISO(lastDay));
+    // Período pela data do agendamento ou pela data em que foi criado (GMT-3).
+    const [dateBasis, setDateBasis] = useState<AppointmentDateField>('date');
 
     const [attendantFilter, setAttendantFilter] = useState('');
     const [eventFilter, setEventFilter] = useState('');
@@ -133,16 +136,16 @@ export const Metrics: React.FC = () => {
 
     // --- DATA CALCULATION ---
     const { rankings, chartData, filteredAppointments, chartTotal } = useMemo(() => computeMetrics({
-        user, appointments, attendants, startDate, endDate, attendantFilter,
+        user, appointments, attendants, startDate, endDate, dateBasis, attendantFilter,
         eventFilter, typeFilter, sectorFilter, directionFilter: effectiveDirection, rankingScope: rankingScopeFor(sectorFilter), uniqueClients, selectedStatuses
-    }), [user, appointments, startDate, endDate, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, effectiveDirection, rankingScope, uniqueClients, selectedStatuses]);
+    }), [user, appointments, startDate, endDate, dateBasis, attendantFilter, eventFilter, typeFilter, attendants, sectorFilter, effectiveDirection, rankingScope, uniqueClients, selectedStatuses]);
 
     // Busca no banco tudo do período selecionado. Sem isso a tela usaria a lista
     // que já estava carregada (carga inicial ou período de outra tela).
     useEffect(() => {
         if (!startDate || !endDate || startDate > endDate) return;
-        refresh({ startDate, endDate });
-    }, [startDate, endDate]);
+        refresh({ startDate, endDate, dateField: dateBasis });
+    }, [startDate, endDate, dateBasis]);
 
     // Setores com troca de responsável habilitada (Configurações). Só neles o card de responsáveis aparece.
     const [ownerSectors, setOwnerSectors] = useState<string[]>([]);
@@ -156,14 +159,14 @@ export const Metrics: React.FC = () => {
 
     // Base do card: mesmos filtros da página (visibilidade, setor e direção), sem alunos únicos.
     const ownerBase = useMemo(() => filterAppointments({
-        user, appointments, attendants, startDate, endDate, eventFilter, typeFilter,
+        user, appointments, attendants, startDate, endDate, dateBasis, eventFilter, typeFilter,
         sectorFilter: ownerDisplaySector || 'all', directionFilter: ownerDisplaySector ? directionFilter : 'all'
-    }), [user, appointments, attendants, startDate, endDate, eventFilter, typeFilter, ownerDisplaySector, directionFilter]);
+    }), [user, appointments, attendants, startDate, endDate, dateBasis, eventFilter, typeFilter, ownerDisplaySector, directionFilter]);
 
     const ownerStats = useMemo(() => computeOwnerStats({
-        ownerSectors, ownerDisplaySector, appointments: ownerBase, attendants, startDate, endDate,
+        ownerSectors, ownerDisplaySector, appointments: ownerBase, attendants, startDate, endDate, dateBasis,
         eventFilter, typeFilter, attendantFilter, searchTerm
-    }), [ownerSectors, ownerDisplaySector, ownerBase, attendants, startDate, endDate, eventFilter, typeFilter, attendantFilter, searchTerm]);
+    }), [ownerSectors, ownerDisplaySector, ownerBase, attendants, startDate, endDate, dateBasis, eventFilter, typeFilter, attendantFilter, searchTerm]);
 
     const exportAppointments = useMemo(() => filterForExport({
         filteredAppointments, attendants, attendantFilter, searchTerm, selectedStatuses
@@ -172,13 +175,14 @@ export const Metrics: React.FC = () => {
     const handleExport = () => {
         if (loadingAppointments) return;
         if (!exportAppointments.length) return;
-        const headers = ['Data', 'Horario', 'Lead', 'Telefone', 'Email', 'Tipo', 'Status', 'Atendente', 'Criador', 'Responsável', 'Evento'];
+        const headers = ['Criado em', 'Data', 'Horario', 'Lead', 'Telefone', 'Email', 'Tipo', 'Status', 'Atendente', 'Criador', 'Responsável', 'Evento'];
         const csvRows = exportAppointments.map((appt: any) => {
             const attendant = attendants.find(att => att.id === appt.attendantId);
             const event = events.find(e => e.id === appt.eventId);
             const creator = attendants.find(att => att.id === appt.createdBy);
             const owner = attendants.find(att => att.id === (appt.ownerId ?? appt.createdBy));
             return [
+                escapeCsvValue(formatCreatedAtBR(appt.createdAt)),
                 escapeCsvValue(appt.date),
                 escapeCsvValue(appt.time),
                 escapeCsvValue(appt.lead),
@@ -196,7 +200,7 @@ export const Metrics: React.FC = () => {
         const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
         const link = document.body.appendChild(document.createElement('a'));
         link.href = URL.createObjectURL(blob);
-        link.download = `metricas_${startDate}_ate_${endDate}.csv`;
+        link.download = `metricas${dateBasis === 'created' ? '_por_criacao' : ''}_${startDate}_ate_${endDate}.csv`;
         link.click();
         document.body.removeChild(link);
     };
@@ -206,8 +210,8 @@ export const Metrics: React.FC = () => {
     // outro setor (ex.: evento do Pré-vendas atendido pelo Closer) não podiam
     // ser filtrados, embora entrassem nos números.
     const optionBase = useMemo(() => filterAppointments({
-        user, appointments, attendants, startDate, endDate, eventFilter: '', typeFilter: [], sectorFilter, directionFilter: effectiveDirection
-    }), [user, appointments, attendants, startDate, endDate, sectorFilter, effectiveDirection]);
+        user, appointments, attendants, startDate, endDate, dateBasis, eventFilter: '', typeFilter: [], sectorFilter, directionFilter: effectiveDirection
+    }), [user, appointments, attendants, startDate, endDate, dateBasis, sectorFilter, effectiveDirection]);
 
     // Quem vê vários setores (Admin, Dev, Suporte, Qualidade...) escolhe entre os
     // eventos do setor filtrado e os que aparecem nos dados. Os demais (Líder,
@@ -279,6 +283,18 @@ export const Metrics: React.FC = () => {
                             className="flex-1 min-w-0 sm:flex-none sm:w-36"
                         />
                     </div>
+
+                    {/* Base do período: data do agendamento ou data de criação (GMT-3) */}
+                    <FloatingSelect
+                        label="Período por"
+                        value={dateBasis}
+                        onChange={(e) => setDateBasis(e.target.value as AppointmentDateField)}
+                        options={[
+                            { value: 'date', label: 'Data do agendamento' },
+                            { value: 'created', label: 'Data de criação' }
+                        ]}
+                        className="w-full sm:w-52"
+                    />
 
                     {/* Search by Name */}
                     {!isCollaborator && (

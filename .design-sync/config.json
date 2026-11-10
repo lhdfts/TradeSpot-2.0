@@ -1,0 +1,20 @@
+{
+  "projectId": "0b7893b5-e2c6-43fd-82cc-d2caa5b5b203",
+  "pkg": "@tradespot/ui",
+  "globalName": "TradeSpotUI",
+  "shape": "package",
+  "buildCmd": "node .design-sync/build-ds.mjs",
+  "entry": ".design-sync/.cache/dist/index.mjs",
+  "srcDir": "../../../src",
+  "tsconfig": "../../../tsconfig.app.json",
+  "cssEntry": "styles.css",
+  "extraFonts": [
+    "../../fonts/montserrat.css"
+  ],
+  "componentSrcMap": {
+    "TabsTrigger": null,
+    "TabsContent": null,
+    "TooltipContent": null
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}

@@ -49,6 +49,15 @@ export interface Attendant {
     denied_events?: string[]; // Array of event IDs
 }
 
+/** Base do período nas listagens: data do agendamento ou data de criação (GMT-3). */
+export type AppointmentDateField = 'date' | 'created';
+
+export interface AppointmentListParams {
+    startDate?: string;
+    endDate?: string;
+    dateField?: AppointmentDateField;
+}
+
 export interface Appointment {
     id: string;
     lead: string;
@@ -66,6 +75,8 @@ export interface Appointment {
     studentProfile?: StudentProfile;
     notes?: string;
     additionalInfo?: string;
+    // Quando o agendamento foi criado (ISO em UTC; exibido sempre em GMT-3).
+    createdAt?: string;
     createdBy?: string;
     // Owner: quem recebe a comissão. Nasce igual a createdBy; só o Líder troca.
     ownerId?: string;

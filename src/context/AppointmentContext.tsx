@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
-import type { Appointment } from '../types';
+import type { Appointment, AppointmentListParams } from '../types';
 import { api } from '../services/api';
 
 interface AppointmentContextType {
@@ -10,7 +10,7 @@ interface AppointmentContextType {
     loaded: boolean;
     // A última busca com período bateu no teto do servidor (lista incompleta).
     truncated: boolean;
-    refresh: (params?: { startDate?: string; endDate?: string }) => Promise<void>;
+    refresh: (params?: AppointmentListParams) => Promise<void>;
     createAppointment: (data: Omit<Appointment, 'id'>) => Promise<void>;
     updateAppointment: (id: string, data: Partial<Appointment>) => Promise<void>;
     changeOwner: (id: string, ownerId: string) => Promise<void>;
@@ -32,9 +32,9 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     // Período da última busca. `refresh()` sem parâmetros (botão de atualizar,
     // salvar uma edição) repete esse período em vez de trocar a lista da tela
     // pela carga padrão.
-    const lastParams = useRef<{ startDate?: string; endDate?: string } | undefined>(undefined);
+    const lastParams = useRef<AppointmentListParams | undefined>(undefined);
 
-    const refresh = async (params?: { startDate?: string; endDate?: string }) => {
+    const refresh = async (params?: AppointmentListParams) => {
         if (params) lastParams.current = params;
         else params = lastParams.current;
         const requestId = ++latestRequest.current;

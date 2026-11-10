@@ -1,6 +1,7 @@
 import { canViewAllSectors, getAllowedSectors } from './security';
 import { SECTOR_CUSTOMER_SUCCESS, SECTOR_PRE_VENDAS, normalizeSector } from '../constants/sectors';
-import { APPOINTMENT_STATUSES, type Appointment, type AppointmentStatus, type Attendant } from '../types';
+import { APPOINTMENT_STATUSES, type Appointment, type AppointmentDateField, type AppointmentStatus, type Attendant } from '../types';
+import { createdDayBR } from '../lib/dates';
 
 /**
  * Cálculos da tela de Métricas, separados do componente para poderem ser
@@ -48,6 +49,13 @@ export type DirectionFilter = 'all' | 'out' | 'internal' | 'in';
 
 export type RankingScope = 'all' | 'own' | 'other';
 
+/**
+ * Dia (YYYY-MM-DD) que conta para o período e para o gráfico: a data do agendamento
+ * ou o dia em que ele foi criado, em GMT-3. Sem data de criação, fica fora do período.
+ */
+export const metricDay = (a: Appointment, dateBasis: AppointmentDateField = 'date'): string | undefined =>
+    dateBasis === 'created' ? createdDayBR(a.createdAt) : a.date;
+
 /** Responsável = owner; agendamentos sem owner valem pelo criador. */
 export const responsibleOf = (a: Appointment) => a.ownerId ?? a.createdBy;
 
@@ -57,6 +65,8 @@ export interface MetricsInput {
     attendants: Attendant[];
     startDate: string;
     endDate: string;
+    /** Período pela data do agendamento (padrão) ou pela data de criação. */
+    dateBasis?: AppointmentDateField;
     attendantFilter: string;
     eventFilter: string;
     // Tipos selecionados; vazio = todos.
@@ -75,8 +85,8 @@ export interface MetricsInput {
  * setor). Também usada, sem tipo e evento, para montar as opções desses filtros.
  */
 export const filterAppointments = ({
-    user, appointments, attendants, startDate, endDate, eventFilter, typeFilter, sectorFilter, directionFilter = 'all'
-}: Pick<MetricsInput, 'user' | 'appointments' | 'attendants' | 'startDate' | 'endDate' | 'eventFilter' | 'typeFilter' | 'sectorFilter' | 'directionFilter'>): Appointment[] => {
+    user, appointments, attendants, startDate, endDate, dateBasis = 'date', eventFilter, typeFilter, sectorFilter, directionFilter = 'all'
+}: Pick<MetricsInput, 'user' | 'appointments' | 'attendants' | 'startDate' | 'endDate' | 'dateBasis' | 'eventFilter' | 'typeFilter' | 'sectorFilter' | 'directionFilter'>): Appointment[] => {
     const allowedSectors = getAllowedSectors(user);
     const isGlobalViewer = canViewAllSectors(user);
     const sectorById = new Map(attendants.map(att => [att.id, att.sector]));
@@ -89,11 +99,12 @@ export const filterAppointments = ({
 
     // 1. Filter Appointments by Date, Event, Type
     return appointments.filter(a => {
-        if (!a.date) return false;
+        const day = metricDay(a, dateBasis);
+        if (!day) return false;
 
         // Period Filter
         if (startDate && endDate) {
-            if (a.date < startDate || a.date > endDate) return false;
+            if (day < startDate || day > endDate) return false;
         } else {
             return false;
         }
@@ -131,10 +142,10 @@ export const filterAppointments = ({
 };
 
 export const computeMetrics = ({
-    user, appointments, attendants, startDate, endDate, attendantFilter,
+    user, appointments, attendants, startDate, endDate, dateBasis = 'date', attendantFilter,
     eventFilter, typeFilter, sectorFilter, directionFilter = 'all', rankingScope = 'all', uniqueClients, selectedStatuses
 }: MetricsInput) => {
-    let filtered = filterAppointments({ user, appointments, attendants, startDate, endDate, eventFilter, typeFilter, sectorFilter, directionFilter });
+    let filtered = filterAppointments({ user, appointments, attendants, startDate, endDate, dateBasis, eventFilter, typeFilter, sectorFilter, directionFilter });
 
     // 1.5 Alunos únicos: cada aluno (telefone) conta uma única vez, pelo agendamento
     // mais recente dentro dos filtros atuais. Aplicado antes de rankings, gráfico,
@@ -281,8 +292,8 @@ export const computeMetrics = ({
     }
 
     filtered.forEach(a => {
-        const key = a.date;
-        if (dateMap.has(key)) {
+        const key = metricDay(a, dateBasis);
+        if (key && dateMap.has(key)) {
             const stats = dateMap.get(key)!;
             if (a.status as string in stats) {
                 stats[a.status as AppointmentStatus]++;
@@ -341,7 +352,7 @@ export interface OwnerStatsItem {
  * o switch de alunos únicos. null = setor sem troca de owner habilitada.
  */
 export const computeOwnerStats = ({
-    ownerSectors, ownerDisplaySector, appointments, attendants, startDate, endDate,
+    ownerSectors, ownerDisplaySector, appointments, attendants, startDate, endDate, dateBasis = 'date',
     eventFilter, typeFilter, attendantFilter, searchTerm
 }: {
     ownerSectors: string[];
@@ -350,6 +361,7 @@ export const computeOwnerStats = ({
     attendants: Attendant[];
     startDate: string;
     endDate: string;
+    dateBasis?: AppointmentDateField;
     eventFilter: string;
     typeFilter: string[];
     attendantFilter: string;
@@ -366,7 +378,8 @@ export const computeOwnerStats = ({
     };
 
     appointments.forEach(a => {
-        if (!a.date || !startDate || !endDate || a.date < startDate || a.date > endDate) return;
+        const day = metricDay(a, dateBasis);
+        if (!day || !startDate || !endDate || day < startDate || day > endDate) return;
         if (eventFilter && a.eventId !== eventFilter) return;
         if (typeFilter.length > 0 && !typeFilter.includes(a.type)) return;
 

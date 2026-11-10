@@ -69,6 +69,14 @@ const isInOwnSector = (user: AuthenticatedRequest['user'], sector?: string | nul
 const canSeeUnnichatUrl = (user: AuthenticatedRequest['user']): boolean =>
     canManageAllSectors(user) || user?.role === 'Líder';
 
+// created_at em ISO UTC. A criação grava new Date().toISOString(); se a coluna for
+// timestamp sem fuso, o PostgREST devolve sem o "Z" e o navegador leria como hora local.
+const toUtcIso = (value?: string | null): string | undefined => {
+    if (!value) return undefined;
+    const iso = value.includes('T') ? value : value.replace(' ', 'T');
+    return /(Z|[+-]\d{2}(:?\d{2})?)$/.test(iso) ? iso : `${iso}Z`;
+};
+
 // Limite por requisição do Supabase (db-max-rows) e teto da listagem com período.
 const PAGE_SIZE = 1000;
 const MAX_ROWS_WITH_DATE = 20000;
@@ -77,10 +85,15 @@ const MAX_ROWS_WITH_DATE = 20000;
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
         // Filtro de data no Backend (Solução 1 - Recomendada)
-        const { startDate, endDate } = req.query;
+        const { startDate, endDate, dateField } = req.query;
         const start = typeof startDate === 'string' && startDate.trim() !== '' ? startDate : null;
         const end = typeof endDate === 'string' && endDate.trim() !== '' ? endDate : null;
         const hasDateFilter = !!(start || end);
+        // Período pela data do agendamento (padrão) ou pela data de criação (Métricas).
+        const byCreatedAt = dateField === 'created';
+        if (byCreatedAt && [start, end].some(d => d && !/^\d{4}-\d{2}-\d{2}$/.test(d))) {
+            return res.status(400).json({ error: 'Datas devem estar no formato AAAA-MM-DD.' });
+        }
 
         // Correção VULN-006: Data Minimization & Least Privilege
         const userRole = req.user?.role;
@@ -149,8 +162,14 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
                 .order('time', { ascending: false })
                 .order('id', { ascending: true })
                 .range(from, to);
-            if (start) q = q.gte('date', start);
-            if (end) q = q.lte('date', end);
+            if (byCreatedAt) {
+                // Dias inteiros em Brasília (GMT-3 fixo, sem horário de verão).
+                if (start) q = q.gte('created_at', `${start}T00:00:00-03:00`);
+                if (end) q = q.lte('created_at', `${end}T23:59:59.999-03:00`);
+            } else {
+                if (start) q = q.gte('date', start);
+                if (end) q = q.lte('date', end);
+            }
             if (scopeFilter) q = q.or(scopeFilter);
             return q;
         };
@@ -191,6 +210,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
             meetLink: app.meet_link,
             notes: app.notes,
             additionalInfo: app.additional_info,
+            createdAt: toUtcIso(app.created_at),
             createdBy: app.created_by,
             ownerId: app.owner ?? app.created_by,
             ownerName: app.owner_user?.name,

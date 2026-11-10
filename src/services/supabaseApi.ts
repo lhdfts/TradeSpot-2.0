@@ -1,6 +1,6 @@
 import { getAuthHeaders } from '../lib/firebase';
 import type { ApiService, ReminderAppointment } from './api';
-import type { Appointment, Attendant, Event, UnnichatConnection } from '../types';
+import type { Appointment, AppointmentListParams, Attendant, Event, UnnichatConnection } from '../types';
 import { normalizeSector } from '../constants/sectors';
 
 // Setores chegam aqui já com o nome atual, mesmo que o banco ainda guarde um
@@ -10,17 +10,18 @@ const withNormalizedSector = <T extends { sector?: string | null }>(rows: T[]): 
 
 export class SupabaseApiService implements ApiService {
     appointments = {
-        list: async (params?: { startDate?: string; endDate?: string }): Promise<Appointment[]> => {
+        list: async (params?: AppointmentListParams): Promise<Appointment[]> => {
             return (await this.appointments.listWithMeta(params)).appointments;
         },
         // `truncated`: o período tem mais agendamentos do que o teto do servidor.
-        listWithMeta: async (params?: { startDate?: string; endDate?: string }): Promise<{ appointments: Appointment[]; truncated: boolean; total: number }> => {
+        listWithMeta: async (params?: AppointmentListParams): Promise<{ appointments: Appointment[]; truncated: boolean; total: number }> => {
             const authHeaders = await getAuthHeaders();
             let url = '/api/appointments';
             if (params?.startDate || params?.endDate) {
                 const searchParams = new URLSearchParams();
                 if (params.startDate) searchParams.append('startDate', params.startDate);
                 if (params.endDate) searchParams.append('endDate', params.endDate);
+                if (params.dateField === 'created') searchParams.append('dateField', 'created');
                 url += `?${searchParams.toString()}`;
             }
             const response = await fetch(url, {

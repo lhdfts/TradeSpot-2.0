@@ -12,7 +12,8 @@ import { AppointmentsListView } from '../components/appointments/AppointmentsLis
 import { canChooseColumns, useColumnLookups, type AppointmentColumnId } from '../components/appointments/appointmentColumns';
 
 // Colunas opcionais visíveis enquanto a pessoa não escolher outras (as de sempre desta tela).
-const ALL_APPOINTMENTS_DEFAULT_COLUMNS: AppointmentColumnId[] = ['type', 'owner', 'attendant'];
+// "Criado em" (GMT-3) vem ligada para todos os setores e cargos; quem escolhe colunas pode desligar.
+const ALL_APPOINTMENTS_DEFAULT_COLUMNS: AppointmentColumnId[] = ['createdAt', 'type', 'owner', 'attendant'];
 import { STATUS_FILTER_OPTIONS, FILTER_WIDTH } from '../constants/appointmentStatus';
 import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
 
