@@ -17,6 +17,7 @@ import { canChooseColumns, useColumnLookups, type AppointmentColumnId } from '..
 const ALL_APPOINTMENTS_DEFAULT_COLUMNS: AppointmentColumnId[] = ['createdAt', 'type', 'owner', 'attendant'];
 import { STATUS_FILTER_OPTIONS, FILTER_WIDTH } from '../constants/appointmentStatus';
 import { sanitizeInput, canViewAllSectors, isMedinaUser, getAllowedSectors, isDualLeader } from '../utils/security';
+import { CONTACT_CHANNEL_FILTER_OPTIONS, matchesContactChannel } from '../constants/sectors';
 
 interface AllAppointmentsProps {
     onEdit: (appt: Appointment) => void;
@@ -56,6 +57,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     const [ownerFilter, setOwnerFilter] = useState('all');
     const [eventFilter, setEventFilter] = useState('all');
     const [sectorFilter, setSectorFilter] = useState('all');
+    const [contactChannelFilter, setContactChannelFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: getBrazilTodayISO(), end: '' });
     // Período pela data do agendamento ou pela data de criação (GMT-3), como nas Métricas.
     const [dateBasis, setDateBasis] = useState<AppointmentDateField>('date');
@@ -105,7 +107,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
     // Reset pagination when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, statusFilter, attendantFilter, creatorFilter, ownerFilter, eventFilter, sectorFilter, dateRange, dateBasis]);
+    }, [search, statusFilter, attendantFilter, creatorFilter, ownerFilter, eventFilter, sectorFilter, contactChannelFilter, dateRange, dateBasis]);
 
     // Events that had at least 1 appointment within the selected period (Data Inicial/Data Final),
     // used to restrict the options shown in the "Evento" filter.
@@ -168,6 +170,8 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
 
+        const matchesChannel = matchesContactChannel(a.contactChannel, contactChannelFilter);
+
         const matchesSectorFilter = sectorFilter === 'all' || (() => {
             const linkedAttendant = attendants.find(att => att.id === a.attendantId);
             return linkedAttendant?.sector === sectorFilter;
@@ -210,7 +214,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
             (a.createdBy === user?.id) ||
             (a.ownerId === user?.id);
 
-        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesOwner && matchesEvent && matchesSectorFilter && matchesDate && matchesSector;
+        return matchesSearch && matchesStatus && matchesAttendant && matchesCreator && matchesOwner && matchesEvent && matchesChannel && matchesSectorFilter && matchesDate && matchesSector;
     }).sort((a, b) => {
         // Por criação: na ordem em que foram criados. Senão, os mais próximos primeiro.
         if (dateBasis === 'created') {
@@ -223,12 +227,12 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
 
     const hasActiveFilters =
         search !== '' || statusFilter !== 'all' || attendantFilter !== 'all' || creatorFilter !== 'all' ||
-        ownerFilter !== 'all' || eventFilter !== 'all' || sectorFilter !== 'all' ||
+        ownerFilter !== 'all' || eventFilter !== 'all' || sectorFilter !== 'all' || contactChannelFilter !== 'all' ||
         dateRange.start !== getBrazilTodayISO() || dateRange.end !== '' || dateBasis !== 'date';
 
     const advancedActiveCount = [
         creatorFilter !== 'all', ownerFilter !== 'all', sectorFilter !== 'all',
-        attendantFilter !== 'all', eventFilter !== 'all', dateRange.end !== '',
+        attendantFilter !== 'all', eventFilter !== 'all', contactChannelFilter !== 'all', dateRange.end !== '',
     ].filter(Boolean).length;
 
     const clearFilters = () => {
@@ -239,6 +243,7 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
         setOwnerFilter('all');
         setEventFilter('all');
         setSectorFilter('all');
+        setContactChannelFilter('all');
         setDateRange({ start: getBrazilTodayISO(), end: '' });
         setDateBasis('date');
     };
@@ -345,6 +350,13 @@ export const AllAppointments: React.FC<AllAppointmentsProps> = ({ onEdit }) => {
                             { value: 'all', label: 'Todos' },
                             ...eventOptions.map(ev => ({ value: ev.id, label: ev.event_name }))
                         ]}
+                    />
+                    <FloatingSelect
+                        label="Meio de Contato"
+                        className={FILTER_WIDTH}
+                        value={contactChannelFilter}
+                        onChange={e => setContactChannelFilter(e.target.value)}
+                        options={CONTACT_CHANNEL_FILTER_OPTIONS}
                     />
                     {viewMode === 'table' && (
                         <FloatingDateInput
