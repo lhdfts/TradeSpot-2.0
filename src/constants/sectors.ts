@@ -55,6 +55,16 @@ export const INTEREST_PRODUCTS = PRODUCTS;
 // Mesma lista em server/src/schemas/appointmentSchema.ts e no check da coluna contact_channel.
 export const CONTACT_CHANNELS = ['Unnichat', '3C Plus', 'Whatsapp Comercial'] as const;
 export type ContactChannel = typeof CONTACT_CHANNELS[number];
+
+// Opções do filtro "Meio de Contato" nas listas ('none' = agendamento sem o campo).
+export const CONTACT_CHANNEL_FILTER_OPTIONS = [
+    { value: 'all', label: 'Todos' },
+    ...CONTACT_CHANNELS.map(c => ({ value: c, label: c })),
+    { value: 'none', label: 'Não informado' },
+];
+
+export const matchesContactChannel = (channel: string | null | undefined, filter: string): boolean =>
+    filter === 'all' || (filter === 'none' ? !channel : channel === filter);
 export type InterestProduct = Product;
 
 /**

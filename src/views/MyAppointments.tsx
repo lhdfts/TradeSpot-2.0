@@ -12,6 +12,7 @@ import { brazilTodayISO } from '../lib/dates';
 import { useFormData } from '../hooks/useFormData';
 import { getDisplayStatus } from '../lib/appointmentStatus';
 import { useNow } from '../hooks/useNow';
+import { CONTACT_CHANNEL_FILTER_OPTIONS, matchesContactChannel } from '../constants/sectors';
 
 // Colunas opcionais visíveis enquanto a pessoa não escolher outras (as de sempre desta tela).
 const MY_APPOINTMENTS_DEFAULT_COLUMNS: AppointmentColumnId[] = ['type', 'attendant'];
@@ -32,6 +33,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     const now = useNow();
     const [eventFilter, setEventFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState('all');
+    const [contactChannelFilter, setContactChannelFilter] = useState('all');
     const [dateRange, setDateRange] = useState({ start: brazilTodayISO(), end: '' });
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -92,6 +94,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
         const matchesStatus = statusFilter === 'all' || getDisplayStatus(a, now) === statusFilter;
         const matchesEvent = eventFilter === 'all' || a.eventId === eventFilter;
         const matchesType = typeFilter === 'all' || a.type === typeFilter;
+        const matchesChannel = matchesContactChannel(a.contactChannel, contactChannelFilter);
 
         // Default: Show Only Today and Future
         // If filters are empty, we hide past appointments (yesterday or older).
@@ -115,7 +118,7 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
             matchesDate = a.date >= safeTodayStr;
         }
 
-        return matchesSearch && matchesStatus && matchesEvent && matchesType && matchesDate;
+        return matchesSearch && matchesStatus && matchesEvent && matchesType && matchesChannel && matchesDate;
     }).sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
@@ -123,17 +126,18 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
     });
 
     const hasActiveFilters =
-        search !== '' || statusFilter !== 'all' || eventFilter !== 'all' || typeFilter !== 'all' ||
+        search !== '' || statusFilter !== 'all' || eventFilter !== 'all' || typeFilter !== 'all' || contactChannelFilter !== 'all' ||
         dateRange.start !== brazilTodayISO() || dateRange.end !== '';
 
     const advancedActiveCount =
-        [eventFilter !== 'all', typeFilter !== 'all', dateRange.end !== ''].filter(Boolean).length;
+        [eventFilter !== 'all', typeFilter !== 'all', contactChannelFilter !== 'all', dateRange.end !== ''].filter(Boolean).length;
 
     const clearFilters = () => {
         setSearch('');
         setStatusFilter('all');
         setEventFilter('all');
         setTypeFilter('all');
+        setContactChannelFilter('all');
         setDateRange({ start: brazilTodayISO(), end: '' });
         setCurrentPage(1);
     };
@@ -207,6 +211,16 @@ export const MyAppointments: React.FC<MyAppointmentsProps> = ({ onEdit }) => {
                             setCurrentPage(1);
                         }}
                         options={typeOptions}
+                    />
+                    <FloatingSelect
+                        label="Meio de Contato"
+                        className={FILTER_WIDTH}
+                        value={contactChannelFilter}
+                        onChange={e => {
+                            setContactChannelFilter(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                        options={CONTACT_CHANNEL_FILTER_OPTIONS}
                     />
                     {viewMode === 'table' && (
                         <FloatingDateInput

@@ -132,6 +132,8 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
     const showLeadProfile = hasLeadProfile || creatorSector === 'Closer';
     // Produto Adquirido (Customer Success): aparece quando preenchido ou quando quem criou é do CS.
     const showAcquiredProduct = !!initialData?.acquiredProduct || isCustomerSuccess(creatorSector);
+    // Meio de Contato (Pré-vendas): aparece quando preenchido ou quando quem criou é de Pré-vendas.
+    const showContactChannel = !!initialData?.contactChannel || isPreVendas(creatorSector);
     // Moeda, Perfil Financeiro e Perfil de Interesse: substituídos pelo perfil do lead,
     // mas continuam visíveis se tiverem valor (agendamentos anteriores à troca).
     const financialAmount = initialData?.studentProfile?.financial?.amount;
@@ -1208,6 +1210,9 @@ export const EditAppointmentForm: React.FC<EditAppointmentFormProps> = ({ initia
                                 <FloatingInput label="Profissão" value={initialData?.profession || ''} disabled />
                                 <FloatingInput label="Produto de Interesse" value={initialData?.interestProduct || ''} disabled />
                             </>
+                        )}
+                        {showContactChannel && (
+                            <FloatingInput label="Meio de Contato" value={initialData?.contactChannel || 'Não informado'} disabled />
                         )}
                         {showLegacyProfile && (
                         <>
