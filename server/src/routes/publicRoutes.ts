@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import axios from 'axios';
 import { publicAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit } from '../utils/distribution.js';
+import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, isAttendantBlockedForEvent, hasSectorTimeLimit, loadCustomerSuccessTeam, isCustomerSuccessSlotFull, isCustomerSuccessLimitDbError } from '../utils/distribution.js';
 import { getAppointmentWebhooks, getGlobalAppointmentWebhook } from '../config/webhooks.js';
 import { createGoogleMeetLink } from '../services/googleMeet.js';
 import { supabase } from '../utils/supabaseClient.js';
@@ -141,6 +141,8 @@ interface AvailabilityContext {
     attendants: any[];
     /** Atendentes que podem receber este evento (sem os bloqueados). */
     filteredAttendants: any[];
+    /** Time inteiro do Customer Success (qualquer cargo), base do limite de simultâneos. */
+    csTeam: { id: string; sector: string }[];
 }
 
 // Tipo de agendamento, setores e duração usados para um evento.
@@ -204,7 +206,10 @@ async function loadAvailabilityContext(eventId?: string): Promise<AvailabilityCo
         ? attendants.filter(a => !isAttendantBlockedForEvent(a, eventId, appointmentType))
         : attendants;
 
-    return { appointmentType, sectors, durationMinutes, attendants, filteredAttendants };
+    // O limite do CS conta o time todo, não só Colaborador/Co-líder do pool acima.
+    const csTeam = sectors.some(s => isCustomerSuccess(s)) ? await loadCustomerSuccessTeam() : [];
+
+    return { appointmentType, sectors, durationMinutes, attendants, filteredAttendants, csTeam };
 }
 
 // Horários livres de um dia. `dayAppointments` deve conter só os agendamentos
@@ -217,7 +222,7 @@ async function computeAvailableTimes(
     dayAppointments: any[],
     options: { accept?: (time: string) => boolean; stopAtFirst?: boolean } = {}
 ): Promise<string[]> {
-    const { appointmentType, sectors, durationMinutes, attendants, filteredAttendants } = ctx;
+    const { appointmentType, sectors, durationMinutes, csTeam, filteredAttendants } = ctx;
     const accept = options.accept ?? (() => true);
     const availableTimes: string[] = [];
 
@@ -253,7 +258,8 @@ async function computeAvailableTimes(
                 if (hour < 9 || hour > 21 || (hour === 21 && minute > 0)) continue;
                 // 12h de antecedência para o Customer Success (link externo)
                 if (diffMinutes < 12 * 60) continue;
-                if (hasSectorTimeLimit(SECTOR_CUSTOMER_SUCCESS, date, timeSlot, appointmentType, dayAppointments, attendants, undefined, durationMinutes)) continue;
+                // Limite de simultâneos do CS: qualquer tipo ou evento, time inteiro.
+                if (hasSectorTimeLimit(SECTOR_CUSTOMER_SUCCESS, date, timeSlot, dayAppointments, csTeam, undefined, durationMinutes)) continue;
             }
 
             // 1h de antecedência para SDR (link externo)
@@ -590,6 +596,14 @@ router.post('/appointments', async (req: Request, res: Response) => {
             });
         }
 
+        // Checagem final do limite de simultâneos do Customer Success (a distribuição
+        // já o respeita; aqui pega quem agendou no meio tempo).
+        if (await isCustomerSuccessSlotFull({ attendantId: finalAttendantId, date: data.date, time: data.time, durationMinutes })) {
+            return res.status(409).json({
+                error: 'Não há horários disponíveis para este momento. Por favor, escolha outro horário.'
+            });
+        }
+
         // VALIDAÇÃO FINAL DE CONFLITO (Double Booking)
         const { data: conflicts } = await supabase
             .from('appointments')
@@ -742,6 +756,11 @@ router.post('/appointments', async (req: Request, res: Response) => {
             // can't fully close on their own.
             if (appError.code === '23P01') {
                 return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
+            }
+            // Trigger do banco (supabase/add_customer_success_concurrent_limit.sql): dois
+            // pedidos passaram pela checagem do limite do CS ao mesmo tempo.
+            if (isCustomerSuccessLimitDbError(appError)) {
+                return res.status(409).json({ error: 'Este horário acabou de ser preenchido. Por favor, escolha outro.' });
             }
             console.error("Supabase Write Error:", appError);
             return res.status(500).json({ error: 'Erro ao salvar agendamento' });
