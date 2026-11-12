@@ -198,30 +198,34 @@ export const hasConflictingAppointment = (
     });
 };
 
+/**
+ * Limite de agendamentos simultâneos do Customer Success (4 em dias úteis, 1 aos
+ * finais de semana). Conta o time inteiro, qualquer tipo de agendamento
+ * (inclusive Agendamento Pessoal) e qualquer evento. Pré-validação do
+ * formulário: o servidor confere de novo com a base completa (e o banco também).
+ * Só o Customer Success tem limite; outro setor devolve false.
+ */
 export const hasSectorTimeLimit = (
     sector: string,
     dateStr: string,
     timeStr: string,
-    appointmentType: string,
     allAppointments: Appointment[],
     attendants: Attendant[],
-    excludeAppointmentId?: string
+    excludeAppointmentId?: string,
+    durationMinutes: number = 60
 ): boolean => {
-    // Só o Customer Success tem limite, contado sobre o time todo.
     if (!isCustomerSuccess(sector)) return false;
-    if (appointmentType === 'Agendamento Pessoal') return false;
 
     const sectorAttendants = new Set(attendants.filter(a => isCustomerSuccess(a.sector)).map(a => a.id));
-    
+
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(appointmentType);
+    const newEnd = newStart + getDuration(undefined, durationMinutes);
 
     let concurrentCount = 0;
 
     for (const appt of allAppointments) {
         if (excludeAppointmentId && appt.id === excludeAppointmentId) continue;
         if (appt.status !== 'Pendente') continue;
-        if (appt.type === 'Agendamento Pessoal') continue;
         if (appt.date !== dateStr) continue;
         if (!sectorAttendants.has(appt.attendantId)) continue; 
 
@@ -258,7 +262,7 @@ export const findAvailableCloserWithLogs = (
     options: { ignoreSchedule?: boolean, sectorLimit?: string, durationMinutes?: number } = {}
 ): { attendant: Attendant | null, checksLog: CheckLogItem[] } => {
     const checksLog: CheckLogItem[] = [];
-    if (options.sectorLimit && hasSectorTimeLimit(options.sectorLimit, dateStr, timeStr, appointmentType, allAppointments, attendants)) {
+    if (options.sectorLimit && hasSectorTimeLimit(options.sectorLimit, dateStr, timeStr, allAppointments, attendants, undefined, options.durationMinutes)) {
         for (const att of attendants) {
             checksLog.push({ name: att.name, reason: "Limite diário de agendamentos do setor atingido" });
         }

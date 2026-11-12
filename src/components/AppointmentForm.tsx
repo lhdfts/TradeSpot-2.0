@@ -714,16 +714,17 @@ export const AppointmentForm: React.FC<AppointmentFormProps> = ({ initialData, p
                 return false;
             }
 
-            // 4. Sector Check
-            if (isCsEvent && formData.type !== 'Agendamento Pessoal') {
-                if (hasSectorTimeLimit(selectedEvent!.sector || '', formData.date, formData.time, formData.type, appointments, attendants, initialData?.id)) {
-                    toastManager.add({
-                        title: "Limite de Agendamentos",
-                        description: `O setor ${selectedEvent!.sector} atingiu o limite máximo de agendamentos para este horário.`,
-                        type: 'error'
-                    });
-                    return false;
-                }
+            // 4. Limite de simultâneos do Customer Success: vale para qualquer tipo
+            // (inclusive Agendamento Pessoal) e qualquer evento quando o atendente é
+            // do CS. O servidor confere de novo com a base completa.
+            if (isCustomerSuccess(selectedAttendant.sector) &&
+                hasSectorTimeLimit(selectedAttendant.sector, formData.date, formData.time, appointments, attendants, initialData?.id, eventDurationMinutes)) {
+                toastManager.add({
+                    title: "Limite de Agendamentos",
+                    description: "O Customer Success já atingiu o limite de agendamentos simultâneos neste horário (4 em dias úteis, 1 aos finais de semana).",
+                    type: 'error'
+                });
+                return false;
             }
 
             return true;

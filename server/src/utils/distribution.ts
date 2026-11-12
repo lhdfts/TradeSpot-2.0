@@ -217,32 +217,38 @@ export const hasConflictingAppointment = (
     });
 };
 
+/**
+ * Limite de agendamentos simultâneos do Customer Success (4 em dias úteis, 1 aos
+ * finais de semana). Conta o time inteiro — qualquer pessoa do setor, em qualquer
+ * cargo —, qualquer tipo de agendamento (inclusive Agendamento Pessoal, Fora da
+ * agenda etc.) e qualquer evento, ou sem evento. Vale para quem quer que esteja
+ * marcando: formulário interno, edição ou link público.
+ *
+ * `attendants` precisa trazer o time do CS completo (ver loadCustomerSuccessTeam):
+ * uma lista filtrada por cargo deixaria de contar os agendamentos de quem ficou
+ * fora do filtro. Só o Customer Success tem limite; outro setor devolve false.
+ */
 export const hasSectorTimeLimit = (
     sector: string,
     dateStr: string,
     timeStr: string,
-    newAppointmentType: string,
     allAppointments: any[],
     attendants: any[],
     excludeAppointmentId?: string,
     durationMinutes: number = 60
 ): boolean => {
-    // Só o Customer Success tem limite, contado sobre o time todo (Aldeia e Tribo
-    // somados, enquanto o banco não for migrado).
     if (!isCustomerSuccess(sector)) return false;
-    if (newAppointmentType === 'Agendamento Pessoal' || newAppointmentType === 'Personal Appointment') return false;
 
     const sectorAttendants = new Set(attendants.filter(a => isCustomerSuccess(a.sector)).map(a => a.id));
-    
+
     const newStart = timeToMinutes(timeStr);
-    const newEnd = newStart + getDuration(newAppointmentType, durationMinutes);
+    const newEnd = newStart + getDuration(undefined, durationMinutes);
 
     let concurrentCount = 0;
 
     for (const appt of allAppointments) {
         if (excludeAppointmentId && appt.id === excludeAppointmentId) continue;
         if (appt.status !== 'Pendente') continue;
-        if (appt.type === 'Agendamento Pessoal' || appt.type === 'Personal Appointment') continue;
         if (appt.date !== dateStr) continue;
         
         // Handle both frontend (attendantId) and backend (attendant_id) keys
@@ -267,6 +273,50 @@ export const hasSectorTimeLimit = (
     return concurrentCount >= customerSuccessConcurrentLimit(dateStr);
 };
 
+/** Todo o time do Customer Success (qualquer cargo), para contar o limite de simultâneos. */
+export const loadCustomerSuccessTeam = async (): Promise<{ id: string; sector: string }[]> => {
+    const { data, error } = await supabase.from('user').select('id, sector').in('sector', CUSTOMER_SUCCESS_ALIASES);
+    if (error) throw new Error(`Erro ao buscar o time do Customer Success: ${error.message}`);
+    return data || [];
+};
+
+/**
+ * Checagem final, direto no banco, antes de gravar ou alterar um agendamento: se
+ * o atendente é do Customer Success e o horário já está no limite, devolve true.
+ * Atendente de outro setor nunca entra no limite. O tipo e o evento não importam.
+ */
+export const isCustomerSuccessSlotFull = async (params: {
+    attendantId?: string | null;
+    date: string;
+    time: string;
+    durationMinutes?: number;
+    excludeAppointmentId?: string;
+}): Promise<boolean> => {
+    const { attendantId, date, time, durationMinutes = 60, excludeAppointmentId } = params;
+    if (!attendantId || attendantId === 'distribuicao_automatica') return false;
+
+    const team = await loadCustomerSuccessTeam();
+    if (!team.some(u => u.id === attendantId)) return false;
+
+    const { data: appointments, error } = await supabase
+        .from('appointments')
+        .select('id, attendant_id, date, time, end_time, type, status')
+        .eq('date', date)
+        .eq('status', 'Pendente')
+        .in('attendant_id', team.map(u => u.id));
+    if (error) throw new Error(`Erro ao buscar agendamentos do Customer Success: ${error.message}`);
+
+    return hasSectorTimeLimit(SECTOR_CUSTOMER_SUCCESS, date, time, appointments || [], team, excludeAppointmentId, durationMinutes);
+};
+
+/**
+ * Erro lançado pelo trigger do banco (supabase/add_customer_success_concurrent_limit.sql)
+ * quando dois pedidos passam pela checagem acima ao mesmo tempo. Responder 409.
+ */
+export const CUSTOMER_SUCCESS_LIMIT_DB_ERROR_CODE = 'TS409';
+export const isCustomerSuccessLimitDbError = (err: { code?: string | null; message?: string | null } | null | undefined): boolean =>
+    !!err && (err.code === CUSTOMER_SUCCESS_LIMIT_DB_ERROR_CODE || (err.message || '').includes('CS_CONCURRENT_LIMIT'));
+
 export interface CheckLogItem {
     name: string;
     reason: string;
@@ -289,7 +339,6 @@ export const findBestAttendantWithLogs = async (
     const durationMinutes = options.durationMinutes || 60;
     let sectors = ['Closer', 'Co-líder'];
     let roleFilters: string[] | null = null;
-    let sectorLimitCheck: string | null = null;
 
     const isCloserType = ['Ligação Closer', 'Gold Call', 'Reagendamento Closer', 'Upgrade'].includes(type);
     
@@ -302,7 +351,6 @@ export const findBestAttendantWithLogs = async (
     if (type === 'Ligação Equipe Aldeia') {
         sectors = [...CUSTOMER_SUCCESS_ALIASES];
         roleFilters = ['Colaborador', 'Co-líder'];
-        sectorLimitCheck = SECTOR_CUSTOMER_SUCCESS;
     }
 
     // Eventos da Aldeia com Closer: o pool é o Closer, não o setor do evento (Aldeia).
@@ -323,7 +371,6 @@ export const findBestAttendantWithLogs = async (
                 // Distribui pelo time todo (antigos Aldeia e Tribo juntos).
                 sectors = [...CUSTOMER_SUCCESS_ALIASES];
                 roleFilters = ['Colaborador', 'Co-líder'];
-                sectorLimitCheck = SECTOR_CUSTOMER_SUCCESS;
             } else if (eventData.sector === 'SDR') {
                 sectors = ['SDR'];
                 roleFilters = ['Colaborador', 'Co-líder'];
@@ -359,18 +406,25 @@ export const findBestAttendantWithLogs = async (
         return { attendantId: null, checksLog: [] };
     }
 
-    // Check Sector limits before anything else
-    if (sectorLimitCheck) {
-        if (hasSectorTimeLimit(sectorLimitCheck, date, time, type, appointments, attendants, undefined, durationMinutes)) {
-            for (const att of attendants) {
-                checksLog.push({ name: att.name, reason: "Limite diário de agendamentos do setor atingido" });
+    // Limite de agendamentos simultâneos do Customer Success: qualquer tipo ou
+    // evento. Conta o time inteiro (não só o pool deste tipo/evento) e tira da
+    // escolha quem é do CS quando o horário já está cheio.
+    let pool = attendants;
+    if (pool.some(a => isCustomerSuccess(a.sector))) {
+        const csTeam = await loadCustomerSuccessTeam();
+        if (hasSectorTimeLimit(SECTOR_CUSTOMER_SUCCESS, date, time, appointments, csTeam, undefined, durationMinutes)) {
+            for (const att of pool) {
+                if (isCustomerSuccess(att.sector)) {
+                    checksLog.push({ name: att.name, reason: "Limite de agendamentos simultâneos do Customer Success atingido" });
+                }
             }
-            return { attendantId: null, checksLog };
+            pool = pool.filter(a => !isCustomerSuccess(a.sector));
+            if (pool.length === 0) return { attendantId: null, checksLog };
         }
     }
 
     const available: typeof attendants = [];
-    for (const a of attendants) {
+    for (const a of pool) {
         if (a.role === 'Líder') {
             checksLog.push({ name: a.name, reason: "Líderes não recebem agendamentos" });
             continue;

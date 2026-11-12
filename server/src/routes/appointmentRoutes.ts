@@ -2,12 +2,12 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { getAppointmentWebhooks, getUpdateWebhook, getGlobalAppointmentWebhook, getSyncEventsWebhook } from '../config/webhooks.js';
 import { createAppointmentSchema, updateAppointmentSchema } from '../schemas/appointmentSchema.js';
-import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, conflictPoolFor, hasSectorTimeLimit, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
+import { findBestAttendant, findBestAttendantWithLogs, type CheckLogItem, isAttendantWithinSchedule, hasConflictingAppointment, conflictPoolFor, hasSectorTimeLimit, isCustomerSuccessSlotFull, isCustomerSuccessLimitDbError, timeToMinutes, getDuration, isAttendantBlockedForEvent } from '../utils/distribution.js';
 import { createGoogleMeetLink, deleteGoogleMeetEvent, updateGoogleMeetEvent } from '../services/googleMeet.js';
 import { type AuthenticatedRequest, logSuccessfulAction, requireRole } from '../middleware/firebaseAuth.js';
 import { supabase } from '../utils/supabaseClient.js';
 import { rescheduleLastNoShow } from '../utils/noShowReschedule.js';
-import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_DESATIVADO, SECTOR_SEM_SETOR, hasGlobalView, isCustomerSuccess, isStatusLockedForPreVendas, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
+import { ARCHIVED_EMAIL_SUFFIX, PRE_VENDAS_ALIASES, SECTOR_CUSTOMER_SUCCESS, SECTOR_DESATIVADO, SECTOR_SEM_SETOR, customerSuccessLimitMessage, hasGlobalView, isCustomerSuccess, isStatusLockedForPreVendas, requiresLeadProfile, sectorAliases } from '../constants/sectors.js';
 import { getFirebaseAuth } from '../config/firebase-admin.js';
 import { getOwnerChangeSectors, isOwnerChangeEnabledFor } from '../utils/systemSettings.js';
 
@@ -269,15 +269,20 @@ const loadDistributionContext = async (
     // Agendamento Pessoal não depende da escala (pode ser marcado fora do expediente), em qualquer setor.
     const ignoreSchedule = (isCsEvent && !isCloserAppt) || type === 'Agendamento Pessoal';
 
-    const [{ data: existingAppts, error: apptError }, { data: allAttendants, error: attError }] = await Promise.all([
+    const [{ data: existingAppts, error: apptError }, { data: allUsers, error: attError }] = await Promise.all([
         supabase.from('appointments').select('id, attendant_id, date, time, end_time, type, status').eq('date', date).neq('status', 'Cancelado'),
-        supabase.from('user').select('id, name, sector, role, schedule, pauses, denied_events').neq('role', 'Líder')
+        supabase.from('user').select('id, name, sector, role, schedule, pauses, denied_events')
     ]);
 
-    if (apptError || attError || !allAttendants) {
+    if (apptError || attError || !allUsers) {
         console.error('[DISTRIBUTION CONTEXT] Erro ao buscar dados:', apptError || attError);
         return null;
     }
+
+    // Líderes não recebem agendamentos, mas os do Customer Success contam no limite do setor.
+    const allAttendants = allUsers.filter(a => a.role !== 'Líder');
+    // Time inteiro do CS (qualquer cargo): base da contagem de simultâneos.
+    const csTeam = allUsers.filter(a => isCustomerSuccess(a.sector));
 
     let candidates = allAttendants;
 
@@ -310,6 +315,7 @@ const loadDistributionContext = async (
         ignoreSchedule,
         existingAppts: existingAppts || [],
         allAttendants,
+        csTeam,
         candidates
     };
 };
@@ -387,15 +393,15 @@ router.get('/available-times', async (req: AuthenticatedRequest, res: Response) 
         if (!ctx) {
             return res.status(500).json({ error: 'Erro ao buscar horários disponíveis.' });
         }
-        const { durationMinutes, eventSector, isCsEvent, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
+        const { durationMinutes, ignoreSchedule, existingAppts, csTeam, candidates } = ctx;
 
         const availableTimes = ALL_TIME_SLOTS.filter(time => {
-            if (isCsEvent && type !== 'Agendamento Pessoal' &&
-                hasSectorTimeLimit(eventSector as string, date, time, type, existingAppts || [], allAttendants, undefined, durationMinutes)) {
-                return false;
-            }
+            // Limite de simultâneos do Customer Success: qualquer tipo ou evento. Só
+            // tira do horário os candidatos do CS; um Closer, por exemplo, segue livre.
+            const csFull = hasSectorTimeLimit(SECTOR_CUSTOMER_SUCCESS, date, time, existingAppts, csTeam, undefined, durationMinutes);
 
             return candidates.some(att =>
+                !(csFull && isCustomerSuccess(att.sector)) &&
                 !isAttendantBlockedForEvent(att, eventId, type) &&
                 (ignoreSchedule || isAttendantWithinSchedule(att as any, date, time, type, durationMinutes)) &&
                 !hasConflictingAppointment(att.id, date, time, type, existingAppts || [], undefined, durationMinutes)
@@ -429,22 +435,25 @@ router.get('/resolve-attendant', async (req: AuthenticatedRequest, res: Response
         if (!ctx) {
             return res.status(500).json({ error: 'Erro ao resolver atendente.' });
         }
-        const { durationMinutes, eventSector, isCsEvent, ignoreSchedule, existingAppts, allAttendants, candidates } = ctx;
+        const { durationMinutes, ignoreSchedule, existingAppts, csTeam, candidates } = ctx;
 
-        // Limite de agendamentos simultâneos do Customer Success
-        if (isCsEvent && type !== 'Agendamento Pessoal' &&
-            hasSectorTimeLimit(eventSector as string, date, time, type, existingAppts, allAttendants, undefined, durationMinutes)) {
-            return res.json({ attendantId: null, motivo: 'Limite de agendamentos do setor atingido para este horário.' });
-        }
+        // Limite de agendamentos simultâneos do Customer Success: qualquer tipo ou
+        // evento. Só tira da escolha quem é do CS.
+        const csFull = hasSectorTimeLimit(SECTOR_CUSTOMER_SUCCESS, date, time, existingAppts, csTeam, undefined, durationMinutes);
+        const csBlocked = csFull && candidates.some(att => isCustomerSuccess(att.sector));
 
-        // Quem pode atender: não bloqueado para o evento e dentro da escala/pausa
+        // Quem pode atender: fora do limite do CS, não bloqueado para o evento e dentro da escala/pausa
         const disponiveis = candidates.filter(att =>
+            !(csFull && isCustomerSuccess(att.sector)) &&
             !isAttendantBlockedForEvent(att, eventId, type) &&
             (ignoreSchedule || isAttendantWithinSchedule(att as any, date, time, type, durationMinutes))
         );
 
         if (disponiveis.length === 0) {
-            return res.json({ attendantId: null, motivo: 'Nenhum atendente em escala para este horário.' });
+            return res.json({
+                attendantId: null,
+                motivo: csBlocked ? customerSuccessLimitMessage(date) : 'Nenhum atendente em escala para este horário.'
+            });
         }
 
         // Carga = compromissos ainda pendentes no dia, ignorando agendamentos pessoais.
@@ -1396,6 +1405,15 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         }
 
 
+        // 2.5 Limite de agendamentos simultâneos do Customer Success: vale para
+        // qualquer tipo (inclusive Agendamento Pessoal), qualquer evento e quem quer
+        // que esteja marcando. A distribuição automática já respeita o limite; esta
+        // é a checagem final, com a base atualizada, antes de gravar.
+        if ((data.status || 'Pendente') === 'Pendente' &&
+            await isCustomerSuccessSlotFull({ attendantId: finalAttendantId, date: data.date, time: data.time, durationMinutes })) {
+            return res.status(409).json({ error: customerSuccessLimitMessage(data.date) });
+        }
+
         const endTime = calculateEndTime(data.time, durationMinutes);
 
         // 3. Conflict Check (Range Based)
@@ -1557,6 +1575,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
             // can't fully close on their own.
             if (appError.code === '23P01') {
                 return res.status(409).json({ error: 'Conflito: Este atendente já possui um compromisso neste horário.' });
+            }
+            // Trigger do banco (supabase/add_customer_success_concurrent_limit.sql): dois
+            // pedidos passaram pela checagem do limite do CS ao mesmo tempo.
+            if (isCustomerSuccessLimitDbError(appError)) {
+                return res.status(409).json({ error: customerSuccessLimitMessage(data.date) });
             }
             console.error("Supabase Write Error:", appError);
             return res.status(500).json({ error: 'Erro no Banco de Dados' });
@@ -1752,6 +1775,23 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             merged.end_time = calculateEndTime(merged.time, durationMinutes);
         }
 
+        // Limite de agendamentos simultâneos do Customer Success: qualquer tipo ou
+        // evento. Só confere quando algo que entra na contagem muda DE FATO em
+        // relação ao gravado (o formulário de edição reenvia todos os campos, mesmo
+        // sem alteração): atendente, evento, data ou horário diferentes, ou o status
+        // voltando a Pendente. Assim um agendamento antigo acima do limite segue
+        // editável (observações, status etc.). O próprio agendamento fica fora da contagem.
+        const limitRelevantChange =
+            targetAttendantId !== currentApp.attendant_id ||
+            targetEventId !== currentApp.event_id ||
+            (!!updates.date && updates.date !== currentApp.date) ||
+            (!!updates.time && timeToMinutes(updates.time) !== timeToMinutes(currentApp.time)) ||
+            (merged.status === 'Pendente' && currentApp.status !== 'Pendente');
+        if (merged.status === 'Pendente' && limitRelevantChange &&
+            await isCustomerSuccessSlotFull({ attendantId: targetAttendantId, date: merged.date, time: merged.time, durationMinutes, excludeAppointmentId: id })) {
+            return res.status(409).json({ error: customerSuccessLimitMessage(merged.date) });
+        }
+
         // Logic Check
         if ((updates.attendantId || updates.date || updates.time) && merged.status === 'Pendente') {
             const { data: attendant } = await supabase.from('user').select('*').eq('id', merged.attendant_id).single();
@@ -1886,6 +1926,10 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
             // DB-level guarantee (see supabase/add_no_double_booking_constraint.sql).
             if (updateError.code === '23P01') {
                 return res.status(409).json({ error: 'Conflito: O atendente está ocupado.' });
+            }
+            // Trigger do banco (supabase/add_customer_success_concurrent_limit.sql).
+            if (isCustomerSuccessLimitDbError(updateError)) {
+                return res.status(409).json({ error: customerSuccessLimitMessage(merged.date) });
             }
             return res.status(500).json({ error: 'Falha na Atualização' });
         }

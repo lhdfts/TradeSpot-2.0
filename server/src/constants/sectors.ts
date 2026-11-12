@@ -21,11 +21,20 @@ export const isCustomerSuccess = (sector?: string | null): boolean =>
     !!sector && CUSTOMER_SUCCESS_ALIASES.includes(sector);
 
 /**
- * Limite de agendamentos simultâneos do Customer Success (o time todo, não por
- * pessoa, qualquer tipo ou evento): 4 em dias úteis, 1 aos sábados e domingos.
+ * Limite de agendamentos simultâneos do Customer Success: 4 em dias úteis, 1 aos
+ * sábados e domingos. Conta o time todo (qualquer cargo), qualquer tipo de
+ * agendamento (inclusive Agendamento Pessoal) e qualquer evento, seja quem for
+ * que esteja marcando (formulário interno, edição ou link público). A mesma
+ * regra é garantida no banco por supabase/add_customer_success_concurrent_limit.sql.
  */
 export const CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKDAY = 4;
 export const CUSTOMER_SUCCESS_CONCURRENT_LIMIT_WEEKEND = 1;
+
+/** Mensagem devolvida (409) quando o horário já está no limite do Customer Success. */
+export const customerSuccessLimitMessage = (dateStr: string): string => {
+    const limit = customerSuccessConcurrentLimit(dateStr);
+    return `O Customer Success já atingiu o limite de ${limit} agendamento${limit === 1 ? '' : 's'} simultâneo${limit === 1 ? '' : 's'} neste horário.`;
+};
 
 /** Limite do CS para a data (YYYY-MM-DD ou DD/MM/YYYY). */
 export const customerSuccessConcurrentLimit = (dateStr: string): number => {
